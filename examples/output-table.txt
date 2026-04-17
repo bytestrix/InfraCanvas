@@ -1,0 +1,165 @@
+Infrastructure Discovery Report
+Generated: 2024-03-15 10:30:45 UTC
+Collection Duration: 2.5s
+Scope: host, docker, kubernetes
+
+================================================================================
+HOST INFORMATION
+================================================================================
+
+Hostname:         prod-web-01
+FQDN:             prod-web-01.example.com
+OS:               Ubuntu 22.04.3 LTS
+Kernel:           5.15.0-91-generic
+Architecture:     x86_64
+Virtualization:   kvm
+Cloud Provider:   aws
+Instance ID:      i-0123456789abcdef0
+Instance Type:    t3.large
+Region:           us-east-1
+Availability Zone: us-east-1a
+
+Health Status:    🟢 Healthy
+
+RESOURCE USAGE
+┌──────────┬────────────┬────────────┬─────────┬────────┐
+│ Resource │ Total      │ Used       │ Avail   │ Usage  │
+├──────────┼────────────┼────────────┼─────────┼────────┤
+│ CPU      │ 2 cores    │ -          │ -       │ 45.2%  │
+│ Memory   │ 8.0 GB     │ 5.0 GB     │ 3.0 GB  │ 62.5%  │
+│ Disk (/) │ 100.0 GB   │ 30.0 GB    │ 70.0 GB │ 30.0%  │
+└──────────┴────────────┴────────────┴─────────┴────────┘
+
+NETWORK INTERFACES
+┌───────┬──────────────────┬───────────────────┬────────┐
+│ Name  │ IP Address       │ MAC Address       │ Status │
+├───────┼──────────────────┼───────────────────┼────────┤
+│ eth0  │ 10.0.1.100       │ 02:42:ac:11:00:02 │ up     │
+│       │ fe80::1234:56... │                   │        │
+└───────┴──────────────────┴───────────────────┴────────┘
+
+LISTENING PORTS
+┌──────┬──────────┬─────────┬─────────┐
+│ Port │ Protocol │ Process │ PID     │
+├──────┼──────────┼─────────┼─────────┤
+│ 22   │ tcp      │ sshd    │ 1234    │
+│ 80   │ tcp      │ nginx   │ 5678    │
+└──────┴──────────┴─────────┴─────────┘
+
+================================================================================
+DOCKER CONTAINERS
+================================================================================
+
+┌──────────────┬────────────────────┬─────────┬────────────┬──────────┬────────┐
+│ Name         │ Image              │ State   │ Status     │ CPU      │ Memory │
+├──────────────┼────────────────────┼─────────┼────────────┼──────────┼────────┤
+│ nginx-proxy  │ nginx:1.25-alpine  │ running │ Up 5 days  │ 2.5%     │ 50 MB  │
+└──────────────┴────────────────────┴─────────┴────────────┴──────────┴────────┘
+
+Health: 🟢 1 healthy, 0 degraded, 0 unhealthy
+
+CONTAINER DETAILS: nginx-proxy
+  Container ID:    abc123def456
+  Image:           nginx:1.25-alpine
+  State:           running
+  Status:          Up 5 days
+  Restart Count:   0
+  Compose Project: web-app
+  Compose Service: nginx
+  
+  Port Mappings:
+    0.0.0.0:80 → 80/tcp
+    0.0.0.0:443 → 443/tcp
+  
+  Mounts:
+    /var/lib/docker/volumes/nginx-config/_data → /etc/nginx/conf.d (ro)
+  
+  Resource Usage:
+    CPU:         2.5%
+    Memory:      50 MB / 512 MB
+    Network RX:  1.0 GB
+    Network TX:  2.0 GB
+
+================================================================================
+KUBERNETES CLUSTER
+================================================================================
+
+Cluster:          production-cluster
+Version:          v1.28.3
+API Server:       https://kubernetes.default.svc
+
+DEPLOYMENTS (namespace: production)
+┌──────────┬───────────┬──────────┬───────────┬────────┬────────┐
+│ Name     │ Namespace │ Replicas │ Available │ Ready  │ Health │
+├──────────┼───────────┼──────────┼───────────┼────────┼────────┤
+│ web-app  │ production│ 3        │ 3         │ 3      │ 🟢     │
+└──────────┴───────────┴──────────┴───────────┴────────┴────────┘
+
+PODS (namespace: production)
+┌──────────────────────────────┬───────────┬─────────┬───────┬──────┬────────┐
+│ Name                         │ Namespace │ Phase   │ Node  │ IP   │ Health │
+├──────────────────────────────┼───────────┼─────────┼───────┼──────┼────────┤
+│ web-app-7d9f8c6b5-xk2lm      │ production│ Running │ node-1│ 10...│ 🟢     │
+└──────────────────────────────┴───────────┴─────────┴───────┴──────┴────────┘
+
+POD DETAILS: web-app-7d9f8c6b5-xk2lm
+  Namespace:       production
+  Phase:           Running
+  Node:            node-1
+  Pod IP:          10.244.1.15
+  Host IP:         10.0.1.100
+  Owner:           ReplicaSet/web-app-7d9f8c6b5
+  
+  Containers:
+    Name:          app
+    Image:         myregistry.io/web-app:v1.2.3
+    State:         running
+    Ready:         true
+    Restart Count: 0
+    Resources:
+      Requests:    CPU: 100m, Memory: 128Mi
+      Limits:      CPU: 500m, Memory: 512Mi
+
+================================================================================
+RELATIONSHIPS
+================================================================================
+
+Discovered 2 relationships:
+
+1. container-nginx-proxy → host-prod-web-01
+   Type: RUNS_ON
+   Description: Container runs on host
+
+2. pod-web-app-7d9f8c6b5-xk2lm → deployment-web-app
+   Type: OWNS
+   Description: Pod owned by deployment (via ReplicaSet)
+
+================================================================================
+HEALTH SUMMARY
+================================================================================
+
+Overall Infrastructure Health: 🟢 Healthy
+
+┌──────────────┬─────────┬──────────┬────────────┐
+│ Layer        │ Healthy │ Degraded │ Unhealthy  │
+├──────────────┼─────────┼──────────┼────────────┤
+│ Host         │ 1       │ 0        │ 0          │
+│ Docker       │ 1       │ 0        │ 0          │
+│ Kubernetes   │ 2       │ 0        │ 0          │
+├──────────────┼─────────┼──────────┼────────────┤
+│ Total        │ 4       │ 0        │ 0          │
+└──────────────┴─────────┴──────────┴────────────┘
+
+No issues detected.
+
+================================================================================
+COLLECTION METADATA
+================================================================================
+
+Timestamp:           2024-03-15 10:30:45 UTC
+Collection Duration: 2.5s
+Scope:               host, docker, kubernetes
+Errors:              None
+Permission Issues:   None
+
+Discovery completed successfully.

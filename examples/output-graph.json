@@ -1,0 +1,371 @@
+{
+  "graph_format": "nodes_and_edges",
+  "generated_at": "2024-03-15T10:30:45Z",
+  "nodes": [
+    {
+      "id": "host-prod-web-01",
+      "type": "host",
+      "label": "prod-web-01",
+      "properties": {
+        "hostname": "prod-web-01",
+        "os": "Ubuntu 22.04.3 LTS",
+        "cloud_provider": "aws",
+        "instance_type": "t3.large",
+        "region": "us-east-1",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "host",
+        "environment": "production"
+      }
+    },
+    {
+      "id": "container-runtime-docker",
+      "type": "container_runtime",
+      "label": "Docker",
+      "properties": {
+        "runtime_type": "docker",
+        "version": "24.0.7",
+        "storage_driver": "overlay2",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "docker"
+      }
+    },
+    {
+      "id": "container-nginx-proxy",
+      "type": "container",
+      "label": "nginx-proxy",
+      "properties": {
+        "name": "nginx-proxy",
+        "image": "nginx:1.25-alpine",
+        "state": "running",
+        "compose_project": "web-app",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "docker",
+        "compose_project": "web-app"
+      }
+    },
+    {
+      "id": "image-nginx-1.25-alpine",
+      "type": "image",
+      "label": "nginx:1.25-alpine",
+      "properties": {
+        "repository": "nginx",
+        "tag": "1.25-alpine",
+        "size": 41943040,
+        "health": "unknown"
+      },
+      "metadata": {
+        "layer": "docker"
+      }
+    },
+    {
+      "id": "volume-nginx-config",
+      "type": "volume",
+      "label": "nginx-config",
+      "properties": {
+        "name": "nginx-config",
+        "driver": "local",
+        "health": "unknown"
+      },
+      "metadata": {
+        "layer": "docker"
+      }
+    },
+    {
+      "id": "network-bridge",
+      "type": "network",
+      "label": "bridge",
+      "properties": {
+        "name": "bridge",
+        "driver": "bridge",
+        "subnet": "172.17.0.0/16",
+        "health": "unknown"
+      },
+      "metadata": {
+        "layer": "docker"
+      }
+    },
+    {
+      "id": "cluster-production",
+      "type": "cluster",
+      "label": "production-cluster",
+      "properties": {
+        "name": "production-cluster",
+        "version": "v1.28.3",
+        "platform": "eks",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes"
+      }
+    },
+    {
+      "id": "node-node-1",
+      "type": "node",
+      "label": "node-1",
+      "properties": {
+        "name": "node-1",
+        "status": "Ready",
+        "kubernetes_version": "v1.28.3",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes"
+      }
+    },
+    {
+      "id": "namespace-production",
+      "type": "namespace",
+      "label": "production",
+      "properties": {
+        "name": "production",
+        "status": "Active",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes"
+      }
+    },
+    {
+      "id": "deployment-web-app",
+      "type": "deployment",
+      "label": "web-app",
+      "properties": {
+        "name": "web-app",
+        "namespace": "production",
+        "replicas": 3,
+        "available_replicas": 3,
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes",
+        "namespace": "production"
+      }
+    },
+    {
+      "id": "replicaset-web-app-7d9f8c6b5",
+      "type": "replicaset",
+      "label": "web-app-7d9f8c6b5",
+      "properties": {
+        "name": "web-app-7d9f8c6b5",
+        "namespace": "production",
+        "replicas": 3,
+        "ready_replicas": 3,
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes",
+        "namespace": "production"
+      }
+    },
+    {
+      "id": "pod-web-app-7d9f8c6b5-xk2lm",
+      "type": "pod",
+      "label": "web-app-7d9f8c6b5-xk2lm",
+      "properties": {
+        "name": "web-app-7d9f8c6b5-xk2lm",
+        "namespace": "production",
+        "phase": "Running",
+        "pod_ip": "10.244.1.15",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes",
+        "namespace": "production"
+      }
+    },
+    {
+      "id": "service-web-app",
+      "type": "service",
+      "label": "web-app",
+      "properties": {
+        "name": "web-app",
+        "namespace": "production",
+        "type": "ClusterIP",
+        "cluster_ip": "10.96.100.50",
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes",
+        "namespace": "production"
+      }
+    },
+    {
+      "id": "ingress-web-app",
+      "type": "ingress",
+      "label": "web-app",
+      "properties": {
+        "name": "web-app",
+        "namespace": "production",
+        "hosts": ["app.example.com"],
+        "health": "healthy"
+      },
+      "metadata": {
+        "layer": "kubernetes",
+        "namespace": "production"
+      }
+    },
+    {
+      "id": "image-web-app-v1.2.3",
+      "type": "image",
+      "label": "myregistry.io/web-app:v1.2.3",
+      "properties": {
+        "repository": "myregistry.io/web-app",
+        "tag": "v1.2.3",
+        "health": "unknown"
+      },
+      "metadata": {
+        "layer": "kubernetes"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "container-runtime-docker",
+      "target": "host-prod-web-01",
+      "type": "RUNS_ON",
+      "label": "runs on",
+      "properties": {}
+    },
+    {
+      "source": "container-nginx-proxy",
+      "target": "host-prod-web-01",
+      "type": "RUNS_ON",
+      "label": "runs on",
+      "properties": {}
+    },
+    {
+      "source": "container-nginx-proxy",
+      "target": "image-nginx-1.25-alpine",
+      "type": "USES",
+      "label": "uses image",
+      "properties": {}
+    },
+    {
+      "source": "container-nginx-proxy",
+      "target": "volume-nginx-config",
+      "type": "MOUNTS",
+      "label": "mounts",
+      "properties": {
+        "mount_path": "/etc/nginx/conf.d",
+        "mode": "ro"
+      }
+    },
+    {
+      "source": "container-nginx-proxy",
+      "target": "network-bridge",
+      "type": "CONNECTS_TO",
+      "label": "connects to",
+      "properties": {}
+    },
+    {
+      "source": "node-node-1",
+      "target": "cluster-production",
+      "type": "BELONGS_TO",
+      "label": "belongs to",
+      "properties": {}
+    },
+    {
+      "source": "namespace-production",
+      "target": "cluster-production",
+      "type": "BELONGS_TO",
+      "label": "belongs to",
+      "properties": {}
+    },
+    {
+      "source": "deployment-web-app",
+      "target": "namespace-production",
+      "type": "BELONGS_TO",
+      "label": "in namespace",
+      "properties": {}
+    },
+    {
+      "source": "replicaset-web-app-7d9f8c6b5",
+      "target": "deployment-web-app",
+      "type": "OWNED_BY",
+      "label": "owned by",
+      "properties": {}
+    },
+    {
+      "source": "pod-web-app-7d9f8c6b5-xk2lm",
+      "target": "replicaset-web-app-7d9f8c6b5",
+      "type": "OWNED_BY",
+      "label": "owned by",
+      "properties": {}
+    },
+    {
+      "source": "pod-web-app-7d9f8c6b5-xk2lm",
+      "target": "node-node-1",
+      "type": "RUNS_ON",
+      "label": "runs on",
+      "properties": {}
+    },
+    {
+      "source": "pod-web-app-7d9f8c6b5-xk2lm",
+      "target": "image-web-app-v1.2.3",
+      "type": "USES",
+      "label": "uses image",
+      "properties": {}
+    },
+    {
+      "source": "service-web-app",
+      "target": "pod-web-app-7d9f8c6b5-xk2lm",
+      "type": "TARGETS",
+      "label": "targets",
+      "properties": {
+        "selector": "app=web-app"
+      }
+    },
+    {
+      "source": "ingress-web-app",
+      "target": "service-web-app",
+      "type": "ROUTES_TO",
+      "label": "routes to",
+      "properties": {
+        "host": "app.example.com",
+        "path": "/"
+      }
+    }
+  ],
+  "statistics": {
+    "total_nodes": 15,
+    "total_edges": 14,
+    "nodes_by_type": {
+      "host": 1,
+      "container_runtime": 1,
+      "container": 1,
+      "image": 2,
+      "volume": 1,
+      "network": 1,
+      "cluster": 1,
+      "node": 1,
+      "namespace": 1,
+      "deployment": 1,
+      "replicaset": 1,
+      "pod": 1,
+      "service": 1,
+      "ingress": 1
+    },
+    "edges_by_type": {
+      "RUNS_ON": 3,
+      "USES": 2,
+      "MOUNTS": 1,
+      "CONNECTS_TO": 1,
+      "BELONGS_TO": 2,
+      "OWNED_BY": 2,
+      "TARGETS": 1,
+      "ROUTES_TO": 1
+    }
+  },
+  "metadata": {
+    "format_version": "1.0",
+    "tool": "rix",
+    "tool_version": "1.0.0",
+    "description": "Infrastructure dependency graph showing relationships between all discovered entities"
+  }
+}

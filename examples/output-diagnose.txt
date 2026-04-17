@@ -1,0 +1,284 @@
+Infrastructure Health Diagnostics Report
+Generated: 2024-03-15 10:30:45 UTC
+Scope: host, docker, kubernetes
+
+================================================================================
+OVERALL HEALTH STATUS
+================================================================================
+
+Infrastructure Health: 🟡 DEGRADED
+
+Summary:
+  🟢 Healthy:    12 entities
+  🟡 Degraded:   3 entities
+  🔴 Unhealthy:  2 entities
+  ⚪ Unknown:    5 entities
+
+================================================================================
+CRITICAL ISSUES
+================================================================================
+
+🔴 UNHEALTHY ENTITIES (2)
+
+1. Pod: api-server-6c8d9f7b5-k9xpm (namespace: production)
+   Status: CrashLoopBackOff
+   Reason: Container 'api' is in CrashLoopBackOff state
+   Restart Count: 15
+   Last Restart: 2 minutes ago
+   
+   Recommendation:
+   - Check pod logs: infracanvas logs pod/api-server-6c8d9f7b5-k9xpm -n production
+   - Check recent events: infracanvas get events -n production --filter pod=api-server-6c8d9f7b5-k9xpm
+   - Verify container image is accessible
+   - Check resource limits and requests
+
+2. Container: database-backup
+   Status: Exited (1)
+   Reason: Container exited with non-zero status code
+   Exit Code: 1
+   Finished: 5 minutes ago
+   
+   Recommendation:
+   - Check container logs: infracanvas logs container/database-backup --tail 100
+   - Restart container: docker start database-backup
+   - Verify backup script and permissions
+
+================================================================================
+DEGRADED ENTITIES
+================================================================================
+
+🟡 DEGRADED ENTITIES (3)
+
+1. Host: prod-db-01
+   Issue: High memory usage
+   Memory Usage: 92.5% (7.4 GB / 8.0 GB used)
+   Threshold: 90%
+   
+   Recommendation:
+   - Identify memory-intensive processes
+   - Consider scaling up instance size
+   - Review application memory leaks
+   - Add memory limits to containers
+
+2. Deployment: web-app (namespace: production)
+   Issue: Insufficient replicas
+   Desired Replicas: 5
+   Available Replicas: 3
+   Ready Replicas: 3
+   
+   Recommendation:
+   - Check pod scheduling issues
+   - Verify node resources are available
+   - Check for pending pods: infracanvas get pods -n production --filter phase=Pending
+   - Review cluster autoscaler logs
+
+3. Node: worker-node-3
+   Issue: Disk pressure
+   Condition: DiskPressure=True
+   Reason: Kubelet has insufficient disk space
+   
+   Recommendation:
+   - Clean up unused images: kubectl delete images --all
+   - Remove old logs and temporary files
+   - Increase disk size
+   - Check for large log files
+
+================================================================================
+RESOURCE USAGE ALERTS
+================================================================================
+
+HOST RESOURCES
+
+High CPU Usage:
+  - prod-web-02: 91.2% (threshold: 90%)
+  - prod-worker-01: 88.5% (threshold: 90%)
+
+High Memory Usage:
+  - prod-db-01: 92.5% (threshold: 90%)
+  - prod-cache-01: 91.8% (threshold: 90%)
+
+High Disk Usage:
+  - prod-web-01: 87.3% on / (threshold: 85%)
+
+CONTAINER RESOURCES
+
+Containers Near Memory Limit:
+  - redis-cache: 480 MB / 512 MB (93.8%)
+  - elasticsearch: 1.9 GB / 2.0 GB (95.0%)
+
+Containers with High Restart Count:
+  - api-server-6c8d9f7b5-k9xpm: 15 restarts
+  - worker-processor: 8 restarts
+
+================================================================================
+KUBERNETES ISSUES
+================================================================================
+
+FAILED PODS (2)
+  - api-server-6c8d9f7b5-k9xpm (production): CrashLoopBackOff
+  - job-data-migration-xyz (default): Error
+
+PENDING PODS (1)
+  - web-app-7d9f8c6b5-n8qrt (production): Insufficient CPU
+
+SERVICES WITHOUT ENDPOINTS (1)
+  - legacy-api (production): No matching pods found
+
+RECENT WARNING EVENTS (5)
+  - ImagePullBackOff: Failed to pull image "myregistry.io/app:v2.0.0"
+  - FailedScheduling: 0/3 nodes available: insufficient cpu
+  - BackOff: Back-off restarting failed container
+  - Unhealthy: Liveness probe failed: HTTP probe failed
+  - FailedMount: Unable to mount volume: timeout expired
+
+================================================================================
+RELATIONSHIP ISSUES
+================================================================================
+
+ORPHANED RESOURCES
+
+Volumes Not Mounted:
+  - backup-data (created 30 days ago, never used)
+  - temp-storage (created 15 days ago, never used)
+
+Images Not Used:
+  - nginx:1.24-alpine (pulled 60 days ago, no containers)
+  - redis:6.2 (pulled 45 days ago, no containers)
+
+MISSING DEPENDENCIES
+
+Pods Referencing Missing ConfigMaps:
+  - web-app-7d9f8c6b5-xk2lm → configmap/app-config (not found)
+
+Pods Referencing Missing Secrets:
+  - api-server-6c8d9f7b5-k9xpm → secret/api-credentials (not found)
+
+PVCs Without Bound PVs:
+  - data-storage (production): Pending, no matching PV
+
+================================================================================
+SECURITY CONCERNS
+================================================================================
+
+SENSITIVE DATA EXPOSURE
+
+Containers with Unredacted Secrets:
+  - legacy-app: Environment variable "DATABASE_PASSWORD" contains plaintext password
+  
+  Recommendation: Use Kubernetes Secrets instead of environment variables
+
+Images with 'latest' Tag:
+  - myapp:latest (used by 3 pods)
+  - worker:latest (used by 2 pods)
+  
+  Recommendation: Use specific version tags for reproducibility
+
+================================================================================
+PERMISSION ISSUES
+================================================================================
+
+Discovery Limitations:
+
+Host Layer:
+  ⚠️  Cannot list all processes (requires root)
+  ⚠️  Cannot access systemd services (requires systemd-journal group)
+  
+  Impact: Limited process and service visibility
+  Solution: Run with sudo or add user to systemd-journal group
+
+Docker Layer:
+  ✅ Full access available
+
+Kubernetes Layer:
+  ⚠️  Cannot list secrets (forbidden)
+  ⚠️  Cannot list nodes (forbidden)
+  
+  Impact: Limited cluster visibility
+  Solution: Apply RBAC configuration from examples/rbac-discovery.yaml
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+IMMEDIATE ACTIONS (Critical)
+
+1. Fix CrashLoopBackOff pod: api-server-6c8d9f7b5-k9xpm
+   Command: infracanvas logs pod/api-server-6c8d9f7b5-k9xpm -n production
+
+2. Investigate failed container: database-backup
+   Command: infracanvas logs container/database-backup --tail 100
+
+3. Address high memory usage on prod-db-01 (92.5%)
+   Command: infracanvas get processes --host prod-db-01 --sort-by memory
+
+SHORT-TERM ACTIONS (Important)
+
+4. Scale up web-app deployment to meet desired replicas
+   Command: kubectl scale deployment web-app -n production --replicas=5
+
+5. Resolve disk pressure on worker-node-3
+   Command: kubectl delete images --all
+
+6. Fix missing ConfigMap: app-config
+   Command: kubectl create configmap app-config -n production --from-file=config.yaml
+
+7. Fix missing Secret: api-credentials
+   Command: kubectl create secret generic api-credentials -n production
+
+LONG-TERM ACTIONS (Maintenance)
+
+8. Clean up unused Docker images (2 images, 60+ days old)
+   Command: docker image prune -a --filter "until=60d"
+
+9. Remove unused volumes (2 volumes never mounted)
+   Command: docker volume rm backup-data temp-storage
+
+10. Replace 'latest' image tags with specific versions
+    Update deployment manifests to use versioned tags
+
+11. Apply proper RBAC permissions for full discovery
+    Command: kubectl apply -f examples/rbac-discovery.yaml
+
+================================================================================
+HEALTH SCORE BREAKDOWN
+================================================================================
+
+Layer Health Scores:
+
+Host Layer:        75/100 (Degraded)
+  - 2 hosts healthy, 1 degraded
+  - High resource usage on 3 hosts
+  - Score Impact: -25 points
+
+Docker Layer:      85/100 (Healthy)
+  - 8 containers running, 1 exited
+  - 2 containers near memory limit
+  - Score Impact: -15 points
+
+Kubernetes Layer:  70/100 (Degraded)
+  - 2 unhealthy pods, 1 pending pod
+  - 1 deployment under-replicated
+  - 1 node with disk pressure
+  - Score Impact: -30 points
+
+Overall Score:     77/100 (Degraded)
+
+================================================================================
+COLLECTION METADATA
+================================================================================
+
+Timestamp:           2024-03-15 10:30:45 UTC
+Collection Duration: 3.2s
+Scope:               host, docker, kubernetes
+Entities Discovered: 22
+Relationships:       18
+Errors:              0
+Permission Issues:   4
+
+Report generated successfully.
+
+For detailed information, run:
+  infracanvas discover --output json > full-report.json
+
+For continuous monitoring, consider running in agent mode:
+  infracanvas agent run

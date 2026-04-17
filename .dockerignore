@@ -1,0 +1,11 @@
+frontend/
+bin/
+*.log
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.md
+deploy-agent-to-azure.sh
+start-ssh-tunnel.sh

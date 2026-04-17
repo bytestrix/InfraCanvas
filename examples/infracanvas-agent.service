@@ -1,0 +1,33 @@
+[Unit]
+Description=Infrastructure Discovery Agent
+Documentation=https://github.com/yourusername/infracanvas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/infracanvas agent --config /etc/infracanvas/agent.yaml
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (optional - can also use config file)
+# Environment="RIX_BACKEND_URL=http://localhost:8080"
+# Environment="RIX_AUTH_TOKEN=your-token-here"
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/infracanvas
+
+# Resource limits
+LimitNOFILE=65536
+MemoryLimit=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,48 @@
+# InfraCanvas Relay Server — Caddy with automatic HTTPS
+# Replace relay.yourdomain.com with your actual domain
+#
+# Usage:
+#   1. Point DNS A record for relay.yourdomain.com → this server's IP
+#   2. Run: caddy run --config Caddyfile
+#   Caddy will auto-obtain TLS certs from Let's Encrypt
+
+relay.yourdomain.com {
+    # WebSocket proxy for agents
+    handle /ws/agent* {
+        reverse_proxy localhost:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                # Keep WS connections alive
+                keepalive 30s
+                keepalive_idle_conns 10
+            }
+        }
+    }
+
+    # WebSocket proxy for browsers
+    handle /ws/canvas* {
+        reverse_proxy localhost:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # REST API
+    handle /api/* {
+        reverse_proxy localhost:8080
+    }
+
+    # Frontend
+    handle {
+        reverse_proxy localhost:3000
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        -Server
+    }
+}
