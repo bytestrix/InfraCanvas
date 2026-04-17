@@ -38,8 +38,9 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION}" \
             -o dist/infracanvas-darwin-arm64  ./cmd/infracanvas
 
-          # Also include install script in release
+          # Also include install/uninstall scripts in release
           cp install-agent.sh dist/install.sh
+          cp uninstall-agent.sh dist/uninstall.sh
 
       - name: Create checksums
         working-directory: dist
