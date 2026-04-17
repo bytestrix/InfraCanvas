@@ -91,6 +91,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("backend_url is required")
 	}
 
+	if c.AuthToken == "" {
+		return fmt.Errorf("auth_token is required")
+	}
+
 	if c.HostInterval < 1 {
 		return fmt.Errorf("host_interval must be at least 1 second")
 	}

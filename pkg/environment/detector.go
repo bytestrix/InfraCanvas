@@ -214,18 +214,23 @@ func (d *Detector) matchHostname(hostname string) Environment {
 	return EnvUnknown
 }
 
-// matchNamespace matches namespace name against environment patterns
+// matchNamespace matches namespace name against environment patterns.
+// Patterns are checked in a fixed priority order so that e.g. "qas-testing"
+// matches QA (via the qas prefix) rather than Test (via the test suffix).
 func (d *Detector) matchNamespace(namespace string) Environment {
 	if namespace == "" {
 		return EnvUnknown
 	}
-	
-	for env, pattern := range d.namespacePatterns {
-		if pattern.MatchString(namespace) {
-			return env
+
+	priority := []Environment{EnvProduction, EnvStaging, EnvQA, EnvDev, EnvTest}
+	for _, env := range priority {
+		if pattern, ok := d.namespacePatterns[env]; ok {
+			if pattern.MatchString(namespace) {
+				return env
+			}
 		}
 	}
-	
+
 	return EnvUnknown
 }
 

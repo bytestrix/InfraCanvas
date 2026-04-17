@@ -84,8 +84,12 @@ func (b *Builder) buildDockerRelationships(entities map[string]models.Entity) []
 			}
 
 			// Container -> Network (CONNECTS_TO relation)
-			// Use all connected networks from NetworkSettings, not just NetworkMode
-			for _, networkName := range container.Networks {
+			// Prefer the full Networks list; fall back to NetworkMode when it's absent.
+			networks := container.Networks
+			if len(networks) == 0 && container.NetworkMode != "" {
+				networks = []string{container.NetworkMode}
+			}
+			for _, networkName := range networks {
 				networkID := b.findNetworkByName(entities, networkName)
 				if networkID != "" {
 					relations = append(relations, models.Relation{
