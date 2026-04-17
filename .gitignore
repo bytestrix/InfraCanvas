@@ -1,6 +1,6 @@
 # Binaries
 bin/
-infracanvas
+/infracanvas
 *.exe
 *.exe~
 *.dll
