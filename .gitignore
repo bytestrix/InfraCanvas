@@ -41,3 +41,17 @@ npm-debug.log*
 # Build artifacts
 dist/
 test_outputs/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Discovery / graph output dumps (never commit real VM data)
+vm_*.json
+*_output_*.json
+*_discovery_*.json
+
+# Claude Code local settings
+.claude/
+
+# Root package-lock (no root package.json)
+/package-lock.json
