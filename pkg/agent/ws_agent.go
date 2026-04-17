@@ -1,12 +1,16 @@
 package agent
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -14,9 +18,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
 	"infracanvas/internal/models"
+	"infracanvas/pkg/actions"
 	"infracanvas/pkg/orchestrator"
 	"infracanvas/pkg/output"
 )
@@ -57,14 +63,24 @@ type GraphDiff struct {
 	RemovedEdgeIds []string            `json:"removedEdgeIds"`
 }
 
+// execSession holds state for an active interactive exec session.
+// Exactly one of dockerSess or ptmx will be non-nil.
+type execSession struct {
+	dockerSess *actions.ExecSession // Docker exec (container terminal)
+	ptmx       *os.File             // host PTY (VM terminal)
+	cancel     context.CancelFunc
+}
+
 // WSAgent manages the WebSocket connection to the backend and streams graph data.
 type WSAgent struct {
-	cfg          *WSConfig
-	orch         *orchestrator.Orchestrator
-	conn         *websocket.Conn
-	connMu       sync.Mutex
-	lastGraph    *output.GraphOutput
-	lastGraphMu  sync.RWMutex
+	cfg            *WSConfig
+	orch           *orchestrator.Orchestrator
+	actionExecutor *actions.ActionExecutor
+	conn           *websocket.Conn
+	connMu         sync.Mutex
+	lastGraph      *output.GraphOutput
+	lastGraphMu    sync.RWMutex
+	execSessions   sync.Map // sessionID → *execSession
 }
 
 // NewWSAgent creates a new WebSocket agent.
@@ -80,9 +96,16 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 	}
 
 	orch := orchestrator.NewOrchestrator(cfg.EnableRedaction)
+
+	executor, err := actions.NewActionExecutor()
+	if err != nil {
+		log.Printf("[agent] Warning: action executor init failed: %v", err)
+	}
+
 	return &WSAgent{
-		cfg:  cfg,
-		orch: orch,
+		cfg:            cfg,
+		orch:           orch,
+		actionExecutor: executor,
 	}, nil
 }
 
@@ -350,8 +373,19 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 		}
 
 	case "ACTION_REQUEST":
-		// Handle action execution requests from browser
 		go a.handleActionRequest(ctx, env.Data)
+
+	case "EXEC_START":
+		go a.handleExecStart(ctx, env.Data)
+
+	case "EXEC_INPUT":
+		go a.handleExecInput(env.Data)
+
+	case "EXEC_RESIZE":
+		go a.handleExecResize(env.Data)
+
+	case "EXEC_END":
+		go a.handleExecEnd(env.Data)
 	}
 }
 
@@ -520,9 +554,9 @@ func memUsage() int64 {
 }
 
 
-// handleActionRequest processes action execution requests from the browser
+// handleActionRequest processes action execution requests from the browser.
 func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage) {
-	var actionReq struct {
+	var req struct {
 		ActionID   string            `json:"action_id"`
 		Type       string            `json:"type"`
 		Target     struct {
@@ -534,32 +568,401 @@ func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage)
 		Parameters map[string]string `json:"parameters"`
 	}
 
-	if err := json.Unmarshal(data, &actionReq); err != nil {
-		log.Printf("Failed to unmarshal action request: %v", err)
-		a.sendActionResult(actionReq.ActionID, false, "Invalid action request", err.Error(), nil)
+	if err := json.Unmarshal(data, &req); err != nil {
+		log.Printf("[action] unmarshal error: %v", err)
+		a.sendActionResult("", false, "Invalid action request", err.Error(), nil)
 		return
 	}
 
-	log.Printf("Executing action: %s on %s/%s", actionReq.Type, actionReq.Target.Namespace, actionReq.Target.EntityID)
+	log.Printf("[action] %s on %s/%s (layer=%s)", req.Type, req.Target.Namespace, req.Target.EntityID, req.Target.Layer)
+	a.sendActionProgress(req.ActionID, "in_progress", 10, "Starting…")
 
-	// Send initial progress
-	a.sendActionProgress(actionReq.ActionID, "in_progress", 0, "Starting action execution")
-
-	// Simulate execution for now (actual implementation would use the actions package)
-	a.sendActionProgress(actionReq.ActionID, "in_progress", 50, "Executing action")
-
-	// Simulate execution
-	time.Sleep(2 * time.Second)
-
-	// Send result
-	details := map[string]interface{}{
-		"action_type": actionReq.Type,
-		"target":      actionReq.Target.EntityID,
-		"namespace":   actionReq.Target.Namespace,
+	// Special case: docker logs streaming
+	if req.Type == "docker_logs" {
+		a.handleDockerLogs(ctx, req.ActionID, req.Target.EntityID, req.Parameters)
+		return
 	}
 
-	a.sendActionResult(actionReq.ActionID, true, "Action completed successfully", "", details)
-	a.sendActionProgress(actionReq.ActionID, "success", 100, "Action completed")
+	if a.actionExecutor == nil {
+		a.sendActionResult(req.ActionID, false, "Action executor not available", "executor init failed", nil)
+		return
+	}
+
+	// Map frontend action type → backend ActionType
+	actionType, layer := mapFrontendActionType(req.Type)
+	if layer != "" {
+		req.Target.Layer = layer
+	}
+
+	// Normalize entity ID (strip type prefix like "container/", "pod/")
+	entityID := normalizeEntityID(req.Target.EntityID)
+
+	action := &actions.Action{
+		ID:   req.ActionID,
+		Type: actionType,
+		Target: actions.ActionTarget{
+			Layer:      req.Target.Layer,
+			EntityType: req.Target.EntityType,
+			EntityID:   entityID,
+			Namespace:  req.Target.Namespace,
+		},
+		Parameters:  req.Parameters,
+		RequestedAt: time.Now(),
+	}
+
+	a.sendActionProgress(req.ActionID, "in_progress", 50, "Executing…")
+
+	result, err := a.actionExecutor.ExecuteAction(ctx, action)
+	if err != nil && result == nil {
+		a.sendActionResult(req.ActionID, false, "Execution error", err.Error(), nil)
+		a.sendActionProgress(req.ActionID, "failed", 100, "Failed")
+		return
+	}
+
+	details := map[string]interface{}{
+		"action_type": req.Type,
+		"target":      req.Target.EntityID,
+		"output":      result.Output,
+		"duration_ms": result.EndTime.Sub(result.StartTime).Milliseconds(),
+	}
+
+	a.sendActionResult(req.ActionID, result.Success, result.Message, result.Error, details)
+	status := "success"
+	if !result.Success {
+		status = "failed"
+	}
+	a.sendActionProgress(req.ActionID, status, 100, result.Message)
+}
+
+// handleDockerLogs fetches container logs and streams them back as LOG_DATA.
+func (a *WSAgent) handleDockerLogs(ctx context.Context, requestID, rawEntityID string, params map[string]string) {
+	if a.actionExecutor == nil {
+		a.sendLogData(requestID, rawEntityID, nil, "action executor not available", true)
+		return
+	}
+
+	containerID := normalizeEntityID(rawEntityID)
+	tail := 200
+	if t, ok := params["tail"]; ok {
+		if n := atoi(t); n > 0 {
+			tail = n
+		}
+	}
+
+	// Use a short-lived context for the log fetch
+	logCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	reader, err := a.actionExecutor.DockerLogs(logCtx, containerID, tail)
+	if err != nil {
+		a.sendLogData(requestID, rawEntityID, nil, err.Error(), true)
+		return
+	}
+	defer reader.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Docker multiplexes stdout/stderr with an 8-byte header — strip it.
+		if len(line) > 8 {
+			h := line[0]
+			if h == 1 || h == 2 {
+				line = line[8:]
+			}
+		}
+		lines = append(lines, line)
+		// Send in batches of 50 lines
+		if len(lines) >= 50 {
+			a.sendLogData(requestID, rawEntityID, lines, "", false)
+			lines = lines[:0]
+		}
+	}
+	// Send remaining lines + done signal
+	a.sendLogData(requestID, rawEntityID, lines, "", true)
+}
+
+func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, errMsg string, done bool) {
+	payload := map[string]interface{}{
+		"request_id":   requestID,
+		"container_id": containerID,
+		"lines":        lines,
+		"done":         done,
+		"error":        errMsg,
+	}
+	raw, err := marshalEnvelope("LOG_DATA", payload)
+	if err != nil {
+		return
+	}
+	a.sendRaw(raw)
+}
+
+// handleExecStart creates an interactive terminal session.
+// For layer "host" it spawns a PTY shell on the VM itself.
+// For layer "docker" (or empty) it runs docker exec inside the container.
+func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
+	var req struct {
+		SessionID   string   `json:"session_id"`
+		ContainerID string   `json:"container_id"` // only for docker layer
+		Layer       string   `json:"layer"`         // "host" or "docker"
+		Cmd         []string `json:"cmd"`
+		Rows        uint     `json:"rows"`
+		Cols        uint     `json:"cols"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		log.Printf("[exec] bad EXEC_START: %v", err)
+		return
+	}
+	if req.SessionID == "" {
+		return
+	}
+	if req.Rows == 0 {
+		req.Rows = 24
+	}
+	if req.Cols == 0 {
+		req.Cols = 80
+	}
+
+	execCtx, cancel := context.WithCancel(ctx)
+
+	if req.Layer == "host" {
+		a.startHostExec(execCtx, cancel, req.SessionID, req.Cmd, req.Rows, req.Cols)
+	} else {
+		a.startDockerExec(execCtx, cancel, req.SessionID, req.ContainerID, req.Cmd, req.Rows, req.Cols)
+	}
+}
+
+// startHostExec opens a PTY shell on the host VM.
+func (a *WSAgent) startHostExec(ctx context.Context, cancel context.CancelFunc, sessionID string, cmd []string, rows, cols uint) {
+	if len(cmd) == 0 {
+		// Pick the best available shell
+		for _, sh := range []string{"/bin/bash", "/bin/sh"} {
+			if _, err := os.Stat(sh); err == nil {
+				cmd = []string{sh}
+				break
+			}
+		}
+	}
+
+	c := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	c.Env = append(os.Environ(), "TERM=xterm-256color")
+
+	ptmx, err := pty.Start(c)
+	if err != nil {
+		cancel()
+		a.sendExecData(sessionID, nil, fmt.Sprintf("failed to open host terminal: %v", err))
+		return
+	}
+
+	// Set initial window size
+	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+
+	a.execSessions.Store(sessionID, &execSession{ptmx: ptmx, cancel: cancel})
+
+	go func() {
+		defer func() {
+			ptmx.Close()
+			c.Process.Kill()
+			a.execSessions.Delete(sessionID)
+			a.sendExecEnd(sessionID)
+		}()
+		buf := make([]byte, 4096)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			n, err := ptmx.Read(buf)
+			if n > 0 {
+				a.sendExecData(sessionID, buf[:n], "")
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+}
+
+// startDockerExec opens an exec session inside a container.
+func (a *WSAgent) startDockerExec(ctx context.Context, cancel context.CancelFunc, sessionID, rawContainerID string, cmd []string, rows, cols uint) {
+	if len(cmd) == 0 {
+		cmd = []string{"/bin/sh"}
+	}
+	containerID := normalizeEntityID(rawContainerID)
+
+	if a.actionExecutor == nil {
+		cancel()
+		a.sendExecData(sessionID, nil, "action executor not available")
+		return
+	}
+
+	sess, err := a.actionExecutor.DockerExec(ctx, containerID, cmd, rows, cols)
+	if err != nil {
+		cancel()
+		a.sendExecData(sessionID, nil, fmt.Sprintf("docker exec failed: %v", err))
+		return
+	}
+
+	a.execSessions.Store(sessionID, &execSession{dockerSess: sess, cancel: cancel})
+
+	go func() {
+		defer func() {
+			sess.Attach.Close()
+			a.execSessions.Delete(sessionID)
+			a.sendExecEnd(sessionID)
+		}()
+		buf := make([]byte, 4096)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			n, err := sess.Attach.Reader.Read(buf)
+			if n > 0 {
+				a.sendExecData(sessionID, buf[:n], "")
+			}
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("[exec] docker read error session=%s: %v", sessionID, err)
+				}
+				return
+			}
+		}
+	}()
+}
+
+func (a *WSAgent) handleExecInput(data json.RawMessage) {
+	var req struct {
+		SessionID string `json:"session_id"`
+		Data      string `json:"data"` // base64-encoded
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		return
+	}
+	val, ok := a.execSessions.Load(req.SessionID)
+	if !ok {
+		return
+	}
+	es := val.(*execSession)
+	decoded, err := base64.StdEncoding.DecodeString(req.Data)
+	if err != nil {
+		return
+	}
+	if es.ptmx != nil {
+		es.ptmx.Write(decoded)
+	} else if es.dockerSess != nil {
+		es.dockerSess.Attach.Conn.Write(decoded)
+	}
+}
+
+func (a *WSAgent) handleExecResize(data json.RawMessage) {
+	var req struct {
+		SessionID string `json:"session_id"`
+		Rows      uint   `json:"rows"`
+		Cols      uint   `json:"cols"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		return
+	}
+	val, ok := a.execSessions.Load(req.SessionID)
+	if !ok {
+		return
+	}
+	es := val.(*execSession)
+	if es.ptmx != nil {
+		pty.Setsize(es.ptmx, &pty.Winsize{Rows: uint16(req.Rows), Cols: uint16(req.Cols)})
+	} else if es.dockerSess != nil && a.actionExecutor != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		a.actionExecutor.DockerExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
+	}
+}
+
+func (a *WSAgent) handleExecEnd(data json.RawMessage) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		return
+	}
+	val, ok := a.execSessions.Load(req.SessionID)
+	if !ok {
+		return
+	}
+	es := val.(*execSession)
+	es.cancel()
+	if es.ptmx != nil {
+		es.ptmx.Close()
+	} else if es.dockerSess != nil {
+		es.dockerSess.Attach.Close()
+	}
+	a.execSessions.Delete(req.SessionID)
+}
+
+func (a *WSAgent) sendExecData(sessionID string, data []byte, errMsg string) {
+	payload := map[string]interface{}{
+		"session_id": sessionID,
+		"data":       base64.StdEncoding.EncodeToString(data),
+		"error":      errMsg,
+	}
+	raw, err := marshalEnvelope("EXEC_DATA", payload)
+	if err != nil {
+		return
+	}
+	a.sendRaw(raw)
+}
+
+func (a *WSAgent) sendExecEnd(sessionID string) {
+	payload := map[string]interface{}{"session_id": sessionID}
+	raw, err := marshalEnvelope("EXEC_END", payload)
+	if err != nil {
+		return
+	}
+	a.sendRaw(raw)
+}
+
+// mapFrontendActionType maps the frontend action type string to an ActionType constant.
+// Returns the ActionType and an optional layer override (empty = keep original).
+func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
+	switch frontendType {
+	case "docker_restart_container":
+		return actions.ActionRestartContainer, "docker"
+	case "docker_stop_container":
+		return actions.ActionStopContainer, "docker"
+	case "docker_start_container":
+		return actions.ActionStartContainer, "docker"
+	case "k8s_restart_deployment", "k8s_restart_statefulset", "k8s_restart_daemonset":
+		return actions.ActionK8sRolloutRestart, "kubernetes"
+	case "k8s_update_image":
+		return actions.ActionK8sUpdateImage, "kubernetes"
+	case "k8s_get_logs":
+		return actions.ActionK8sGetLogs, "kubernetes"
+	case "k8s_rollout_restart":
+		return actions.ActionK8sRolloutRestart, "kubernetes"
+	default:
+		return actions.ActionType(frontendType), ""
+	}
+}
+
+// normalizeEntityID strips type prefixes like "container/", "pod/", "deployment/" from entity IDs.
+func normalizeEntityID(id string) string {
+	if i := strings.Index(id, "/"); i >= 0 {
+		return id[i+1:]
+	}
+	return id
+}
+
+func atoi(s string) int {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
 }
 
 // sendActionResult sends an action result back to the browser

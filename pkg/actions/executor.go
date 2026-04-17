@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -198,4 +199,36 @@ func (e *ActionExecutor) ExecuteAction(ctx context.Context, action *Action) (*Ac
 	}
 
 	return result, err
+}
+
+// DockerLogs streams logs from a container. Caller must close the returned reader.
+func (e *ActionExecutor) DockerLogs(ctx context.Context, containerID string, tail int) (io.ReadCloser, error) {
+	if e.dockerExecutor == nil {
+		return nil, fmt.Errorf("docker is not available")
+	}
+	return e.dockerExecutor.GetContainerLogs(ctx, containerID, tail, false)
+}
+
+// DockerExec creates an interactive exec session in a container.
+func (e *ActionExecutor) DockerExec(ctx context.Context, containerID string, cmd []string, rows, cols uint) (*ExecSession, error) {
+	if e.dockerExecutor == nil {
+		return nil, fmt.Errorf("docker is not available")
+	}
+	sess, err := e.dockerExecutor.ExecCreate(ctx, containerID, cmd)
+	if err != nil {
+		return nil, err
+	}
+	// Resize immediately to the requested dimensions.
+	if rows > 0 && cols > 0 {
+		_ = e.dockerExecutor.ExecResize(ctx, sess.ExecID, rows, cols)
+	}
+	return sess, nil
+}
+
+// DockerExecResize resizes an active exec session's terminal.
+func (e *ActionExecutor) DockerExecResize(ctx context.Context, execID string, rows, cols uint) error {
+	if e.dockerExecutor == nil {
+		return fmt.Errorf("docker is not available")
+	}
+	return e.dockerExecutor.ExecResize(ctx, execID, rows, cols)
 }

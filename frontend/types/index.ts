@@ -131,12 +131,40 @@ export interface WsError {
   data: { message: string }
 }
 
+export interface WsLogData {
+  type: 'LOG_DATA'
+  data: {
+    request_id: string
+    container_id: string
+    lines: string[]
+    done: boolean
+    error?: string
+  }
+}
+
+export interface WsExecData {
+  type: 'EXEC_DATA'
+  data: {
+    session_id: string
+    data: string // base64
+    error?: string
+  }
+}
+
+export interface WsExecEnd {
+  type: 'EXEC_END'
+  data: { session_id: string }
+}
+
 export type WsInbound =
   | WsGraphSnapshot
   | WsGraphDiff
   | WsAgentConnected
   | WsAgentDisconnected
   | WsError
+  | WsLogData
+  | WsExecData
+  | WsExecEnd
 
 // ─── App State Types ──────────────────────────────────────────────────────────
 

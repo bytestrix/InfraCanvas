@@ -35,6 +35,8 @@ import NamespaceGroupNode from './NamespaceGroupNode'
 import GroupNode from './GroupNode'
 import GroupDrawer from './GroupDrawer'
 import NodeDetailPanel from './NodeDetailPanel'
+import LogsPanel from './LogsPanel'
+import TerminalPanel from './TerminalPanel'
 import {
   ArrowLeft,
   RefreshCw,
@@ -46,6 +48,7 @@ import {
   Network,
   Server,
   AlertTriangle,
+  Download,
 } from 'lucide-react'
 
 // ─── Filter groups ────────────────────────────────────────────────────────────
@@ -157,6 +160,10 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [groupsMap, setGroupsMap] = useState<Map<string, GroupInfo>>(new Map())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
+  const [showTerminal, setShowTerminal] = useState(false)
+  const [terminalLayer, setTerminalLayer] = useState<'docker' | 'host'>('docker')
+  const canvasWrapRef = useRef<HTMLDivElement>(null)
 
   // Spotlight: which filter key to dim everything else for (null = no spotlight)
   const [spotlightKey, setSpotlightKey] = useState<FilterKey | null>(null)
@@ -312,10 +319,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       if (group) {
         setSelectedNodeId(null)
         setDrawerGroup(group)
+        setShowLogs(false)
+        setShowTerminal(false)
       }
     } else {
       setDrawerGroup(null)
-      setSelectedNodeId(node.id)
+      setSelectedNodeId((prev) => {
+        if (prev !== node.id) { setShowLogs(false); setShowTerminal(false) }
+        return node.id
+      })
     }
   }, [groupsMap])
 
@@ -343,6 +355,35 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     setSelectedNodeId(null)
     setDrawerGroup(null)
     setSpotlightKey(null)
+    setShowLogs(false)
+    setShowTerminal(false)
+  }
+
+  // ── Export helpers ─────────────────────────────────────────────────────────
+  async function handleExportPNG() {
+    if (!canvasWrapRef.current) return
+    try {
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(canvasWrapRef.current, { backgroundColor: '#070711', pixelRatio: 2 })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${vm.hostname ?? vm.code}-canvas.png`
+      a.click()
+    } catch (err) {
+      console.error('[export] PNG failed', err)
+    }
+  }
+
+  function handleExportJSON() {
+    if (!vm.graph) return
+    const json = JSON.stringify(vm.graph, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${vm.hostname ?? vm.code}-graph.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // ── Critical alert banner ──────────────────────────────────────────────────
@@ -499,6 +540,36 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           Refresh
         </button>
+
+        <div style={DIVIDER} />
+
+        {/* Export dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            id="export-btn"
+            onClick={() => {
+              const menu = document.getElementById('export-menu')
+              if (menu) menu.style.display = menu.style.display === 'none' ? 'flex' : 'none'
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid #1e1e3a', background: '#0e0e1a', color: '#94a3b8', fontSize: 11, cursor: 'pointer' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2d2d52'; e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#94a3b8' }}>
+            <Download size={12} /> Export
+          </button>
+          <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#0e0e1a', border: '1px solid #1e1e3a', borderRadius: 8, overflow: 'hidden', minWidth: 130, zIndex: 50 }}>
+            {[
+              { label: 'Export PNG', action: () => { handleExportPNG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
+              { label: 'Export JSON', action: () => { handleExportJSON(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
+            ].map(({ label, action }) => (
+              <button key={label} onClick={action}
+                style={{ padding: '8px 14px', background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 11, cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#13131f'; e.currentTarget.style.color = '#e2e8f0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Critical alert banner ─────────────────────────────────── */}
@@ -534,7 +605,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       )}
 
       {/* ── Canvas ───────────────────────────────────────────────── */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      <div ref={canvasWrapRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {!vm.graph ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -587,7 +658,34 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         )}
 
         {selectedNode && !drawerGroup && (
-          <NodeDetailPanel node={selectedNode} vmCode={vm.code} onClose={() => setSelectedNodeId(null)} />
+          <NodeDetailPanel
+            node={selectedNode}
+            vmCode={vm.code}
+            onClose={() => { setSelectedNodeId(null); setShowLogs(false); setShowTerminal(false) }}
+            onShowLogs={['container', 'pod'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
+            onShowTerminal={['container', 'host'].includes(selectedNode.type) ? () => {
+              setTerminalLayer(selectedNode.type === 'host' ? 'host' : 'docker')
+              setShowTerminal(true)
+              setShowLogs(false)
+            } : undefined}
+          />
+        )}
+
+        {selectedNode && showLogs && !showTerminal && (
+          <LogsPanel
+            node={selectedNode}
+            vmCode={vm.code}
+            onClose={() => setShowLogs(false)}
+          />
+        )}
+
+        {selectedNode && showTerminal && !showLogs && (
+          <TerminalPanel
+            node={selectedNode}
+            vmCode={vm.code}
+            layer={terminalLayer}
+            onClose={() => setShowTerminal(false)}
+          />
         )}
       </div>
 

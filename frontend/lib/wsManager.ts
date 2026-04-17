@@ -139,6 +139,27 @@ function handleMessage(code: string, msg: WsInbound): void {
       actionProgressListeners.forEach((fn) => fn((msg as any).data))
       break
 
+    case 'LOG_DATA' as any: {
+      const d = (msg as any).data
+      const listeners = logDataListeners.get(d.request_id)
+      if (listeners) listeners.forEach((fn) => fn(d))
+      break
+    }
+
+    case 'EXEC_DATA' as any: {
+      const d = (msg as any).data
+      const listeners = execDataListeners.get(d.session_id)
+      if (listeners) listeners.forEach((fn) => fn(d))
+      break
+    }
+
+    case 'EXEC_END' as any: {
+      const d = (msg as any).data
+      const listeners = execEndListeners.get(d.session_id)
+      if (listeners) listeners.forEach((fn) => fn(d))
+      break
+    }
+
     default:
       console.warn('[wsManager] Unknown message type:', (msg as any).type)
   }
@@ -180,6 +201,78 @@ export function subscribeActionResult(handler: ActionHandler): () => void {
 export function subscribeActionProgress(handler: ActionHandler): () => void {
   actionProgressListeners.add(handler)
   return () => actionProgressListeners.delete(handler)
+}
+
+// ── Log data subscriptions ────────────────────────────────────────────────────
+
+// requestID → set of handlers
+const logDataListeners = new Map<string, Set<ActionHandler>>()
+
+export function subscribeLogData(requestID: string, handler: ActionHandler): () => void {
+  if (!logDataListeners.has(requestID)) logDataListeners.set(requestID, new Set())
+  logDataListeners.get(requestID)!.add(handler)
+  return () => {
+    const s = logDataListeners.get(requestID)
+    if (s) { s.delete(handler); if (s.size === 0) logDataListeners.delete(requestID) }
+  }
+}
+
+// ── Exec session subscriptions ────────────────────────────────────────────────
+
+const execDataListeners = new Map<string, Set<ActionHandler>>()
+const execEndListeners  = new Map<string, Set<ActionHandler>>()
+
+export function subscribeExecData(sessionID: string, handler: ActionHandler): () => void {
+  if (!execDataListeners.has(sessionID)) execDataListeners.set(sessionID, new Set())
+  execDataListeners.get(sessionID)!.add(handler)
+  return () => {
+    const s = execDataListeners.get(sessionID)
+    if (s) { s.delete(handler); if (s.size === 0) execDataListeners.delete(sessionID) }
+  }
+}
+
+export function subscribeExecEnd(sessionID: string, handler: ActionHandler): () => void {
+  if (!execEndListeners.has(sessionID)) execEndListeners.set(sessionID, new Set())
+  execEndListeners.get(sessionID)!.add(handler)
+  return () => {
+    const s = execEndListeners.get(sessionID)
+    if (s) { s.delete(handler); if (s.size === 0) execEndListeners.delete(sessionID) }
+  }
+}
+
+export function sendExecStart(
+  code: string,
+  sessionID: string,
+  containerID: string,
+  cmd: string[],
+  rows: number,
+  cols: number,
+  layer: 'docker' | 'host' = 'docker',
+): void {
+  const entry = sockets.get(code)
+  if (!entry || entry.ws.readyState !== WebSocket.OPEN) return
+  entry.ws.send(JSON.stringify({
+    type: 'EXEC_START',
+    data: { session_id: sessionID, container_id: containerID, layer, cmd, rows, cols },
+  }))
+}
+
+export function sendExecInput(code: string, sessionID: string, data: string): void {
+  const entry = sockets.get(code)
+  if (!entry || entry.ws.readyState !== WebSocket.OPEN) return
+  entry.ws.send(JSON.stringify({ type: 'EXEC_INPUT', data: { session_id: sessionID, data } }))
+}
+
+export function sendExecResize(code: string, sessionID: string, rows: number, cols: number): void {
+  const entry = sockets.get(code)
+  if (!entry || entry.ws.readyState !== WebSocket.OPEN) return
+  entry.ws.send(JSON.stringify({ type: 'EXEC_RESIZE', data: { session_id: sessionID, rows, cols } }))
+}
+
+export function sendExecEnd(code: string, sessionID: string): void {
+  const entry = sockets.get(code)
+  if (!entry || entry.ws.readyState !== WebSocket.OPEN) return
+  entry.ws.send(JSON.stringify({ type: 'EXEC_END', data: { session_id: sessionID } }))
 }
 
 export function disconnectVM(code: string): void {

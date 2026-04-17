@@ -3,8 +3,11 @@ package actions
 import (
 	"context"
 	"fmt"
+	"io"
+	"strconv"
 	"time"
 
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
@@ -148,4 +151,52 @@ func (d *DockerExecutor) startContainer(ctx context.Context, containerID string,
 		StartTime: startTime,
 		EndTime:   time.Now(),
 	}, nil
+}
+
+// GetContainerLogs returns a streaming reader for container logs.
+// The caller is responsible for closing the returned ReadCloser.
+func (d *DockerExecutor) GetContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+	opts := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       strconv.Itoa(tail),
+		Follow:     follow,
+		Timestamps: true,
+	}
+	return d.client.ContainerLogs(ctx, containerID, opts)
+}
+
+// ExecSession holds state for an active exec session.
+type ExecSession struct {
+	ExecID  string
+	Attach  dockertypes.HijackedResponse
+}
+
+// ExecCreate creates an exec instance and attaches to it, returning an ExecSession.
+func (d *DockerExecutor) ExecCreate(ctx context.Context, containerID string, cmd []string) (*ExecSession, error) {
+	execResp, err := d.client.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		Cmd:          cmd,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("exec create: %w", err)
+	}
+
+	attach, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{Tty: true})
+	if err != nil {
+		return nil, fmt.Errorf("exec attach: %w", err)
+	}
+
+	return &ExecSession{ExecID: execResp.ID, Attach: attach}, nil
+}
+
+// ExecResize resizes the TTY for an exec session.
+func (d *DockerExecutor) ExecResize(ctx context.Context, execID string, rows, cols uint) error {
+	return d.client.ContainerExecResize(ctx, execID, container.ResizeOptions{
+		Height: rows,
+		Width:  cols,
+	})
 }

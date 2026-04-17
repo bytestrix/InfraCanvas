@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   X, RotateCw, Square, Play, Tag, Layers, Trash2,
   CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight,
-  AlertTriangle, type LucideIcon,
+  AlertTriangle, FileText, Terminal, type LucideIcon,
 } from 'lucide-react'
 import { type GraphNode, getNodeColor, getNodeIcon } from '@/types'
 import { sendAction, subscribeActionResult, subscribeActionProgress } from '@/lib/wsManager'
@@ -174,11 +174,15 @@ interface NodeDetailPanelProps {
   node: GraphNode
   vmCode: string
   onClose: () => void
+  onShowLogs?: () => void
+  onShowTerminal?: () => void
 }
 
 type ActionStatus = 'idle' | 'confirming' | 'running' | 'success' | 'error'
 
-export default function NodeDetailPanel({ node, vmCode, onClose }: NodeDetailPanelProps) {
+const TOOLS_NODES = new Set(['container', 'pod', 'host'])
+
+export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onShowTerminal }: NodeDetailPanelProps) {
   const color = getNodeColor(node.type, node.health)
   const icon = getNodeIcon(node.type)
   const hc = HEALTH_COLOR[node.health] ?? '#64748b'
@@ -303,6 +307,35 @@ export default function NodeDetailPanel({ node, vmCode, onClose }: NodeDetailPan
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* ── Tools (Logs / Terminal) ── */}
+        {TOOLS_NODES.has(node.type) && (onShowLogs || onShowTerminal) && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e1e3a' }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#334155', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Tools</p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {onShowLogs && (
+                <button
+                  onClick={onShowLogs}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: '1px solid #1e1e3a', background: '#070711', color: '#64748b', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.color = '#10b981'; e.currentTarget.style.background = '#10b98110' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#070711' }}
+                >
+                  <FileText size={11} /> Logs
+                </button>
+              )}
+              {onShowTerminal && (
+                <button
+                  onClick={onShowTerminal}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: '1px solid #1e1e3a', background: '#070711', color: '#64748b', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.background = '#6366f110' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#070711' }}
+                >
+                  <Terminal size={11} /> Terminal
+                </button>
+              )}
+            </div>
           </div>
         )}
 

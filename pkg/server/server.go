@@ -15,18 +15,24 @@ import (
 // Message type constants — shared with agent and browser clients.
 const (
 	// Agent → Server
-	MsgHello         = "HELLO"
-	MsgGraphSnapshot = "GRAPH_SNAPSHOT"
-	MsgGraphDiff     = "GRAPH_DIFF"
-	MsgHeartbeat     = "HEARTBEAT"
-	MsgActionResult  = "ACTION_RESULT"
+	MsgHello          = "HELLO"
+	MsgGraphSnapshot  = "GRAPH_SNAPSHOT"
+	MsgGraphDiff      = "GRAPH_DIFF"
+	MsgHeartbeat      = "HEARTBEAT"
+	MsgActionResult   = "ACTION_RESULT"
 	MsgActionProgress = "ACTION_PROGRESS"
+	MsgLogData        = "LOG_DATA"
+	MsgExecData       = "EXEC_DATA"
+	MsgExecEnd        = "EXEC_END"
 
-	// Server → Agent
+	// Server → Agent (and Browser → Server → Agent)
 	MsgPairCode      = "PAIR_CODE"
 	MsgPaired        = "PAIRED"
 	MsgCommand       = "COMMAND"
 	MsgActionRequest = "ACTION_REQUEST"
+	MsgExecStart     = "EXEC_START"
+	MsgExecInput     = "EXEC_INPUT"
+	MsgExecResize    = "EXEC_RESIZE"
 
 	// Browser → Server
 	MsgBrowserAction = "BROWSER_ACTION"
@@ -315,12 +321,22 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		log.Printf("[agent] GRAPH_DIFF  → %d browsers", sess.BrowserCount())
 
 	case MsgActionResult:
-		// Forward action results to browsers
 		broadcastToBrowsers(sess, raw)
 		log.Printf("[agent] ACTION_RESULT  → %d browsers", sess.BrowserCount())
 
 	case MsgActionProgress:
-		// Forward action progress to browsers
+		broadcastToBrowsers(sess, raw)
+
+	case MsgLogData:
+		// Forward streaming log data to browsers
+		broadcastToBrowsers(sess, raw)
+
+	case MsgExecData:
+		// Forward exec output to browsers
+		broadcastToBrowsers(sess, raw)
+
+	case MsgExecEnd:
+		// Forward exec session end notification to browsers
 		broadcastToBrowsers(sess, raw)
 
 	case MsgHeartbeat:
@@ -393,16 +409,17 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(payload, &env); err != nil {
 			continue
 		}
-		if env.Type == MsgCommand || env.Type == MsgBrowserAction {
+		switch env.Type {
+		case MsgBrowserAction:
+			// Translate BROWSER_ACTION → ACTION_REQUEST before forwarding
+			env.Type = MsgActionRequest
+			payload, _ = json.Marshal(env)
+			fallthrough
+		case MsgCommand, MsgExecStart, MsgExecInput, MsgExecResize, MsgExecEnd:
 			sess.mu.RLock()
 			agentConn := sess.AgentConn
 			sess.mu.RUnlock()
 			if agentConn != nil {
-				// Forward to agent as ACTION_REQUEST
-				if env.Type == MsgBrowserAction {
-					env.Type = MsgActionRequest
-					payload, _ = json.Marshal(env)
-				}
 				agentConn.WriteMessage(websocket.TextMessage, payload)
 			}
 		}
