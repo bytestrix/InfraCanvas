@@ -199,18 +199,23 @@ func (d *Detector) DetectFromDaemonSet(daemonset *models.DaemonSet) Environment 
 	return EnvUnknown
 }
 
-// matchHostname matches hostname against environment patterns
+// matchHostname matches hostname against environment patterns.
+// Patterns are checked in a fixed priority order so that e.g. "qa-test-server"
+// matches QA (via the qa prefix) rather than Test (via the test suffix).
 func (d *Detector) matchHostname(hostname string) Environment {
 	if hostname == "" {
 		return EnvUnknown
 	}
-	
-	for env, pattern := range d.hostnamePatterns {
-		if pattern.MatchString(hostname) {
-			return env
+
+	priority := []Environment{EnvProduction, EnvStaging, EnvQA, EnvDev, EnvTest}
+	for _, env := range priority {
+		if pattern, ok := d.hostnamePatterns[env]; ok {
+			if pattern.MatchString(hostname) {
+				return env
+			}
 		}
 	}
-	
+
 	return EnvUnknown
 }
 
