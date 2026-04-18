@@ -51,8 +51,9 @@ vm_*.json
 *_output_*.json
 *_discovery_*.json
 
-# Claude Code local settings
+# Claude Code local settings and session artifacts
 .claude/
+20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.txt
 
 # Root package-lock (no root package.json)
 /package-lock.json

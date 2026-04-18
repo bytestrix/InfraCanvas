@@ -1,0 +1,29 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+
+linters-settings:
+  errcheck:
+    ignore: "fmt:.*,io:Close"
+
+issues:
+  exclude-rules:
+    # Test files are allowed to use unsafe patterns
+    - path: "_test\\.go"
+      linters: [errcheck, gosec]
+    # Example files
+    - path: "example_test\\.go"
+      linters: [errcheck]
+  # Don't report issues in generated files
+  exclude-dirs:
+    - frontend/node_modules
+    - vendor

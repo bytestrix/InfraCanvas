@@ -1,27 +1,15 @@
-# Agent Configuration Example
-# This file shows all available configuration options for the infracanvas agent
+# InfraCanvas agent environment file example
+# Copy to /etc/infracanvas/agent.env and edit as needed.
+#
+# The installer (install-agent.sh) writes this file automatically.
+# Override any value here, then: sudo systemctl restart infracanvas-agent
 
-# Backend connection settings
-backend_url: "http://localhost:8080"
-auth_token: "your-auth-token-here"
-tls_insecure: false
+# Relay server WebSocket URL (required)
+INFRACANVAS_BACKEND=ws://13.49.41.61:8080
 
-# Collection intervals (in seconds)
-host_interval: 10        # How often to collect host metrics
-docker_interval: 15      # How often to collect Docker data
-kubernetes_interval: 20  # How often to collect Kubernetes data
-heartbeat_interval: 30   # How often to send heartbeats
+# Shared auth token — must match INFRACANVAS_TOKEN on the relay server
+# Leave empty if the relay runs without auth (dev mode)
+INFRACANVAS_TOKEN=
 
-# Discovery scope - which layers to discover
-scope:
-  - host
-  - docker
-  - kubernetes
-
-# Agent identity
-agent_id: ""             # Leave empty for auto-generation
-agent_name: "my-agent"   # Friendly name for this agent
-
-# Features
-enable_redaction: true   # Automatically redact sensitive data
-enable_watchers: true    # Enable event watchers for real-time updates
+# Discovery scope: comma-separated list of host, docker, kubernetes
+INFRACANVAS_SCOPE=host,docker,kubernetes

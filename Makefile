@@ -1,4 +1,4 @@
-.PHONY: build test install clean
+.PHONY: build test lint fmt install clean
 
 # Build variables
 BINARY_NAME=infracanvas
@@ -24,6 +24,16 @@ install: build
 	@echo "Installing $(BINARY_NAME) to /usr/local/bin..."
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME)
 	@echo "Installation complete!"
+
+# Run golangci-lint (install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+lint:
+	@echo "Running linter..."
+	golangci-lint run ./...
+
+# Format Go source
+fmt:
+	@echo "Formatting..."
+	gofmt -w .
 
 # Clean build artifacts
 clean:
@@ -80,6 +90,8 @@ help:
 	@echo "  release          - Build all release binaries (agent + server, all platforms)"
 	@echo "  deploy-local     - Run relay server + frontend via Docker Compose"
 	@echo "  test             - Run all tests with race detection and coverage"
+	@echo "  lint             - Run golangci-lint"
+	@echo "  fmt              - Format Go source with gofmt"
 	@echo "  install          - Install binary to /usr/local/bin (requires sudo)"
 	@echo "  clean            - Remove build artifacts and coverage files"
 	@echo "  help             - Show this help message"
