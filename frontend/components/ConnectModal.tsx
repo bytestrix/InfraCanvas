@@ -20,209 +20,175 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
 
   useEffect(() => {
     inputRef.current?.focus()
-
-    // Fetch active sessions
     fetch(`${API_URL}/api/sessions`)
       .then((r) => r.json())
-      .then((data: SessionInfo[]) => {
-        setSessions(Array.isArray(data) ? data : [])
-        setLoadingSessions(false)
-      })
-      .catch(() => {
-        setSessions([])
-        setLoadingSessions(false)
-      })
+      .then((d: SessionInfo[]) => { setSessions(Array.isArray(d) ? d : []); setLoadingSessions(false) })
+      .catch(() => { setSessions([]); setLoadingSessions(false) })
   }, [])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = code.trim().toUpperCase()
-    if (!trimmed) {
-      setError('Please enter a pair code')
-      return
-    }
-    // Basic format validation: WORD-1234
+    if (!trimmed) { setError('Enter a pair code'); return }
     if (!/^[A-Z]+-\d+$/.test(trimmed)) {
-      setError('Code format should be WORD-1234 (e.g. WOLF-1234)')
+      setError('Format: WORD-1234 (e.g. APEX-1483)')
       return
     }
     onConnect(trimmed)
   }
 
-  function handleSelectSession(sessionCode: string) {
-    onConnect(sessionCode)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Escape') onClose()
-  }
-
   const steps = [
     {
-      num: 1,
-      icon: <Terminal size={14} />,
-      title: 'Start the server on your VM',
-      code: 'infracanvas-server &',
-      desc: 'Run on the target VM (once per machine)',
+      icon: <Terminal size={13} />,
+      title: 'Install the agent on your VM',
+      code: 'curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash',
+      desc: 'One command — installs and starts automatically',
     },
     {
-      num: 2,
-      icon: <Wifi size={14} />,
-      title: 'Start the agent on your VM',
-      code: 'infracanvas start',
-      desc: 'Run on the same VM — displays your pair code',
+      icon: <Wifi size={13} />,
+      title: 'Get your pair code',
+      code: 'sudo journalctl -u infracanvas-agent -n 20 | grep "Pair code"',
+      desc: 'The agent prints a code like APEX-1483',
     },
     {
-      num: 3,
-      icon: <ArrowRight size={14} />,
-      title: 'Enter the pair code',
-      desc: 'The agent will display a code like WOLF-1234',
+      icon: <ArrowRight size={13} />,
+      title: 'Enter the code below',
+      desc: null,
+      code: null,
     },
   ]
 
   return (
-    <div className="modal-backdrop" onClick={onClose} onKeyDown={handleKeyDown}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="w-full max-w-lg mx-4 rounded-2xl animate-slide-up overflow-hidden"
-        style={{
-          background: '#0e0e1a',
-          border: '1px solid #1e1e3a',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.05)',
-        }}
         onClick={(e) => e.stopPropagation()}
+        className="animate-slide-up"
+        style={{
+          width: '100%', maxWidth: 500, margin: '0 16px',
+          background: '#191817',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 18,
+          overflow: 'hidden',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(218,119,86,0.06)',
+        }}
       >
         {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-4 border-b"
-          style={{ borderColor: '#1e1e3a' }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-            >
-              ⬡
-            </div>
+        <div style={{ padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: '#DA7756', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, boxShadow: '0 2px 10px rgba(218,119,86,0.3)',
+            }}>⬡</div>
             <div>
-              <h2 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>
-                Connect a VM
-              </h2>
-              <p className="text-xs" style={{ color: '#475569' }}>
-                Pair with an InfraCanvas agent
-              </p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE7', margin: 0 }}>Connect a VM</p>
+              <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0' }}>Pair with an InfraCanvas agent</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-            style={{ color: '#475569' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#13131f'
-              e.currentTarget.style.color = '#94a3b8'
+            style={{
+              width: 30, height: 30, borderRadius: 8, border: 'none',
+              background: 'transparent', color: '#625850',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.15s, color 0.15s',
             }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = '#475569'
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#A09890' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#625850' }}
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 flex flex-col gap-5">
+        <div style={{ padding: '22px 22px 20px' }}>
+
           {/* Steps */}
-          <div className="flex flex-col gap-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {steps.map((step, i) => (
-              <div key={step.num} className="flex gap-3">
-                {/* Step indicator */}
-                <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                    style={{
-                      background: i < 2 ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.15)',
-                      color: '#6366f1',
-                      border: '1px solid rgba(99,102,241,0.2)',
-                    }}
-                  >
-                    {step.num}
+              <div key={i} style={{ display: 'flex', gap: 14 }}>
+                {/* Step column */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{
+                    width: 26, height: 26, borderRadius: '50%',
+                    background: i < 2 ? 'rgba(218,119,86,0.12)' : 'rgba(218,119,86,0.12)',
+                    border: '1px solid rgba(218,119,86,0.22)',
+                    color: '#DA7756',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 600, flexShrink: 0,
+                  }}>
+                    {i + 1}
                   </div>
                   {i < steps.length - 1 && (
-                    <div className="w-px flex-1 min-h-[8px]" style={{ background: '#1e1e3a' }} />
+                    <div style={{ width: 1, flex: 1, minHeight: 16, background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
                   )}
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 pb-1">
-                  <p className="text-xs font-semibold mb-0.5" style={{ color: '#e2e8f0' }}>
+                <div style={{ paddingBottom: i < steps.length - 1 ? 18 : 0, flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#F0EDE7', margin: '2px 0 4px' }}>
                     {step.title}
                   </p>
                   {step.desc && (
-                    <p className="text-xs mb-1.5" style={{ color: '#475569' }}>
+                    <p style={{ fontSize: 11, color: '#625850', margin: '0 0 8px', lineHeight: 1.5 }}>
                       {step.desc}
                     </p>
                   )}
                   {step.code && (
-                    <div
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg code-text text-xs"
-                      style={{
-                        background: '#070711',
-                        border: '1px solid #1e1e3a',
-                        color: '#a78bfa',
-                      }}
-                    >
-                      <span style={{ color: '#475569' }}>$</span>
+                    <div style={{
+                      padding: '9px 12px', borderRadius: 9,
+                      background: '#111110', border: '1px solid rgba(255,255,255,0.08)',
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+                      color: '#DA7756', wordBreak: 'break-all',
+                    }}>
+                      <span style={{ color: '#625850', marginRight: 8 }}>$</span>
                       <span className="select-all">{step.code}</span>
                     </div>
                   )}
-                  {step.num === 3 && (
-                    <form onSubmit={handleSubmit} className="mt-2">
-                      <div className="flex gap-2">
-                        <div className="flex-1 relative">
+
+                  {/* Input form on last step */}
+                  {i === steps.length - 1 && (
+                    <form onSubmit={handleSubmit} style={{ marginTop: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
                           <input
                             ref={inputRef}
                             type="text"
                             value={code}
-                            onChange={(e) => {
-                              setCode(e.target.value.toUpperCase())
-                              setError('')
-                            }}
-                            placeholder="WOLF-1234"
-                            className="w-full px-3 py-2.5 rounded-lg text-sm font-mono outline-none transition-all"
+                            onChange={(e) => { setCode(e.target.value.toUpperCase()); setError('') }}
+                            placeholder="APEX-1483"
                             style={{
-                              background: '#070711',
-                              border: `1px solid ${error ? '#ef4444' : '#2d2d52'}`,
-                              color: '#e2e8f0',
-                              letterSpacing: '0.05em',
+                              width: '100%', padding: '10px 14px',
+                              borderRadius: 9, background: '#111110',
+                              border: `1px solid ${error ? 'rgba(217,85,85,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                              color: '#F0EDE7', fontSize: 14, fontWeight: 500,
+                              fontFamily: 'JetBrains Mono, monospace', outline: 'none',
+                              letterSpacing: '0.06em', transition: 'border-color 0.15s',
                             }}
-                            onFocus={(e) => {
-                              if (!error) e.target.style.borderColor = '#6366f1'
-                            }}
-                            onBlur={(e) => {
-                              if (!error) e.target.style.borderColor = '#2d2d52'
-                            }}
+                            onFocus={(e) => { if (!error) e.target.style.borderColor = 'rgba(218,119,86,0.5)' }}
+                            onBlur={(e) => { if (!error) e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
                           />
                         </div>
                         <button
                           type="submit"
-                          className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2"
                           style={{
-                            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                            color: '#fff',
+                            padding: '10px 18px', borderRadius: 9, border: 'none',
+                            background: '#DA7756', color: '#fff',
+                            fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            transition: 'background 0.15s, transform 0.15s',
+                            whiteSpace: 'nowrap',
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#E88A68' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = '#DA7756' }}
                         >
-                          Connect
-                          <ArrowRight size={14} />
+                          Connect <ArrowRight size={13} />
                         </button>
                       </div>
                       {error && (
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <AlertCircle size={12} style={{ color: '#ef4444' }} />
-                          <p className="text-xs" style={{ color: '#ef4444' }}>
-                            {error}
-                          </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                          <AlertCircle size={12} style={{ color: '#D95555', flexShrink: 0 }} />
+                          <p style={{ fontSize: 11, color: '#D95555', margin: 0 }}>{error}</p>
                         </div>
                       )}
                     </form>
@@ -234,64 +200,53 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
 
           {/* Active sessions */}
           {!loadingSessions && sessions.length > 0 && (
-            <div>
-              <div
-                className="border-t pt-4"
-                style={{ borderColor: '#1e1e3a' }}
-              >
-                <p className="text-xs font-semibold mb-2" style={{ color: '#475569' }}>
-                  ACTIVE SESSIONS
-                </p>
-                <div className="flex flex-col gap-2">
-                  {sessions.map((session) => (
-                    <button
-                      key={session.code}
-                      onClick={() => handleSelectSession(session.code)}
-                      className="flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all"
-                      style={{
-                        background: '#070711',
-                        border: '1px solid #1e1e3a',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#6366f1'
-                        e.currentTarget.style.background = 'rgba(99,102,241,0.04)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#1e1e3a'
-                        e.currentTarget.style.background = '#070711'
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ background: session.paired ? '#f59e0b' : '#10b981' }}
-                        />
-                        <div>
-                          <p className="text-xs font-semibold" style={{ color: '#e2e8f0' }}>
-                            {session.hostname || 'Unknown host'}
-                          </p>
-                          <p className="text-xs font-mono" style={{ color: '#475569' }}>
-                            {session.code}
-                          </p>
-                        </div>
+            <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: '#625850', margin: '0 0 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Active sessions
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {sessions.map((s) => (
+                  <button
+                    key={s.code}
+                    onClick={() => onConnect(s.code)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)',
+                      background: '#111110', cursor: 'pointer', textAlign: 'left',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(218,119,86,0.3)'
+                      e.currentTarget.style.background = 'rgba(218,119,86,0.05)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                      e.currentTarget.style.background = '#111110'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.paired ? '#C8993C' : '#4DB88A', flexShrink: 0, display: 'block' }} />
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: '#F0EDE7', margin: 0 }}>
+                          {s.hostname || 'Unknown host'}
+                        </p>
+                        <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace' }}>
+                          {s.code}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full"
-                          style={{
-                            background: session.paired
-                              ? 'rgba(245,158,11,0.1)'
-                              : 'rgba(16,185,129,0.1)',
-                            color: session.paired ? '#f59e0b' : '#10b981',
-                          }}
-                        >
-                          {session.paired ? 'In use' : 'Available'}
-                        </span>
-                        <ArrowRight size={14} style={{ color: '#475569' }} />
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        fontSize: 11, padding: '2px 9px', borderRadius: 20, fontWeight: 500,
+                        background: s.paired ? 'rgba(200,153,60,0.1)' : 'rgba(77,184,138,0.1)',
+                        color: s.paired ? '#C8993C' : '#4DB88A',
+                      }}>
+                        {s.paired ? 'In use' : 'Available'}
+                      </span>
+                      <ArrowRight size={13} style={{ color: '#625850' }} />
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}

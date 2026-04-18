@@ -135,7 +135,7 @@ EOF
 
   # Wait a moment then grab the pair code from logs
   sleep 3
-  PAIR_CODE=$(journalctl -u "$SERVICE_NAME" --no-pager -n 50 2>/dev/null | grep -oP 'Pair code: \K[A-Z]+-[A-Z]+-[A-Z]+' | tail -1 || true)
+  PAIR_CODE=$(journalctl -u "$SERVICE_NAME" --no-pager -n 50 2>/dev/null | grep -oP 'Pair code: \K[A-Z]+-\d+' | tail -1 || true)
   if [[ -n "$PAIR_CODE" ]]; then
     echo -e "${GREEN}════════════════════════════════════════${NC}"
     echo -e "${GREEN}  Your pair code:  ${YELLOW}${PAIR_CODE}${NC}"
@@ -154,7 +154,7 @@ else
   echo $! | $NEED_SUDO tee /var/run/infracanvas-agent.pid > /dev/null
 
   sleep 3
-  PAIR_CODE=$(grep -oP 'Pair code: \K[A-Z]+-[A-Z]+-[A-Z]+' /var/log/infracanvas-agent.log | tail -1 || true)
+  PAIR_CODE=$(grep -oP 'Pair code: \K[A-Z]+-\d+' /var/log/infracanvas-agent.log | tail -1 || true)
   echo ""
   echo -e "${GREEN}✓ Agent started (PID: $(cat /var/run/infracanvas-agent.pid 2>/dev/null))${NC}"
   echo ""

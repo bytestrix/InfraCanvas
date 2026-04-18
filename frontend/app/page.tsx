@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM, disconnectVM } from '@/lib/wsManager'
 import ConnectModal from '@/components/ConnectModal'
 import VMCard from '@/components/VMCard'
-import { Plus, Hexagon, Activity, Wifi } from 'lucide-react'
+import { Plus, Activity, Network, Terminal } from 'lucide-react'
 
 export default function Dashboard() {
   const { vms } = useVMStore()
@@ -19,219 +19,211 @@ export default function Dashboard() {
     setShowConnect(false)
   }
 
-  function handleDisconnect(code: string) {
-    disconnectVM(code)
-  }
-
   return (
-    <div className="min-h-screen" style={{ background: '#070711' }}>
-      {/* ─── Header ─────────────────────────────────────────────── */}
-      <header
-        className="sticky top-0 z-40 border-b"
-        style={{
-          background: 'rgba(7, 7, 17, 0.9)',
-          backdropFilter: 'blur(12px)',
-          borderColor: '#1e1e3a',
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen" style={{ background: '#111110' }}>
+
+      {/* ── Header ────────────────────────────────────────────────── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: 'rgba(17,17,16,0.92)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+      }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-lg"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-            >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: '#DA7756',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: '#fff', fontWeight: 700, flexShrink: 0,
+              boxShadow: '0 2px 12px rgba(218,119,86,0.35)',
+            }}>
               ⬡
             </div>
             <div>
-              <h1 className="font-semibold text-base leading-none" style={{ color: '#e2e8f0' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE7', lineHeight: 1, margin: 0 }}>
                 InfraCanvas
-              </h1>
-              <p className="text-xs mt-0.5" style={{ color: '#475569' }}>
+              </p>
+              <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0', lineHeight: 1 }}>
                 Infrastructure at a glance
               </p>
             </div>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4">
+          {/* Right */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {connectedCount > 0 && (
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
-                style={{
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
-                  color: '#10b981',
-                }}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full status-dot-pulse"
-                  style={{ background: '#10b981' }}
-                />
-                {connectedCount} VM{connectedCount !== 1 ? 's' : ''} connected
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '5px 12px', borderRadius: 20,
+                background: 'rgba(77,184,138,0.1)',
+                border: '1px solid rgba(77,184,138,0.2)',
+                color: '#4DB88A', fontSize: 12, fontWeight: 500,
+              }}>
+                <span className="status-dot-pulse" style={{ display: 'block', width: 6, height: 6, borderRadius: '50%', background: '#4DB88A', flexShrink: 0 }} />
+                {connectedCount} live
               </div>
             )}
             <button
               onClick={() => setShowConnect(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                color: '#fff',
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '8px 16px', borderRadius: 9,
+                background: '#DA7756', color: '#fff',
+                border: 'none', fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', transition: 'background 0.15s, transform 0.15s, box-shadow 0.15s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '0.9'
+                e.currentTarget.style.background = '#E88A68'
                 e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(218,119,86,0.35)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1'
-                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.background = '#DA7756'
+                e.currentTarget.style.transform = 'none'
+                e.currentTarget.style.boxShadow = 'none'
               }}
             >
-              <Plus size={16} />
+              <Plus size={15} />
               Connect VM
             </button>
           </div>
         </div>
       </header>
 
-      {/* ─── Main Content ───────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      {/* ── Main ──────────────────────────────────────────────────── */}
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
+
         {vmList.length === 0 ? (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center py-32 animate-slide-up">
-            <div
-              className="w-24 h-24 rounded-2xl flex items-center justify-center text-4xl mb-6"
-              style={{
-                background: 'rgba(99, 102, 241, 0.08)',
-                border: '1px solid rgba(99, 102, 241, 0.15)',
-              }}
-            >
+          /* ── Empty state ── */
+          <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingBottom: 80 }}>
+
+            {/* Icon */}
+            <div style={{
+              width: 80, height: 80, borderRadius: 22,
+              background: 'rgba(218,119,86,0.08)',
+              border: '1px solid rgba(218,119,86,0.14)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 36, marginBottom: 28,
+            }}>
               ⬡
             </div>
-            <h2 className="text-2xl font-semibold mb-2" style={{ color: '#e2e8f0' }}>
+
+            <h2 style={{ fontSize: 26, fontWeight: 600, color: '#F0EDE7', margin: '0 0 10px', letterSpacing: '-0.3px' }}>
               No VMs connected
             </h2>
-            <p className="text-sm mb-8 text-center max-w-md" style={{ color: '#64748b' }}>
-              Connect your first VM to start visualizing your infrastructure. Run the InfraCanvas
-              agent on any VM or Kubernetes cluster.
+            <p style={{ fontSize: 14, color: '#A09890', margin: '0 0 36px', textAlign: 'center', maxWidth: 380, lineHeight: 1.6 }}>
+              Connect a VM to start visualizing your infrastructure. Run the agent on any Linux server — no inbound ports required.
             </p>
+
             <button
               onClick={() => setShowConnect(true)}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-150"
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                color: '#fff',
-                boxShadow: '0 0 24px rgba(99, 102, 241, 0.25)',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '12px 24px', borderRadius: 10,
+                background: '#DA7756', color: '#fff',
+                border: 'none', fontSize: 14, fontWeight: 500,
+                cursor: 'pointer', transition: 'all 0.15s',
+                boxShadow: '0 4px 20px rgba(218,119,86,0.25)',
               }}
               onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#E88A68'
                 e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = '0 0 32px rgba(99, 102, 241, 0.4)'
+                e.currentTarget.style.boxShadow = '0 8px 28px rgba(218,119,86,0.35)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = '0 0 24px rgba(99, 102, 241, 0.25)'
+                e.currentTarget.style.background = '#DA7756'
+                e.currentTarget.style.transform = 'none'
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(218,119,86,0.25)'
               }}
             >
-              <Plus size={18} />
-              Connect VM
+              <Plus size={17} />
+              Connect your first VM
             </button>
 
             {/* Feature hints */}
-            <div className="grid grid-cols-3 gap-4 mt-16 w-full max-w-2xl">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 60, width: '100%', maxWidth: 560 }}>
               {[
-                {
-                  icon: <Activity size={18} />,
-                  title: 'Real-time monitoring',
-                  desc: 'Live CPU, memory, and health metrics',
-                },
-                {
-                  icon: <span className="text-base">⬡</span>,
-                  title: 'Visual canvas',
-                  desc: 'Interactive graph of your infrastructure',
-                },
-                {
-                  icon: <Wifi size={18} />,
-                  title: 'WebSocket streaming',
-                  desc: 'Instant updates via persistent connection',
-                },
+                { icon: <Activity size={16} />, title: 'Live metrics', desc: 'CPU, memory, and health in real-time' },
+                { icon: <span style={{ fontSize: 16 }}>⬡</span>, title: 'Visual canvas', desc: 'Interactive graph of every resource' },
+                { icon: <Network size={16} />, title: 'Outbound only', desc: 'No inbound ports or VPN needed' },
               ].map((f) => (
-                <div
-                  key={f.title}
-                  className="p-4 rounded-xl text-center"
-                  style={{
-                    background: '#0e0e1a',
-                    border: '1px solid #1e1e3a',
-                  }}
-                >
-                  <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center mx-auto mb-3"
-                    style={{
-                      background: 'rgba(99, 102, 241, 0.1)',
-                      color: '#6366f1',
-                    }}
-                  >
-                    {f.icon}
-                  </div>
-                  <p className="text-xs font-semibold mb-1" style={{ color: '#e2e8f0' }}>
-                    {f.title}
-                  </p>
-                  <p className="text-xs" style={{ color: '#475569' }}>
-                    {f.desc}
-                  </p>
+                <div key={f.title} style={{
+                  padding: '18px 16px',
+                  background: '#191817',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: 12, textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 9,
+                    background: 'rgba(218,119,86,0.1)',
+                    color: '#DA7756',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 12px',
+                  }}>{f.icon}</div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#F0EDE7', margin: '0 0 4px' }}>{f.title}</p>
+                  <p style={{ fontSize: 11, color: '#625850', margin: 0, lineHeight: 1.5 }}>{f.desc}</p>
                 </div>
               ))}
             </div>
           </div>
+
         ) : (
-          /* VM Grid */
+          /* ── VM Grid ── */
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-lg font-semibold" style={{ color: '#e2e8f0' }}>
-                  Connected VMs
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>
-                  {vmList.length} VM{vmList.length !== 1 ? 's' : ''} registered
-                </p>
-              </div>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: '#F0EDE7', margin: '0 0 4px', letterSpacing: '-0.2px' }}>
+                Connected VMs
+              </h2>
+              <p style={{ fontSize: 12, color: '#625850', margin: 0 }}>
+                {vmList.length} VM{vmList.length !== 1 ? 's' : ''} registered
+              </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
               {vmList.map((vm) => (
-                <VMCard key={vm.code} vm={vm} onDisconnect={() => handleDisconnect(vm.code)} />
+                <VMCard key={vm.code} vm={vm} onDisconnect={() => disconnectVM(vm.code)} />
               ))}
-              {/* Add more card */}
+
+              {/* Add more */}
               <button
                 onClick={() => setShowConnect(true)}
-                className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-3 p-8 transition-all duration-150 min-h-[220px]"
                 style={{
-                  borderColor: '#1e1e3a',
-                  color: '#475569',
+                  minHeight: 200, borderRadius: 14,
+                  border: '1.5px dashed rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 10, cursor: 'pointer', color: '#625850',
+                  transition: 'border-color 0.15s, color 0.15s, background 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#6366f1'
-                  e.currentTarget.style.color = '#6366f1'
-                  e.currentTarget.style.background = 'rgba(99, 102, 241, 0.04)'
+                  e.currentTarget.style.borderColor = 'rgba(218,119,86,0.35)'
+                  e.currentTarget.style.color = '#DA7756'
+                  e.currentTarget.style.background = 'rgba(218,119,86,0.04)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#1e1e3a'
-                  e.currentTarget.style.color = '#475569'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.color = '#625850'
                   e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ background: 'rgba(71, 85, 105, 0.1)' }}
-                >
-                  <Plus size={20} />
+                <div style={{
+                  width: 38, height: 38, borderRadius: 9,
+                  background: 'rgba(255,255,255,0.04)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Plus size={18} />
                 </div>
-                <p className="text-sm font-medium">Add VM</p>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>Add VM</span>
               </button>
             </div>
           </div>
         )}
       </main>
 
-      {/* ─── Connect Modal ──────────────────────────────────────── */}
       {showConnect && (
         <ConnectModal onConnect={handleConnect} onClose={() => setShowConnect(false)} />
       )}
