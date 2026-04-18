@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Terminal, ArrowRight, Wifi, Check, AlertCircle } from 'lucide-react'
+import { X, Terminal, ArrowRight, Wifi, AlertCircle } from 'lucide-react'
 import { SessionInfo } from '@/types'
 
 interface ConnectModalProps {
@@ -65,36 +65,37 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
         className="animate-slide-up"
         style={{
           width: '100%', maxWidth: 500, margin: '0 16px',
-          background: '#191817',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: '#0E0E1C',
+          border: '1px solid rgba(138,92,246,0.18)',
           borderRadius: 18,
           overflow: 'hidden',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(218,119,86,0.06)',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(192,38,211,0.06)',
         }}
       >
         {/* Header */}
-        <div style={{ padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '20px 22px 18px', borderBottom: '1px solid rgba(138,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 34, height: 34, borderRadius: 10,
-              background: '#DA7756', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, boxShadow: '0 2px 10px rgba(218,119,86,0.3)',
+              background: 'linear-gradient(135deg, #C026D3, #7C3AED)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, boxShadow: '0 2px 12px rgba(192,38,211,0.35)',
             }}>⬡</div>
             <div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE7', margin: 0 }}>Connect a VM</p>
-              <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0' }}>Pair with an InfraCanvas agent</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#EEE8FF', margin: 0 }}>Connect a VM</p>
+              <p style={{ fontSize: 11, color: '#52496E', margin: '2px 0 0' }}>Pair with an InfraCanvas agent</p>
             </div>
           </div>
           <button
             onClick={onClose}
             style={{
               width: 30, height: 30, borderRadius: 8, border: 'none',
-              background: 'transparent', color: '#625850',
+              background: 'transparent', color: '#52496E',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 0.15s, color 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#A09890' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#625850' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(138,92,246,0.1)'; e.currentTarget.style.color = '#8B82B0' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52496E' }}
           >
             <X size={15} />
           </button>
@@ -111,37 +112,37 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
                   <div style={{
                     width: 26, height: 26, borderRadius: '50%',
-                    background: i < 2 ? 'rgba(218,119,86,0.12)' : 'rgba(218,119,86,0.12)',
-                    border: '1px solid rgba(218,119,86,0.22)',
-                    color: '#DA7756',
+                    background: 'rgba(192,38,211,0.12)',
+                    border: '1px solid rgba(192,38,211,0.25)',
+                    color: '#C026D3',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 11, fontWeight: 600, flexShrink: 0,
                   }}>
                     {i + 1}
                   </div>
                   {i < steps.length - 1 && (
-                    <div style={{ width: 1, flex: 1, minHeight: 16, background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
+                    <div style={{ width: 1, flex: 1, minHeight: 16, background: 'rgba(138,92,246,0.1)', margin: '4px 0' }} />
                   )}
                 </div>
 
                 {/* Content */}
                 <div style={{ paddingBottom: i < steps.length - 1 ? 18 : 0, flex: 1 }}>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: '#F0EDE7', margin: '2px 0 4px' }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#EEE8FF', margin: '2px 0 4px' }}>
                     {step.title}
                   </p>
                   {step.desc && (
-                    <p style={{ fontSize: 11, color: '#625850', margin: '0 0 8px', lineHeight: 1.5 }}>
+                    <p style={{ fontSize: 11, color: '#52496E', margin: '0 0 8px', lineHeight: 1.5 }}>
                       {step.desc}
                     </p>
                   )}
                   {step.code && (
                     <div style={{
                       padding: '9px 12px', borderRadius: 9,
-                      background: '#111110', border: '1px solid rgba(255,255,255,0.08)',
+                      background: '#08080E', border: '1px solid rgba(138,92,246,0.12)',
                       fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
-                      color: '#DA7756', wordBreak: 'break-all',
+                      color: '#A78BFA', wordBreak: 'break-all',
                     }}>
-                      <span style={{ color: '#625850', marginRight: 8 }}>$</span>
+                      <span style={{ color: '#52496E', marginRight: 8 }}>$</span>
                       <span className="select-all">{step.code}</span>
                     </div>
                   )}
@@ -159,36 +160,37 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
                             placeholder="APEX-1483"
                             style={{
                               width: '100%', padding: '10px 14px',
-                              borderRadius: 9, background: '#111110',
-                              border: `1px solid ${error ? 'rgba(217,85,85,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                              color: '#F0EDE7', fontSize: 14, fontWeight: 500,
+                              borderRadius: 9, background: '#08080E',
+                              border: `1px solid ${error ? 'rgba(248,113,113,0.5)' : 'rgba(138,92,246,0.18)'}`,
+                              color: '#EEE8FF', fontSize: 14, fontWeight: 500,
                               fontFamily: 'JetBrains Mono, monospace', outline: 'none',
                               letterSpacing: '0.06em', transition: 'border-color 0.15s',
                             }}
-                            onFocus={(e) => { if (!error) e.target.style.borderColor = 'rgba(218,119,86,0.5)' }}
-                            onBlur={(e) => { if (!error) e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                            onFocus={(e) => { if (!error) e.target.style.borderColor = 'rgba(192,38,211,0.5)' }}
+                            onBlur={(e) => { if (!error) e.target.style.borderColor = 'rgba(138,92,246,0.18)' }}
                           />
                         </div>
                         <button
                           type="submit"
                           style={{
                             padding: '10px 18px', borderRadius: 9, border: 'none',
-                            background: '#DA7756', color: '#fff',
-                            fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                            background: 'linear-gradient(135deg, #C026D3, #7C3AED)',
+                            color: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: 6,
-                            transition: 'background 0.15s, transform 0.15s',
+                            transition: 'opacity 0.15s',
                             whiteSpace: 'nowrap',
+                            boxShadow: '0 2px 12px rgba(192,38,211,0.3)',
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#E88A68' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = '#DA7756' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
                         >
                           Connect <ArrowRight size={13} />
                         </button>
                       </div>
                       {error && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                          <AlertCircle size={12} style={{ color: '#D95555', flexShrink: 0 }} />
-                          <p style={{ fontSize: 11, color: '#D95555', margin: 0 }}>{error}</p>
+                          <AlertCircle size={12} style={{ color: '#F87171', flexShrink: 0 }} />
+                          <p style={{ fontSize: 11, color: '#F87171', margin: 0 }}>{error}</p>
                         </div>
                       )}
                     </form>
@@ -200,8 +202,8 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
 
           {/* Active sessions */}
           {!loadingSessions && sessions.length > 0 && (
-            <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: '#625850', margin: '0 0 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(138,92,246,0.08)' }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: '#52496E', margin: '0 0 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 Active sessions
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -211,26 +213,26 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
                     onClick={() => onConnect(s.code)}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)',
-                      background: '#111110', cursor: 'pointer', textAlign: 'left',
+                      padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(138,92,246,0.12)',
+                      background: '#08080E', cursor: 'pointer', textAlign: 'left',
                       transition: 'border-color 0.15s, background 0.15s',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(218,119,86,0.3)'
-                      e.currentTarget.style.background = 'rgba(218,119,86,0.05)'
+                      e.currentTarget.style.borderColor = 'rgba(192,38,211,0.3)'
+                      e.currentTarget.style.background = 'rgba(192,38,211,0.05)'
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-                      e.currentTarget.style.background = '#111110'
+                      e.currentTarget.style.borderColor = 'rgba(138,92,246,0.12)'
+                      e.currentTarget.style.background = '#08080E'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.paired ? '#C8993C' : '#4DB88A', flexShrink: 0, display: 'block' }} />
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.paired ? '#FBBF24' : '#4ADE80', flexShrink: 0, display: 'block' }} />
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 500, color: '#F0EDE7', margin: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: '#EEE8FF', margin: 0 }}>
                           {s.hostname || 'Unknown host'}
                         </p>
-                        <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace' }}>
+                        <p style={{ fontSize: 11, color: '#52496E', margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace' }}>
                           {s.code}
                         </p>
                       </div>
@@ -238,12 +240,12 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{
                         fontSize: 11, padding: '2px 9px', borderRadius: 20, fontWeight: 500,
-                        background: s.paired ? 'rgba(200,153,60,0.1)' : 'rgba(77,184,138,0.1)',
-                        color: s.paired ? '#C8993C' : '#4DB88A',
+                        background: s.paired ? 'rgba(251,191,36,0.1)' : 'rgba(74,222,128,0.1)',
+                        color: s.paired ? '#FBBF24' : '#4ADE80',
                       }}>
                         {s.paired ? 'In use' : 'Available'}
                       </span>
-                      <ArrowRight size={13} style={{ color: '#625850' }} />
+                      <ArrowRight size={13} style={{ color: '#52496E' }} />
                     </div>
                   </button>
                 ))}

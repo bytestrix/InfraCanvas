@@ -15,9 +15,9 @@ interface VMCardProps {
 
 function MiniBar({ value, color }: { value: number; color: string }) {
   const pct = Math.min(100, Math.max(0, value))
-  const bar = pct > 85 ? '#D95555' : pct > 65 ? '#C8993C' : color
+  const bar = pct > 85 ? '#F87171' : pct > 65 ? '#FBBF24' : color
   return (
-    <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+    <div style={{ height: 3, borderRadius: 2, background: 'rgba(138,92,246,0.1)', overflow: 'hidden' }}>
       <div style={{ height: '100%', width: `${pct}%`, background: bar, borderRadius: 2, transition: 'width 0.6s ease' }} />
     </div>
   )
@@ -27,11 +27,11 @@ function Stat({ label, value, icon }: { label: string; value: number | undefined
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-      padding: '8px 4px', borderRadius: 9, background: 'rgba(255,255,255,0.03)',
+      padding: '8px 4px', borderRadius: 9, background: 'rgba(138,92,246,0.05)',
     }}>
-      <span style={{ color: '#625850', display: 'flex' }}>{icon}</span>
-      <span style={{ fontSize: 16, fontWeight: 600, color: '#F0EDE7', lineHeight: 1 }}>{value ?? 0}</span>
-      <span style={{ fontSize: 10, color: '#625850', lineHeight: 1 }}>{label}</span>
+      <span style={{ color: '#52496E', display: 'flex' }}>{icon}</span>
+      <span style={{ fontSize: 16, fontWeight: 600, color: '#EEE8FF', lineHeight: 1 }}>{value ?? 0}</span>
+      <span style={{ fontSize: 10, color: '#52496E', lineHeight: 1 }}>{label}</span>
     </div>
   )
 }
@@ -39,9 +39,9 @@ function Stat({ label, value, icon }: { label: string; value: number | undefined
 export default function VMCard({ vm, onDisconnect }: VMCardProps) {
   const router = useRouter()
 
-  const isConnected   = vm.status === 'connected'
-  const isConnecting  = vm.status === 'connecting' || vm.status === 'paired'
-  const isError       = vm.status === 'error'
+  const isConnected    = vm.status === 'connected'
+  const isConnecting   = vm.status === 'connecting' || vm.status === 'paired'
+  const isError        = vm.status === 'error'
   const isDisconnected = vm.status === 'disconnected'
 
   const hostNode    = vm.graph?.nodes?.find((n) => n.type === 'host')
@@ -55,25 +55,24 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
 
   const canOpen = isConnected && !!vm.graph
 
-  /* status color */
-  const dotColor = isConnected ? '#4DB88A' : isConnecting ? '#DA7756' : isError ? '#D95555' : '#625850'
+  const dotColor   = isConnected ? '#4ADE80' : isConnecting ? '#C026D3' : isError ? '#F87171' : '#52496E'
   const statusLabel = isConnecting ? 'Connecting…' : isError ? 'Error' : isDisconnected ? 'Disconnected' : vm.status
 
   return (
     <div style={{
-      background: '#191817',
-      border: `1px solid ${isError ? 'rgba(217,85,85,0.2)' : 'rgba(255,255,255,0.08)'}`,
+      background: '#0E0E1C',
+      border: `1px solid ${isError ? 'rgba(248,113,113,0.2)' : 'rgba(138,92,246,0.12)'}`,
       borderRadius: 14,
       display: 'flex', flexDirection: 'column',
       transition: 'border-color 0.2s, box-shadow 0.2s',
       overflow: 'hidden',
     }}
     onMouseEnter={(e) => {
-      if (!isError) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.14)'
-      ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.4)'
+      if (!isError) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(138,92,246,0.28)'
+      ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)'
     }}
     onMouseLeave={(e) => {
-      ;(e.currentTarget as HTMLDivElement).style.borderColor = isError ? 'rgba(217,85,85,0.2)' : 'rgba(255,255,255,0.08)'
+      ;(e.currentTarget as HTMLDivElement).style.borderColor = isError ? 'rgba(248,113,113,0.2)' : 'rgba(138,92,246,0.12)'
       ;(e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
     }}
     >
@@ -81,17 +80,16 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
       {/* ── Header ────────────────────────────────────────────────── */}
       <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-          {/* status dot / spinner */}
           {isConnecting
-            ? <Loader2 size={14} style={{ color: '#DA7756', flexShrink: 0 }} className="animate-spin" />
+            ? <Loader2 size={14} style={{ color: '#C026D3', flexShrink: 0 }} className="animate-spin" />
             : <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0, display: 'block' }}
                     className={isConnected ? 'status-dot-pulse' : ''} />
           }
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE7', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: '#EEE8FF', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {vm.hostname ?? vm.code}
             </p>
-            <p style={{ fontSize: 11, color: '#625850', margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace' }}>
+            <p style={{ fontSize: 11, color: '#52496E', margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace' }}>
               {vm.code}
             </p>
           </div>
@@ -101,14 +99,14 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
           {cloudProvider && (
             <span style={{
               fontSize: 11, padding: '2px 9px', borderRadius: 20,
-              background: 'rgba(218,119,86,0.1)', color: '#DA7756',
-              border: '1px solid rgba(218,119,86,0.18)', fontWeight: 500,
+              background: 'rgba(124,58,237,0.12)', color: '#A78BFA',
+              border: '1px solid rgba(124,58,237,0.22)', fontWeight: 500,
             }}>{cloudProvider}</span>
           )}
           <span style={{
             fontSize: 11, padding: '2px 9px', borderRadius: 20, fontWeight: 500,
-            background: isConnected ? 'rgba(77,184,138,0.1)' : isConnecting ? 'rgba(218,119,86,0.1)' : isError ? 'rgba(217,85,85,0.1)' : 'rgba(255,255,255,0.06)',
-            color: isConnected ? '#4DB88A' : isConnecting ? '#DA7756' : isError ? '#D95555' : '#625850',
+            background: isConnected ? 'rgba(74,222,128,0.1)' : isConnecting ? 'rgba(192,38,211,0.1)' : isError ? 'rgba(248,113,113,0.1)' : 'rgba(255,255,255,0.05)',
+            color: isConnected ? '#4ADE80' : isConnecting ? '#C026D3' : isError ? '#F87171' : '#52496E',
           }}>{statusLabel}</span>
         </div>
       </div>
@@ -118,11 +116,11 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
         <div style={{
           margin: '0 14px 10px',
           padding: '10px 12px', borderRadius: 9,
-          background: 'rgba(217,85,85,0.07)', border: '1px solid rgba(217,85,85,0.15)',
+          background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.15)',
           display: 'flex', alignItems: 'flex-start', gap: 9,
         }}>
-          <AlertTriangle size={13} style={{ color: '#D95555', flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 12, color: '#F8A0A0', margin: 0, lineHeight: 1.5 }}>{vm.error}</p>
+          <AlertTriangle size={13} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 12, color: '#FCA5A5', margin: 0, lineHeight: 1.5 }}>{vm.error}</p>
         </div>
       )}
 
@@ -130,11 +128,11 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
       {isDisconnected && (
         <div style={{
           margin: '0 14px 10px', padding: '10px 12px', borderRadius: 9,
-          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(138,92,246,0.04)', border: '1px solid rgba(138,92,246,0.1)',
           display: 'flex', alignItems: 'center', gap: 9,
         }}>
-          <WifiOff size={13} style={{ color: '#625850' }} />
-          <p style={{ fontSize: 12, color: '#625850', margin: 0 }}>Agent disconnected</p>
+          <WifiOff size={13} style={{ color: '#52496E' }} />
+          <p style={{ fontSize: 12, color: '#52496E', margin: 0 }}>Agent disconnected</p>
         </div>
       )}
 
@@ -145,15 +143,15 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
             <div style={{ padding: '0 18px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div style={{ display: 'flex', gap: 14 }}>
                 {[
-                  { label: 'CPU', value: cpu, color: '#DA7756', icon: <Cpu size={11} /> },
-                  { label: 'Mem', value: mem, color: '#8B6CF6', icon: <MemoryStick size={11} /> },
+                  { label: 'CPU', value: cpu, color: '#C026D3', icon: <Cpu size={11} /> },
+                  { label: 'Mem', value: mem, color: '#7C3AED', icon: <MemoryStick size={11} /> },
                 ].map((m) => (
                   <div key={m.label} style={{ flex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#625850' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#52496E' }}>
                         {m.icon} {m.label}
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: '#A09890', fontFamily: 'JetBrains Mono, monospace' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#8B82B0', fontFamily: 'JetBrains Mono, monospace' }}>
                         {m.value.toFixed(1)}%
                       </span>
                     </div>
@@ -178,13 +176,13 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
           {snapshot && (
             <div style={{
               margin: '0 14px 12px', padding: '8px 12px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.03)',
+              background: 'rgba(138,92,246,0.04)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <span style={{ fontSize: 11, color: '#625850' }}>
+              <span style={{ fontSize: 11, color: '#52496E' }}>
                 {vm.graph.stats.totalNodes} nodes · {vm.graph.stats.totalEdges} edges
               </span>
-              <span style={{ fontSize: 11, color: '#625850', fontFamily: 'JetBrains Mono, monospace' }}>
+              <span style={{ fontSize: 11, color: '#52496E', fontFamily: 'JetBrains Mono, monospace' }}>
                 {new Date(snapshot.timestamp).toLocaleTimeString()}
               </span>
             </div>
@@ -195,14 +193,14 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
       {/* ── Loading shimmer ────────────────────────────────────────── */}
       {(isConnecting || (isConnected && !vm.graph)) && (
         <div style={{ padding: '0 18px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(138,92,246,0.08)', overflow: 'hidden', position: 'relative' }}>
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(90deg, transparent, rgba(218,119,86,0.5), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(192,38,211,0.5), transparent)',
               animation: 'shimmer 1.8s infinite',
             }} />
           </div>
-          <span style={{ fontSize: 11, color: '#625850', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, color: '#52496E', whiteSpace: 'nowrap' }}>
             {isConnecting ? 'Pairing…' : 'Loading graph…'}
           </span>
         </div>
@@ -211,7 +209,7 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
       {/* ── Actions ───────────────────────────────────────────────── */}
       <div style={{
         padding: '12px 14px 14px',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
+        borderTop: '1px solid rgba(138,92,246,0.08)',
         display: 'flex', gap: 8, marginTop: 'auto',
       }}>
         <button
@@ -221,12 +219,13 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 6, padding: '8px 12px', borderRadius: 9, border: 'none',
             fontSize: 12, fontWeight: 500, cursor: canOpen ? 'pointer' : 'not-allowed',
-            background: canOpen ? '#DA7756' : 'rgba(255,255,255,0.05)',
-            color: canOpen ? '#fff' : '#625850',
-            transition: 'background 0.15s, opacity 0.15s',
+            background: canOpen ? 'linear-gradient(135deg, #C026D3, #7C3AED)' : 'rgba(138,92,246,0.07)',
+            color: canOpen ? '#fff' : '#52496E',
+            transition: 'opacity 0.15s',
+            boxShadow: canOpen ? '0 2px 12px rgba(192,38,211,0.25)' : 'none',
           }}
-          onMouseEnter={(e) => { if (canOpen) e.currentTarget.style.background = '#E88A68' }}
-          onMouseLeave={(e) => { if (canOpen) e.currentTarget.style.background = '#DA7756' }}
+          onMouseEnter={(e) => { if (canOpen) e.currentTarget.style.opacity = '0.85' }}
+          onMouseLeave={(e) => { if (canOpen) e.currentTarget.style.opacity = '1' }}
         >
           <ExternalLink size={12} />
           View Canvas
@@ -237,20 +236,20 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
           disabled={!isConnected}
           title="Refresh graph"
           style={{
-            padding: '8px 11px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.08)',
-            background: 'transparent', color: isConnected ? '#A09890' : '#625850',
+            padding: '8px 11px', borderRadius: 9, border: '1px solid rgba(138,92,246,0.12)',
+            background: 'transparent', color: isConnected ? '#8B82B0' : '#52496E',
             cursor: isConnected ? 'pointer' : 'not-allowed', transition: 'all 0.15s',
             display: 'flex', alignItems: 'center',
           }}
           onMouseEnter={(e) => {
             if (isConnected) {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'
-              e.currentTarget.style.color = '#F0EDE7'
+              e.currentTarget.style.borderColor = 'rgba(138,92,246,0.3)'
+              e.currentTarget.style.color = '#EEE8FF'
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-            e.currentTarget.style.color = isConnected ? '#A09890' : '#625850'
+            e.currentTarget.style.borderColor = 'rgba(138,92,246,0.12)'
+            e.currentTarget.style.color = isConnected ? '#8B82B0' : '#52496E'
           }}
         >
           <RefreshCw size={13} />
@@ -260,19 +259,19 @@ export default function VMCard({ vm, onDisconnect }: VMCardProps) {
           onClick={onDisconnect}
           title="Disconnect"
           style={{
-            padding: '8px 11px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.08)',
-            background: 'transparent', color: '#625850',
+            padding: '8px 11px', borderRadius: 9, border: '1px solid rgba(138,92,246,0.12)',
+            background: 'transparent', color: '#52496E',
             cursor: 'pointer', transition: 'all 0.15s',
             display: 'flex', alignItems: 'center',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(217,85,85,0.3)'
-            e.currentTarget.style.color = '#D95555'
-            e.currentTarget.style.background = 'rgba(217,85,85,0.07)'
+            e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'
+            e.currentTarget.style.color = '#F87171'
+            e.currentTarget.style.background = 'rgba(248,113,113,0.07)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-            e.currentTarget.style.color = '#625850'
+            e.currentTarget.style.borderColor = 'rgba(138,92,246,0.12)'
+            e.currentTarget.style.color = '#52496E'
             e.currentTarget.style.background = 'transparent'
           }}
         >

@@ -20,15 +20,15 @@ export default function VMCanvasPage() {
 
   if (!vm) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111110' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#08080E' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
           <div style={{
             width: 38, height: 38, borderRadius: '50%',
-            border: '2.5px solid rgba(218,119,86,0.25)',
-            borderTopColor: '#DA7756',
+            border: '2.5px solid rgba(192,38,211,0.2)',
+            borderTopColor: '#C026D3',
             animation: 'spin 0.85s linear infinite',
           }} className="animate-spin" />
-          <p style={{ fontSize: 13, color: '#625850' }}>Connecting to {code}…</p>
+          <p style={{ fontSize: 13, color: '#52496E' }}>Connecting to {code}…</p>
         </div>
       </div>
     )
@@ -36,32 +36,32 @@ export default function VMCanvasPage() {
 
   if (vm.status === 'error') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111110' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#08080E' }}>
         <div style={{
           maxWidth: 420, width: '100%', margin: '0 16px',
-          background: '#191817', border: '1px solid rgba(255,255,255,0.08)',
+          background: '#0E0E1C', border: '1px solid rgba(138,92,246,0.12)',
           borderRadius: 16, padding: '28px 28px 24px',
           display: 'flex', flexDirection: 'column', gap: 18,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{
               width: 42, height: 42, borderRadius: 11,
-              background: 'rgba(217,85,85,0.1)', border: '1px solid rgba(217,85,85,0.2)',
+              background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#D95555', flexShrink: 0,
+              color: '#F87171', flexShrink: 0,
             }}>
               <AlertCircle size={20} />
             </div>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 600, color: '#F0EDE7', margin: 0 }}>Connection failed</p>
-              <p style={{ fontSize: 12, color: '#625850', margin: '3px 0 0' }}>Could not connect to {code}</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#EEE8FF', margin: 0 }}>Connection failed</p>
+              <p style={{ fontSize: 12, color: '#52496E', margin: '3px 0 0' }}>Could not connect to {code}</p>
             </div>
           </div>
 
           <p style={{
-            fontSize: 12, color: '#A09890', margin: 0,
+            fontSize: 12, color: '#8B82B0', margin: 0,
             padding: '12px 14px', borderRadius: 9,
-            background: '#111110', border: '1px solid rgba(255,255,255,0.07)',
+            background: '#08080E', border: '1px solid rgba(138,92,246,0.1)',
             fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.6,
           }}>
             {vm.error}
@@ -72,17 +72,17 @@ export default function VMCanvasPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '10px 16px', borderRadius: 9,
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#A09890', fontSize: 13, fontWeight: 500,
+              background: 'transparent', border: '1px solid rgba(138,92,246,0.15)',
+              color: '#8B82B0', fontSize: 13, fontWeight: 500,
               cursor: 'pointer', transition: 'all 0.15s',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
-              e.currentTarget.style.color = '#F0EDE7'
+              e.currentTarget.style.borderColor = 'rgba(138,92,246,0.3)'
+              e.currentTarget.style.color = '#EEE8FF'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-              e.currentTarget.style.color = '#A09890'
+              e.currentTarget.style.borderColor = 'rgba(138,92,246,0.15)'
+              e.currentTarget.style.color = '#8B82B0'
             }}
           >
             <ArrowLeft size={15} />

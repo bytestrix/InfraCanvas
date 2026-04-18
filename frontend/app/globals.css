@@ -6,25 +6,27 @@
 
 /* ─── Design tokens ────────────────────────────────────────────────────────── */
 :root {
-  --bg:              #111110;
-  --surface:         #191817;
-  --surface-2:       #201E1C;
-  --surface-3:       #2A2724;
-  --border:          rgba(255,255,255,0.08);
-  --border-bright:   rgba(255,255,255,0.15);
-  --text-primary:    #F0EDE7;
-  --text-secondary:  #A09890;
-  --text-muted:      #625850;
-  --accent:          #DA7756;
-  --accent-hover:    #E88A68;
-  --accent-subtle:   rgba(218,119,86,0.12);
-  --accent-glow:     rgba(218,119,86,0.20);
-  --success:         #4DB88A;
-  --success-subtle:  rgba(77,184,138,0.12);
-  --warning:         #C8993C;
-  --warning-subtle:  rgba(200,153,60,0.12);
-  --danger:          #D95555;
-  --danger-subtle:   rgba(217,85,85,0.12);
+  --bg:              #08080E;
+  --surface:         #0E0E1C;
+  --surface-2:       #141428;
+  --surface-3:       #1C1C38;
+  --border:          rgba(138,92,246,0.12);
+  --border-bright:   rgba(138,92,246,0.25);
+  --text-primary:    #EEE8FF;
+  --text-secondary:  #8B82B0;
+  --text-muted:      #52496E;
+  --accent:          #C026D3;
+  --accent-hover:    #D946EF;
+  --accent-subtle:   rgba(192,38,211,0.12);
+  --accent-glow:     rgba(192,38,211,0.28);
+  --purple:          #7C3AED;
+  --purple-subtle:   rgba(124,58,237,0.12);
+  --success:         #4ADE80;
+  --success-subtle:  rgba(74,222,128,0.12);
+  --warning:         #FBBF24;
+  --warning-subtle:  rgba(251,191,36,0.12);
+  --danger:          #F87171;
+  --danger-subtle:   rgba(248,113,113,0.12);
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────────  */
@@ -43,12 +45,12 @@ html, body {
 /* ─── Scrollbar ─────────────────────────────────────────────────────────────  */
 ::-webkit-scrollbar          { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track    { background: transparent; }
-::-webkit-scrollbar-thumb    { background: rgba(255,255,255,0.12); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb    { background: rgba(138,92,246,0.2); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(138,92,246,0.35); }
 
 /* ─── ReactFlow overrides ───────────────────────────────────────────────────  */
 .react-flow__background              { background-color: var(--bg) !important; }
-.react-flow__background pattern circle { fill: rgba(255,255,255,0.04) !important; }
+.react-flow__background pattern circle { fill: rgba(138,92,246,0.06) !important; }
 
 .react-flow__minimap {
   background: var(--surface) !important;
@@ -56,14 +58,14 @@ html, body {
   border-radius: 10px !important;
   overflow: hidden;
 }
-.react-flow__minimap-mask            { fill: rgba(218,119,86,0.08) !important; }
+.react-flow__minimap-mask            { fill: rgba(192,38,211,0.08) !important; }
 
 .react-flow__controls {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: 10px !important;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
 }
 .react-flow__controls-button {
   background: transparent !important;
@@ -79,7 +81,7 @@ html, body {
 .react-flow__controls-button svg { fill: currentColor !important; }
 
 .react-flow__edge-path {
-  stroke: rgba(255,255,255,0.1) !important;
+  stroke: rgba(138,92,246,0.18) !important;
   stroke-width: 1.5 !important;
 }
 .react-flow__edge.selected .react-flow__edge-path,
@@ -100,7 +102,7 @@ html, body {
 
 /* ─── Utilities ─────────────────────────────────────────────────────────────  */
 .glass {
-  background: rgba(25,24,23,0.85);
+  background: rgba(14,14,28,0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -116,18 +118,18 @@ html, body {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--purple));
   color: #fff;
   border: none;
   border-radius: 9px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 .btn-primary:hover {
-  background: var(--accent-hover);
+  opacity: 0.9;
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px var(--accent-glow);
+  box-shadow: 0 4px 20px var(--accent-glow);
 }
 
 .btn-ghost {
@@ -161,7 +163,7 @@ html, body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10,9,8,0.75);
+  background: rgba(4,4,10,0.80);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   z-index: 50;
@@ -190,6 +192,6 @@ html, body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background: linear-gradient(90deg, transparent, rgba(192,38,211,0.06), transparent);
   animation: shimmer 2s infinite;
 }
