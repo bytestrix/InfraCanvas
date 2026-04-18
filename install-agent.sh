@@ -9,7 +9,7 @@ set -euo pipefail
 # ── defaults ──────────────────────────────────────────────────────────────────
 # Set DEFAULT_RELAY_URL to your hosted relay domain after deployment.
 # Users can still override with --backend-url or INFRACANVAS_BACKEND_URL env var.
-DEFAULT_RELAY_URL="ws://13.49.41.61:8080"   # ← update to wss://yourdomain.com after adding TLS
+DEFAULT_RELAY_URL="ws://13.200.198.166:8080"   # ← update to wss://yourdomain.com after adding TLS
 
 BACKEND_URL="${INFRACANVAS_BACKEND_URL:-$DEFAULT_RELAY_URL}"
 AGENT_NAME="${INFRACANVAS_AGENT_NAME:-}"

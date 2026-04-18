@@ -5,7 +5,7 @@
 # Override any value here, then: sudo systemctl restart infracanvas-agent
 
 # Relay server WebSocket URL (required)
-INFRACANVAS_BACKEND=ws://13.49.41.61:8080
+INFRACANVAS_BACKEND=ws://13.200.198.166:8080
 
 # Shared auth token — must match INFRACANVAS_TOKEN on the relay server
 # Leave empty if the relay runs without auth (dev mode)

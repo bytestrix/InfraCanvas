@@ -55,5 +55,19 @@ vm_*.json
 .claude/
 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.txt
 
+# Dev-only scripts (not for repo consumers)
+deploy-*.sh
+connect-vm.sh
+start-ssh-tunnel.sh
+test_e2e.sh
+test_security.sh
+
+# Old dev docs
+AZURE_VM_SETUP.md
+DEVOPS_OPERATIONS*.md
+QUICKSTART.md
+QUICK_DEPLOY.md
+SETUP_GUIDE.md
+
 # Root package-lock (no root package.json)
 /package-lock.json

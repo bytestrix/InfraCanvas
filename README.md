@@ -38,7 +38,7 @@ docker compose up -d
 
 Open **http://localhost:3000** in your browser.
 
-> The default `frontend/.env` points to the public demo relay at `ws://13.49.41.61:8080`.  
+> The default `frontend/.env` points to the public demo relay at `ws://13.200.198.166:8080`.  
 > To self-host, see [Self-hosting](#self-hosting) below.
 
 ### 2. Install the agent on any Linux VM
@@ -221,7 +221,7 @@ docker compose up -d
 
 Then update `DEFAULT_RELAY_URL` in `install-agent.sh` to `ws://YOUR_IP:8080` before distributing to your VMs.
 
-> **Default relay:** The repo ships with `frontend/.env` pointing to `ws://13.49.41.61:8080` (the public demo relay). Override it by creating `frontend/.env.local` with your own URL — `.env.local` takes priority and is gitignored.
+> **Default relay:** The repo ships with `frontend/.env` pointing to `ws://13.200.198.166:8080` (the public demo relay). Override it by creating `frontend/.env.local` with your own URL — `.env.local` takes priority and is gitignored.
 
 ### With TLS / custom domain
 
