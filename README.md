@@ -1,41 +1,65 @@
 # InfraCanvas
 
-**Real-time infrastructure topology canvas — containers, Kubernetes, and VMs visualized as a live graph.**
+**See everything running on your servers — in one live, visual map.**
 
 [![CI](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg)](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bytestrix/InfraCanvas)](https://goreportcard.com/report/github.com/bytestrix/InfraCanvas)
 
-Install a lightweight agent on any Linux VM with one command. No inbound ports, no VPN, no cloud accounts. The agent phones home to your relay server over a single outbound WebSocket. You get a live visual map of everything running on your servers — containers, pods, networks, volumes, deployments — updating every 30 seconds and diffing to minimize bandwidth.
+InfraCanvas runs a tiny agent on any Linux server. The agent discovers every container, pod, volume, network, and deployment on that machine and streams it to a visual canvas in your browser — live, updating every 30 seconds.
 
-> **Security notice:** Pair codes grant read/exec access to your infrastructure. Treat them like passwords. Use a TLS-enabled relay (`wss://`) in production — see [Security](#security) below.
+**No VPN. No inbound firewall rules. No cloud account needed.**
+
+The agent connects *outward* to a relay server. The relay connects your browser to your VMs. Your servers never accept a connection from the outside world.
+
+---
+
+## What you get
+
+- **Live topology graph** — every container, Kubernetes pod, service, volume, and network drawn as a connected graph. Relationships are shown as edges (this container mounts that volume, this pod belongs to that deployment).
+- **Health at a glance** — nodes turn green, amber, or red based on real container/pod state. A banner appears automatically when something is unhealthy.
+- **Container terminal** — open a real shell inside any running container, right in the browser. Full color, resize, everything.
+- **VM shell** — open a terminal on the VM itself, not just the containers.
+- **Container logs** — last 200 lines, color-coded by severity. Download as a file.
+- **Kubernetes actions** — rolling restart, scale up/down, update the container image for any deployment — all from the UI.
+- **Docker actions** — restart, stop, start, update image for any container.
+- **Inspect everything** — click any node to see its environment variables (with secrets masked), port mappings, volume mounts, and image details.
+- **Multi-VM** — connect as many servers as you want. Each one gets its own card in the dashboard.
+- **Export** — save the canvas as a PNG screenshot or download the full graph as JSON.
 
 ---
 
 ## How it works
 
+There are three pieces:
+
 ```
 Your browser
-  └─ Dashboard  (Next.js · port 3000)
-          │
-          │  WebSocket  /ws/canvas  (outbound only)
+  └── Dashboard (Next.js)
+          │  WebSocket (outbound)
           ▼
-    Relay Server  (Go · port 8080)
+    Relay Server (Go)
           ▲
-          │  WebSocket  /ws/agent  (outbound only)
-  VMs running the agent
+          │  WebSocket (outbound from VM)
+    Agent on each VM
 ```
 
-The agent on each VM connects **outbound** to the relay — no inbound firewall rules needed on the VMs. You pair a VM to your dashboard with a short code like `WOLF-BEAR-482917`. Multiple VMs, multiple browser tabs — all work simultaneously through the same relay.
+**Relay server** — runs on any internet-accessible machine. Acts as a message broker. It never looks inside the data, just passes it through.
+
+**Agent** — a single Go binary you install on each VM. It discovers what's running, builds a graph, and sends it to the relay. When you click "Restart container" in the browser, the relay forwards that instruction to the agent, which runs it.
+
+**Dashboard** — a Next.js web app that connects to the relay. You enter a short **pair code** (like `WOLF-BEAR-482917`) and instantly see that VM's graph.
+
+**Pair codes** are how VMs are identified. When the agent connects to the relay, the relay gives it a unique code. You type that code in the browser. The relay connects them. Nobody else can see your VM's data unless they know the code.
 
 ---
 
 ## Quick Start
 
-### 1. Run the relay + dashboard
+### Step 1 — Run the relay and dashboard
 
-You need Docker and Docker Compose installed.
+You need Docker and Docker Compose.
 
 ```bash
 git clone https://github.com/bytestrix/InfraCanvas.git
@@ -45,36 +69,38 @@ docker compose up -d
 
 Open **http://localhost:3000** in your browser.
 
-> The default `frontend/.env` points to the public demo relay at `ws://13.200.198.166:8080`.  
-> To self-host, see [Self-hosting](#self-hosting) below.
+> By default the dashboard points to a public demo relay at `ws://13.200.198.166:8080`. This is fine for trying things out. For production, [host your own relay](#self-hosting).
 
-### 2. Install the agent on any Linux VM
+### Step 2 — Install the agent on a server
+
+Run this on any Linux VM you want to monitor:
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
 
-The agent connects, prints a **pair code**, and waits:
+The agent starts, connects to the relay, and prints a pair code:
 
 ```
-────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────
   InfraCanvas agent running
 
   Pair code:  WOLF-BEAR-482917
 
-  Open the canvas and enter this code to connect.
-────────────────────────────────────────────────────────────────────
+  Enter this code in the dashboard to connect.
+────────────────────────────────────────────────────────────
 ```
 
-If you missed the code:
+### Step 3 — Enter the code in the dashboard
 
+Type the pair code into the "Connect a VM" field in the browser. The VM appears on the canvas within a few seconds.
+
+**Missed the code?**
 ```bash
 sudo journalctl -u infracanvas-agent -n 50 | grep "Pair code"
 ```
 
-Enter the code in the dashboard — the VM appears on the canvas instantly.
-
-### 3. Uninstall the agent
+### Step 4 — Uninstall
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
@@ -82,165 +108,128 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uni
 
 ---
 
-## Features
+## Your data stays on your servers
 
-### Canvas
+Here is exactly what leaves each VM:
 
-| Feature | Details |
-|---|---|
-| **Live topology graph** | Every container, pod, service, volume, network, image drawn as a node with edges showing relationships |
-| **Real-time updates** | Agent pushes a full snapshot on connect, then incremental diffs every 30 s — only changed nodes/edges are sent |
-| **Grouped view** | Nodes bucketed by type (Containers, K8s Workloads, Storage…) — one card per group, click to drill in |
-| **Flat view** | Every individual node laid out by a Dagre hierarchy — zoom in for full detail |
-| **Filter chips** | Toggle/spotlight Kubernetes · Docker · Host · Pods · Storage · Events groups; right-click to hide |
-| **Health colors** | Healthy = green, degraded = amber, unhealthy = red, unknown = grey — driven by live container/pod state |
-| **Critical alert banner** | Shown automatically when any group has degraded/unhealthy nodes — click to drill in |
-| **Multi-VM** | Add as many VMs as you want from the same dashboard; each runs independently |
-| **Export PNG** | Snapshot the current canvas as a high-res image |
-| **Export JSON** | Download the full raw graph (nodes + edges + stats) as JSON |
+- Container names, IDs, status, image names, port mappings, restart counts
+- Environment variables — **with secret values redacted**. Any variable whose name contains `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` is replaced with `[REDACTED]` before it ever leaves the VM.
+- Resource metadata: CPU, memory, network interfaces, OS info
+- Kubernetes resource names and states (no secret values from ConfigMaps or Secrets)
 
-### Container & Docker
+What **never** leaves your VM:
+- Actual secret values
+- File contents
+- Database contents
+- Network traffic content
+- Anything you did not explicitly stream (like logs or terminal output — those only go to your browser, not stored anywhere)
 
-| Feature | Details |
-|---|---|
-| **Container actions** | Restart / Stop / Start any container from the UI — sent to the agent via WebSocket, executed with Docker SDK |
-| **Image tag update** | Pull a new image tag for a container directly from the panel |
-| **Container logs** | View last 200 log lines with ERROR/WARN/INFO color-coding; download as `.txt` |
-| **Container terminal** | Full interactive TTY shell inside any container (`docker exec`) with xterm.js |
-| **Environment variables** | View all env vars with automatic secret masking; toggle to reveal |
-| **Port mappings** | See host→container port bindings at a glance |
-| **Mounts** | Volume and bind-mount paths with read/write mode |
-| **Volumes & networks** | Visualized as nodes with mount/connect edges to containers |
-
-### Kubernetes
-
-| Feature | Details |
-|---|---|
-| **Full resource graph** | Cluster → Nodes → Namespaces → Deployments/StatefulSets/DaemonSets → Pods → Services → Ingress → PVCs |
-| **Pod health** | Phase-driven health colors |
-| **Rolling restart** | Trigger `kubectl rollout restart` for any Deployment/StatefulSet/DaemonSet |
-| **Update image** | Change the container image for a Deployment via the UI |
-| **Scale** | Set replica count for Deployments and StatefulSets |
-| **Pod logs** | Fetch logs from any pod |
-| **Events** | K8s events shown as nodes with links to affected resources |
-
-### VM / Host
-
-| Feature | Details |
-|---|---|
-| **Host info** | OS, kernel, CPU cores, memory, hostname |
-| **VM terminal** | Full interactive PTY shell directly on the VM (`/bin/bash`) via xterm.js |
-| **Cloud detection** | AWS / GCP / Azure / on-prem detected automatically |
-| **Environment detection** | production / staging / QA / dev / test inferred from hostname/namespace patterns |
-
-### Security
-
-| Feature | Details |
-|---|---|
-| **Secret redaction** | Environment variables containing `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL` etc. are automatically redacted before leaving the VM |
-| **Auth token** | Optional shared secret between agent and relay (`INFRACANVAS_TOKEN`); relay rejects connections without it |
-| **Outbound-only agents** | No inbound ports needed on monitored VMs — agents initiate the WebSocket connection |
-| **Cryptographic pair codes** | Codes are generated with `crypto/rand` — not guessable from time-based seeds |
+The relay server does not store snapshots to disk. If you disconnect, the data is gone.
 
 ---
 
 ## Security
 
-### Pair codes
+### Pair codes protect your VMs
 
-Pair codes (e.g. `WOLF-BEAR-482917`) are generated with `crypto/rand` and have ~1.44 billion possible values. Anyone who knows a pair code can:
+A pair code like `WOLF-BEAR-482917` is the only thing standing between your VM's data and the public internet (when using plain `ws://`). Treat it like a password:
 
-- Read your full infrastructure topology (container names, images, env vars after redaction)
-- Stream container and pod logs
-- Open a shell into any container on that VM
-- Execute Docker and Kubernetes actions (restart, scale, update image)
+- Do not post it in public Slack channels or GitHub issues
+- Do not commit it to version control
+- Regenerate it by restarting the agent (`sudo systemctl restart infracanvas-agent`)
 
-**Treat pair codes like API keys.** Do not share them in public channels or commit them to version control.
+Codes are generated with `crypto/rand` and have approximately 1.44 billion possible values — not guessable from time or hostname.
 
-### Use TLS in production
+### Anyone with the pair code can
 
-The default setup runs over plain `ws://`. For any internet-facing deployment:
+- See your full infrastructure topology
+- View container logs
+- Open a shell inside any container on that VM
+- Run Docker and Kubernetes actions (restart, scale, update image)
 
-1. Put Caddy or nginx in front of the relay and dashboard (see [Self-hosting](#self-hosting))
-2. Use `wss://` in `frontend/.env` and in the agent `--backend-url` flag
-3. Set `INFRACANVAS_TOKEN` as a shared secret so only your agents can connect
+### For production: use TLS and an auth token
 
-### Auth token
+Plain `ws://` is fine for local testing. For anything accessible from the internet:
+
+**1. Put Caddy or nginx in front (automatic HTTPS):**
+
+```
+canvas.example.com {
+    reverse_proxy localhost:3000
+}
+relay.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+**2. Set a shared secret so only your agents can connect:**
 
 ```bash
-# Set on the relay server (docker-compose.yml or environment)
-INFRACANVAS_TOKEN=your-random-secret
+# On the relay server (add to docker-compose.yml environment)
+INFRACANVAS_TOKEN=a-long-random-string
 
-# Set on each agent
-INFRACANVAS_TOKEN=your-random-secret infracanvas start
-# or in /etc/infracanvas/agent.env
+# On each agent (/etc/infracanvas/agent.env)
+INFRACANVAS_TOKEN=a-long-random-string
+```
+
+**3. Use `wss://` in your dashboard `.env`:**
+
+```
+NEXT_PUBLIC_WS_URL=wss://relay.example.com
 ```
 
 ---
 
-## Architecture
+## All features
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Browser                              │
-│           Dashboard  (Next.js · port 3000)               │
-│   ReactFlow canvas · Zustand state · xterm.js terminal   │
-└───────────────────────┬─────────────────────────────────┘
-                        │  WS /ws/canvas
-                        │  PAIR → GRAPH_SNAPSHOT → GRAPH_DIFF
-                        │  BROWSER_ACTION → ACTION_REQUEST
-                        │  ACTION_RESULT ← ACTION_PROGRESS
-                        │  LOG_DATA · EXEC_DATA · EXEC_INPUT
-┌───────────────────────▼─────────────────────────────────┐
-│                  Relay Server  (Go · port 8080)          │
-│  /ws/agent  ←── agents connect outbound                  │
-│  /ws/canvas ←── browsers subscribe                       │
-│  /api/health · /api/sessions                             │
-│  Transparent relay: agent msgs → all paired browsers     │
-│  Transparent relay: browser msgs → paired agent          │
-└───────────────────────┬─────────────────────────────────┘
-                        │  WS /ws/agent
-                        │  HELLO · PAIR_CODE · GRAPH_SNAPSHOT
-                        │  ACTION_REQUEST → ACTION_RESULT
-                        │  EXEC_START / EXEC_INPUT / EXEC_DATA
-┌───────────────────────▼─────────────────────────────────┐
-│                  Agent Binary  (infracanvas start)        │
-│                                                          │
-│  Discovery:                                              │
-│    ├── Host (OS, CPU, memory, network interfaces)        │
-│    ├── Docker (containers, images, volumes, networks)    │
-│    └── Kubernetes (pods, deployments, services, ingress) │
-│                                                          │
-│  Actions:                                                │
-│    ├── Docker: restart / stop / start / logs / exec      │
-│    └── Kubernetes: rollout restart / scale / update img  │
-│                                                          │
-│  Terminals:                                              │
-│    ├── Container exec  (Docker exec API + PTY)           │
-│    └── VM shell        (creack/pty + /bin/bash)          │
-└──────────────────────────────────────────────────────────┘
-```
+### Canvas
 
-### WebSocket message protocol
+| Feature | What it does |
+|---|---|
+| Live topology graph | Every container, pod, service, volume, network drawn as nodes with edges showing relationships |
+| Real-time updates | Full snapshot on first connect, then only changes every 30 s — minimal bandwidth |
+| Grouped view | Nodes grouped by type (Containers, K8s Workloads, Storage…) — one card per group, click to expand |
+| Flat view | Every node laid out individually by type and relationship — zoom in for full detail |
+| Filter chips | Show/hide Kubernetes, Docker, Host, Pods, Storage, Events |
+| Health colors | Green = healthy, amber = degraded, red = unhealthy, grey = unknown — from live state |
+| Alert banner | Appears automatically when any group has unhealthy nodes |
+| Multi-VM | Connect as many VMs as you want — each appears as a separate card |
+| Export PNG | Save the canvas as a high-resolution image |
+| Export JSON | Download the raw graph (all nodes, edges, metadata) |
 
-| Message | Direction | Purpose |
-|---|---|---|
-| `HELLO` | agent → relay | Agent identifies itself (hostname, scope, version) |
-| `PAIR_CODE` | relay → agent | Relay assigns a pair code like `WOLF-BEAR-482917` |
-| `PAIRED` | relay → agent | A browser has connected to this session |
-| `GRAPH_SNAPSHOT` | agent → relay → browser | Full graph on first connect |
-| `GRAPH_DIFF` | agent → relay → browser | Incremental changes every 30 s |
-| `HEARTBEAT` | agent → relay | Keep-alive every 15 s |
-| `BROWSER_ACTION` | browser → relay | UI action (renamed to `ACTION_REQUEST` before forwarding) |
-| `ACTION_REQUEST` | relay → agent | Execute a docker/k8s/host action |
-| `ACTION_RESULT` | agent → relay → browser | Action outcome (success/failure + details) |
-| `ACTION_PROGRESS` | agent → relay → browser | In-progress updates (0–100%) |
-| `LOG_DATA` | agent → relay → browser | Streaming container log lines |
-| `EXEC_START` | browser → relay → agent | Open a PTY/exec terminal session |
-| `EXEC_INPUT` | browser → relay → agent | Keystrokes from xterm.js (base64) |
-| `EXEC_RESIZE` | browser → relay → agent | Terminal window resize event |
-| `EXEC_DATA` | agent → relay → browser | Terminal output to xterm.js (base64) |
-| `EXEC_END` | both directions | Session terminated |
+### Containers and Docker
+
+| Feature | What it does |
+|---|---|
+| Container terminal | Full interactive shell inside any container (`docker exec`) with color and resize |
+| Container logs | Last 200 lines, color-coded ERROR/WARN/INFO, downloadable |
+| Restart / Stop / Start | Run from the UI — executed by the agent on the VM |
+| Update image | Set a new image tag and the agent pulls and recreates the container |
+| Environment variables | All env vars shown with automatic secret masking — click to reveal |
+| Port mappings | See which host ports map to which container ports |
+| Volume mounts | See every bind mount and named volume, with source/destination paths |
+| Image details | Registry, tag, size, digest, which containers are using it |
+
+### Kubernetes
+
+| Feature | What it does |
+|---|---|
+| Full resource graph | Cluster → Nodes → Namespaces → Deployments → Pods → Services → Ingress → PVCs |
+| Health from pod phase | Running/Pending/Failed → green/amber/red |
+| Rolling restart | Trigger `kubectl rollout restart` for Deployments, StatefulSets, DaemonSets |
+| Update image | Change the container image for any Deployment |
+| Scale | Change replica count for Deployments and StatefulSets |
+| Pod logs | Fetch logs from any pod directly in the panel |
+| K8s events | Events shown as nodes linked to the resources they affect |
+
+### VM / Host
+
+| Feature | What it does |
+|---|---|
+| VM terminal | Full interactive shell on the VM itself (not inside a container) |
+| Host info | OS, kernel version, CPU cores, total memory, hostname |
+| Cloud detection | Automatically identifies AWS, GCP, Azure, or on-prem |
+| Environment detection | Infers production/staging/dev/test from hostname and namespace patterns |
 
 ---
 
@@ -248,81 +237,59 @@ INFRACANVAS_TOKEN=your-random-secret infracanvas start
 
 ### Requirements
 
-- Linux server with Docker + Docker Compose
-- Ports **3000** (dashboard) and **8080** (relay) open in your firewall
-- Agents only need outbound internet to reach your relay on port 8080
+- A Linux server with Docker and Docker Compose (for the relay + dashboard)
+- Port **8080** open for agents to connect to the relay
+- Port **3000** open for your browser to reach the dashboard
+- Agents only need outbound access to port 8080 — no inbound ports on monitored VMs
 
-### Deploy your own relay
+### Deploy
 
 ```bash
 git clone https://github.com/bytestrix/InfraCanvas.git
 cd InfraCanvas
 
-# Point everything at your server
-NEXT_PUBLIC_WS_URL=ws://YOUR_IP:8080 \
-NEXT_PUBLIC_API_URL=http://YOUR_IP:8080 \
+# Tell the dashboard where your relay is
+NEXT_PUBLIC_WS_URL=ws://YOUR_SERVER_IP:8080 \
+NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP:8080 \
 docker compose up -d
 ```
 
-Then update `DEFAULT_RELAY_URL` in `install-agent.sh` to `ws://YOUR_IP:8080` before distributing to your VMs.
-
-> **Default relay:** The repo ships with `frontend/.env` pointing to `ws://13.200.198.166:8080` (the public demo relay). Override it by creating `frontend/.env.local` with your own URL — `.env.local` takes priority and is gitignored.
-
-### With TLS / custom domain
-
-Put Caddy or nginx in front. Caddy example:
-
-```
-canvas.example.com {
-    reverse_proxy localhost:3000
-}
-
-relay.example.com {
-    reverse_proxy localhost:8080
-}
-```
-
-Then use `wss://relay.example.com` as the WebSocket URL and set `INFRACANVAS_TOKEN` for auth.
+When distributing the agent to VMs, update `DEFAULT_RELAY_URL` in `install-agent.sh` to point at your relay.
 
 ### Useful commands
 
 ```bash
-docker compose logs -f
-docker compose down
-git pull && docker compose up --build -d
-curl http://YOUR_IP:8080/api/health
+docker compose logs -f              # watch relay and dashboard logs
+docker compose down                 # stop everything
+git pull && docker compose up --build -d  # update to latest
+curl http://YOUR_IP:8080/api/health # check relay is up
 ```
 
 ---
 
-## Agent management
+## Managing the agent
 
 ```bash
-# View live logs
+# Watch live logs
 sudo journalctl -u infracanvas-agent -f
 
-# Status / restart / stop
+# Check status / restart / stop
 sudo systemctl status infracanvas-agent
 sudo systemctl restart infracanvas-agent
 sudo systemctl stop infracanvas-agent
 
-# Get pair code if you missed it
+# Find the pair code if you missed it
 sudo journalctl -u infracanvas-agent -n 50 | grep "Pair code"
-```
 
-### Point agent at a custom relay
-
-```bash
-# Via environment variable at install time
-INFRACANVAS_BACKEND_URL=ws://your-relay:8080 \
-  curl -fsSL .../install.sh | bash
-
-# Via flag
-bash install.sh --backend-url ws://your-relay:8080
-
-# Or edit the env file after install
+# Point the agent at a different relay
 sudo nano /etc/infracanvas/agent.env
 sudo systemctl restart infracanvas-agent
+```
+
+**Install with a custom relay URL:**
+```bash
+INFRACANVAS_BACKEND_URL=ws://your-relay:8080 \
+  curl -fsSL .../install.sh | bash
 ```
 
 ---
@@ -335,17 +302,17 @@ sudo systemctl restart infracanvas-agent
 git clone https://github.com/bytestrix/InfraCanvas.git
 cd InfraCanvas
 
-# Build agent binary
-make build
+make build          # build the agent binary
+make build-all      # cross-compile for linux/darwin × amd64/arm64
+make test           # run all Go tests
+docker compose up --build   # run the full stack locally
+```
 
-# Build all release targets (linux/darwin × amd64/arm64)
-make build-all
-
-# Run all tests
-make test
-
-# Run dashboard + relay locally
-docker compose up --build
+**Frontend only:**
+```bash
+cd frontend
+npm install
+npm run dev    # http://localhost:3000
 ```
 
 ### Project layout
@@ -353,45 +320,42 @@ docker compose up --build
 ```
 InfraCanvas/
 ├── cmd/
-│   ├── infracanvas/          # Agent CLI  (infracanvas start / discover / logs …)
-│   └── infracanvas-server/   # Relay server entry point
+│   ├── infracanvas/          # Agent CLI (infracanvas start / discover / logs …)
+│   └── infracanvas-server/   # Relay server
 ├── pkg/
-│   ├── agent/                # WebSocket agent: connect, discover, diff, actions, exec
-│   ├── actions/              # Action executors: Docker, Kubernetes, Host
+│   ├── agent/                # WebSocket agent: connect, discover, diff, exec, actions
+│   ├── actions/              # Action runners: Docker, Kubernetes, Host
 │   ├── discovery/
 │   │   ├── docker/           # Container, image, volume, network discovery
-│   │   ├── host/             # OS, CPU, memory, process discovery
-│   │   └── kubernetes/       # Full K8s resource discovery
-│   ├── server/               # Relay server: WebSocket broker, session store
+│   │   ├── host/             # OS, CPU, memory, network interfaces
+│   │   └── kubernetes/       # Full K8s resource discovery via client-go
+│   ├── server/               # Relay: WebSocket broker, session store, pair codes
 │   ├── orchestrator/         # Combines all discovery sources into one snapshot
-│   ├── output/               # Graph formatter (nodes + edges JSON)
-│   ├── relationships/        # Builds edges between entities
-│   ├── health/               # Health status calculator per node
-│   ├── environment/          # Environment detection (prod/staging/dev)
-│   └── redactor/             # Sensitive value redaction
-├── internal/
-│   └── models/               # Core data models (snapshot, container, pod…)
+│   ├── output/               # Graph builder (nodes + edges + metadata as JSON)
+│   ├── relationships/        # Builds edges between entities (container→image, pod→node…)
+│   ├── health/               # Health status calculator per node type
+│   ├── environment/          # Detects prod/staging/dev from hostname patterns
+│   └── redactor/             # Strips sensitive values from env vars before sending
+├── internal/models/          # Core data models (snapshot, container, pod, host…)
 ├── frontend/
-│   ├── .env                  # Default env (points to public relay) — committed
 │   ├── app/                  # Next.js 14 app router
 │   ├── components/canvas/
-│   │   ├── InfraCanvas.tsx   # Main canvas: ReactFlow + toolbar + export
-│   │   ├── NodeDetailPanel.tsx
-│   │   ├── LogsPanel.tsx
-│   │   ├── TerminalPanel.tsx
-│   │   ├── GroupNode.tsx
-│   │   ├── InfraNode.tsx
-│   │   └── GroupDrawer.tsx
+│   │   ├── InfraCanvas.tsx   # Main canvas: ReactFlow, toolbar, filters, export
+│   │   ├── NodeDetailPanel.tsx   # Side panel: metadata, actions, env/ports/mounts
+│   │   ├── LogsPanel.tsx         # Log streaming panel
+│   │   ├── TerminalPanel.tsx     # xterm.js terminal
+│   │   ├── GroupNode.tsx / InfraNode.tsx / GroupDrawer.tsx
 │   ├── lib/
-│   │   ├── wsManager.ts      # WebSocket singleton, reconnect, subscriptions
-│   │   ├── layout.ts         # Dagre + zone layout algorithms
+│   │   ├── wsManager.ts      # WebSocket singleton, reconnect, pub/sub
+│   │   ├── layout.ts         # Dagre layout + zone grouping
 │   │   └── graphPreprocess.ts
 │   ├── store/vmStore.ts      # Zustand global state
 │   └── types/index.ts
-├── install-agent.sh
-├── uninstall-agent.sh
-├── Dockerfile.server
-├── frontend/Dockerfile
+├── examples/                 # Example agent config and systemd service file
+├── install-agent.sh          # One-command agent installer
+├── uninstall-agent.sh        # Clean uninstall
+├── Dockerfile.server         # Relay server image
+├── frontend/Dockerfile       # Dashboard image
 └── docker-compose.yml
 ```
 
@@ -399,39 +363,49 @@ InfraCanvas/
 
 ## Roadmap
 
-- [ ] Kubernetes pod exec (interactive shell inside pods via `kubectl exec`)
-- [ ] Rate limiting on the relay (protect pair codes from enumeration)
-- [ ] Multi-relay federation (one dashboard, multiple relay regions)
-- [ ] Prometheus metrics endpoint on the relay
-- [ ] Helm chart for the relay + dashboard
-- [ ] Mobile-responsive canvas
+These are what we're building next. PRs welcome.
+
+- [ ] **Kubernetes pod exec** — open a shell inside a K8s pod (the same way container exec works)
+- [ ] **Rate limiting on the relay** — prevent brute-force enumeration of pair codes
+- [ ] **Prometheus metrics** — expose relay and agent metrics for Grafana scraping
+- [ ] **Helm chart** — deploy the relay + dashboard to a Kubernetes cluster
+- [ ] **Multi-relay federation** — one dashboard, multiple relay regions
+- [ ] **Mobile-responsive canvas** — usable on a phone for quick checks
 
 ---
 
 ## CI / CD
 
-- **CI** (`ci.yml`) — runs `go build ./...` and `go test ./...` on every push/PR
-- **Release** (`release.yml`) — triggered by `v*.*.*` tags; cross-compiles agent for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64; publishes GitHub Release with binaries + `install.sh` + `uninstall.sh`
+Every push runs `go build`, `go test`, and frontend lint. Releases are triggered by version tags:
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
+
+The release workflow cross-compiles the agent binary for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and publishes them as GitHub Release assets along with `install.sh` and `uninstall.sh`.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. Quick version:
 
-1. Open an issue before a large PR
-2. Fork → branch from `main` → PR back to `main`
-3. All of these must pass: `make test`, `make lint`, `cd frontend && npm run lint`
+1. Open an issue before writing a large PR — saves everyone time
+2. Fork → branch from `main` → PR to `main`
+3. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`
 
-Good first issues are tagged [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
+Issues tagged [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22) are a good place to start.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+GNU Affero General Public License v3.0 — see [LICENSE](LICENSE) for details.
+
+**Plain English:**
+- ✅ Free to use, modify, and self-host for any personal or internal company purpose
+- ✅ Fork it, build on top of it, extend it — just keep your changes open source
+- ❌ If you run this as a cloud service for paying customers, your modifications must be open source too
+
+This protects the project from being taken and resold by large companies without contributing anything back to the community. Individual developers and companies using it internally are completely unaffected.

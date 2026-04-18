@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.3.0] — 2026-04-19
 
 ### Added
 - Bytestrix purple/fuchsia UI palette with Catppuccin Mocha terminal theme
