@@ -19,6 +19,7 @@ interface SocketEntry {
   reconnectTimer: ReturnType<typeof setTimeout> | null
   attempt: number
   destroyed: boolean // true when user explicitly disconnects
+  serverRejected: boolean // true when server sent ERROR (don't reconnect)
 }
 
 // Module-level sockets map: code → entry
@@ -48,6 +49,7 @@ function _openSocket(code: string, attempt: number): void {
     reconnectTimer: null,
     attempt,
     destroyed: false,
+    serverRejected: false,
   }
   sockets.set(code, entry)
 
@@ -77,6 +79,8 @@ function _openSocket(code: string, attempt: number): void {
   entry.ws.onclose = (event) => {
     const current = sockets.get(code)
     if (!current || current.destroyed) return // intentional close
+
+    if (current.serverRejected) return // server already sent ERROR — don't reconnect
 
     if (event.code === 1000) {
       // Clean close from server side (e.g. session expired)
@@ -127,9 +131,13 @@ function handleMessage(code: string, msg: WsInbound): void {
       store.applyVMDiff(code, msg.data)
       break
 
-    case 'ERROR':
+    case 'ERROR': {
+      // Mark as server-rejected so onclose won't loop
+      const entry = sockets.get(code)
+      if (entry) entry.serverRejected = true
       store.setVMError(code, msg.data.message)
       break
+    }
 
     case 'ACTION_RESULT' as any:
       actionResultListeners.forEach((fn) => fn((msg as any).data))
