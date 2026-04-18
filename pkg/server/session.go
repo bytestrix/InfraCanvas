@@ -1,8 +1,9 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 )
@@ -116,8 +117,17 @@ func (s *SessionStore) ActiveCount() int {
 	return len(s.byCode)
 }
 
+func cryptoRandN(n int) int {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
+	return int(binary.LittleEndian.Uint64(b[:]) % uint64(n))
+}
+
 func generatePairCode() string {
-	word := pairWords[rand.Intn(len(pairWords))]
-	num := rand.Intn(9000) + 1000
-	return fmt.Sprintf("%s-%04d", word, num)
+	w1 := pairWords[cryptoRandN(len(pairWords))]
+	w2 := pairWords[cryptoRandN(len(pairWords))]
+	num := cryptoRandN(900000) + 100000
+	return fmt.Sprintf("%s-%s-%06d", w1, w2, num)
 }

@@ -735,17 +735,21 @@ func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 // startHostExec opens a PTY shell on the host VM.
 func (a *WSAgent) startHostExec(ctx context.Context, cancel context.CancelFunc, sessionID string, cmd []string, rows, cols uint) {
 	if len(cmd) == 0 {
-		// Pick the best available shell
 		for _, sh := range []string{"/bin/bash", "/bin/sh"} {
 			if _, err := os.Stat(sh); err == nil {
-				cmd = []string{sh}
+				cmd = []string{sh, "-l"} // login shell → starts in HOME
 				break
 			}
 		}
 	}
 
+	home := os.Getenv("HOME")
+	if home == "" {
+		home = "/root"
+	}
 	c := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
-	c.Env = append(os.Environ(), "TERM=xterm-256color")
+	c.Dir = home
+	c.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
 
 	ptmx, err := pty.Start(c)
 	if err != nil {
@@ -946,9 +950,12 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 	}
 }
 
-// normalizeEntityID strips type prefixes like "container/", "pod/", "deployment/" from entity IDs.
+// normalizeEntityID strips type prefixes like "container/", "container:", "pod/", "deployment/" from entity IDs.
 func normalizeEntityID(id string) string {
 	if i := strings.Index(id, "/"); i >= 0 {
+		return id[i+1:]
+	}
+	if i := strings.Index(id, ":"); i >= 0 {
 		return id[i+1:]
 	}
 	return id

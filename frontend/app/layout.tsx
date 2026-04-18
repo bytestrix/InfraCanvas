@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import '@xterm/xterm/css/xterm.css'
 
 export const metadata: Metadata = {
   title: 'InfraCanvas — Infrastructure at a glance',

@@ -10,20 +10,29 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Warm Claude/Anthropic-inspired UI redesign (coral accent, near-black backgrounds)
+- Bytestrix purple/fuchsia UI palette with Catppuccin Mocha terminal theme
+- Container detail panel: environment variables with secret masking toggle, port mappings, volume mounts, image metadata
 - `frontend/.env` committed with public relay URL so cloned repos work out of the box
 - `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `LICENSE`
 - GitHub issue and PR templates
 
 ### Fixed
-- WebSocket reconnect loop no longer masks "unknown pair code" error — UI now shows the error instead of spinning forever
-- `install-agent.sh` pair code grep regex now matches `WORD-1234` format correctly
-- `frontend/.env` default prevents agent↔browser relay mismatch for new users
+- Container terminal: blank screen fixed by importing `@xterm/xterm/css/xterm.css` in layout
+- Container terminal: double output fixed by disabling React StrictMode
+- Container terminal: colors and readline fixed by setting `TERM=xterm-256color` in exec env
+- Container terminal: real PTY resize via ResizeObserver wired correctly
+- Container exec: `No such container: container:XXXX` fixed by stripping `container:` prefix in `normalizeEntityID`
+- Port mappings: camelCase field names (`hostPort`, `containerPort`) now match backend output
+- Kubernetes discovery: `KUBECONFIG` propagated to systemd service via agent env file
+- Pair codes now generated with `crypto/rand` — not time-seeded or guessable
+- Pair code entropy increased: `WORD-WORD-NNNNNN` format (~1.44B combinations vs ~4.5M before)
 
 ### Changed
-- Removed stale dev-only scripts (`deploy-*.sh`, `connect-vm.sh`, `test_e2e.sh`, `test_security.sh`)
-- Removed redundant docs (`AZURE_VM_SETUP.md`, `DEVOPS_*.md`, `QUICKSTART.md`, etc.)
+- Removed stale dev-only scripts (`deploy-*.sh`, `connect-vm.sh`, `test_e2e.sh`, `test_security.sh`) — gitignored
+- Removed redundant docs (`AZURE_VM_SETUP.md`, `DEVOPS_*.md`, `QUICKSTART.md`, etc.) — gitignored
+- Removed internal implementation notes from tracked files
 - CI now validates Go linting and frontend build
+- README: added Security section, Roadmap, badges, known limitations
 
 ---
 

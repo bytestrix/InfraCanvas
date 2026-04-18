@@ -189,22 +189,37 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 		node.Metadata["memoryLimit"] = container.MemoryLimit
 		node.Metadata["networkRx"] = container.NetworkRxBytes
 		node.Metadata["networkTx"] = container.NetworkTxBytes
+		node.Metadata["restartCount"] = container.RestartCount
 		if container.ComposeProject != "" {
 			node.Metadata["composeProject"] = container.ComposeProject
 			node.Metadata["composeService"] = container.ComposeService
 		}
-		if len(container.PortMappings) > 0 {
-			ports := make([]map[string]interface{}, 0, len(container.PortMappings))
-			for _, pm := range container.PortMappings {
-				ports = append(ports, map[string]interface{}{
-					"hostPort":      pm.HostPort,
-					"containerPort": pm.ContainerPort,
-					"protocol":      pm.Protocol,
-					"hostIP":        pm.HostIP,
-				})
-			}
-			node.Metadata["portMappings"] = ports
+		// Port mappings (always include so UI can show "0 ports")
+		ports := make([]map[string]interface{}, 0, len(container.PortMappings))
+		for _, pm := range container.PortMappings {
+			ports = append(ports, map[string]interface{}{
+				"hostPort":      pm.HostPort,
+				"containerPort": pm.ContainerPort,
+				"protocol":      pm.Protocol,
+				"hostIP":        pm.HostIP,
+			})
 		}
+		node.Metadata["portMappings"] = ports
+		// Environment variables (already redacted by discovery)
+		if len(container.Environment) > 0 {
+			node.Metadata["environment"] = container.Environment
+		}
+		// Mounts
+		mounts := make([]map[string]interface{}, 0, len(container.Mounts))
+		for _, m := range container.Mounts {
+			mounts = append(mounts, map[string]interface{}{
+				"source":      m.Source,
+				"destination": m.Destination,
+				"mode":        m.Mode,
+				"type":        m.Type,
+			})
+		}
+		node.Metadata["mounts"] = mounts
 
 	case models.EntityTypeImage:
 		image := entity.(*models.Image)
@@ -218,10 +233,17 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 		} else {
 			node.Label = "unnamed-image"
 		}
+		node.Metadata["registry"] = image.Registry
 		node.Metadata["repository"] = image.Repository
 		node.Metadata["tag"] = image.Tag
 		node.Metadata["size"] = image.Size
 		node.Metadata["created"] = image.Created
+		if image.Digest != "" {
+			node.Metadata["digest"] = image.Digest
+		}
+		if len(image.UsedByContainers) > 0 {
+			node.Metadata["usedByContainers"] = image.UsedByContainers
+		}
 
 	case models.EntityTypeProcess:
 		process := entity.(*models.Process)

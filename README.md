@@ -2,7 +2,14 @@
 
 **Real-time infrastructure topology canvas — containers, Kubernetes, and VMs visualized as a live graph.**
 
+[![CI](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg)](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bytestrix/InfraCanvas)](https://goreportcard.com/report/github.com/bytestrix/InfraCanvas)
+
 Install a lightweight agent on any Linux VM with one command. No inbound ports, no VPN, no cloud accounts. The agent phones home to your relay server over a single outbound WebSocket. You get a live visual map of everything running on your servers — containers, pods, networks, volumes, deployments — updating every 30 seconds and diffing to minimize bandwidth.
+
+> **Security notice:** Pair codes grant read/exec access to your infrastructure. Treat them like passwords. Use a TLS-enabled relay (`wss://`) in production — see [Security](#security) below.
 
 ---
 
@@ -20,7 +27,7 @@ Your browser
   VMs running the agent
 ```
 
-The agent on each VM connects **outbound** to the relay — no inbound firewall rules needed on the VMs. You pair a VM to your dashboard with a short code like `APEX-1483`. Multiple VMs, multiple browser tabs — all work simultaneously through the same relay.
+The agent on each VM connects **outbound** to the relay — no inbound firewall rules needed on the VMs. You pair a VM to your dashboard with a short code like `WOLF-BEAR-482917`. Multiple VMs, multiple browser tabs — all work simultaneously through the same relay.
 
 ---
 
@@ -53,7 +60,7 @@ The agent connects, prints a **pair code**, and waits:
 ────────────────────────────────────────────────────────────────────
   InfraCanvas agent running
 
-  Pair code:  APEX-1483
+  Pair code:  WOLF-BEAR-482917
 
   Open the canvas and enter this code to connect.
 ────────────────────────────────────────────────────────────────────
@@ -100,6 +107,9 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uni
 | **Image tag update** | Pull a new image tag for a container directly from the panel |
 | **Container logs** | View last 200 log lines with ERROR/WARN/INFO color-coding; download as `.txt` |
 | **Container terminal** | Full interactive TTY shell inside any container (`docker exec`) with xterm.js |
+| **Environment variables** | View all env vars with automatic secret masking; toggle to reveal |
+| **Port mappings** | See host→container port bindings at a glance |
+| **Mounts** | Volume and bind-mount paths with read/write mode |
 | **Volumes & networks** | Visualized as nodes with mount/connect edges to containers |
 
 ### Kubernetes
@@ -130,6 +140,41 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uni
 | **Secret redaction** | Environment variables containing `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL` etc. are automatically redacted before leaving the VM |
 | **Auth token** | Optional shared secret between agent and relay (`INFRACANVAS_TOKEN`); relay rejects connections without it |
 | **Outbound-only agents** | No inbound ports needed on monitored VMs — agents initiate the WebSocket connection |
+| **Cryptographic pair codes** | Codes are generated with `crypto/rand` — not guessable from time-based seeds |
+
+---
+
+## Security
+
+### Pair codes
+
+Pair codes (e.g. `WOLF-BEAR-482917`) are generated with `crypto/rand` and have ~1.44 billion possible values. Anyone who knows a pair code can:
+
+- Read your full infrastructure topology (container names, images, env vars after redaction)
+- Stream container and pod logs
+- Open a shell into any container on that VM
+- Execute Docker and Kubernetes actions (restart, scale, update image)
+
+**Treat pair codes like API keys.** Do not share them in public channels or commit them to version control.
+
+### Use TLS in production
+
+The default setup runs over plain `ws://`. For any internet-facing deployment:
+
+1. Put Caddy or nginx in front of the relay and dashboard (see [Self-hosting](#self-hosting))
+2. Use `wss://` in `frontend/.env` and in the agent `--backend-url` flag
+3. Set `INFRACANVAS_TOKEN` as a shared secret so only your agents can connect
+
+### Auth token
+
+```bash
+# Set on the relay server (docker-compose.yml or environment)
+INFRACANVAS_TOKEN=your-random-secret
+
+# Set on each agent
+INFRACANVAS_TOKEN=your-random-secret infracanvas start
+# or in /etc/infracanvas/agent.env
+```
 
 ---
 
@@ -181,7 +226,7 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uni
 | Message | Direction | Purpose |
 |---|---|---|
 | `HELLO` | agent → relay | Agent identifies itself (hostname, scope, version) |
-| `PAIR_CODE` | relay → agent | Relay assigns a pair code like `APEX-1483` |
+| `PAIR_CODE` | relay → agent | Relay assigns a pair code like `WOLF-BEAR-482917` |
 | `PAIRED` | relay → agent | A browser has connected to this session |
 | `GRAPH_SNAPSHOT` | agent → relay → browser | Full graph on first connect |
 | `GRAPH_DIFF` | agent → relay → browser | Incremental changes every 30 s |
@@ -237,7 +282,7 @@ relay.example.com {
 }
 ```
 
-Then use `wss://relay.example.com` as the WebSocket URL.
+Then use `wss://relay.example.com` as the WebSocket URL and set `INFRACANVAS_TOKEN` for auth.
 
 ### Useful commands
 
@@ -352,6 +397,17 @@ InfraCanvas/
 
 ---
 
+## Roadmap
+
+- [ ] Kubernetes pod exec (interactive shell inside pods via `kubectl exec`)
+- [ ] Rate limiting on the relay (protect pair codes from enumeration)
+- [ ] Multi-relay federation (one dashboard, multiple relay regions)
+- [ ] Prometheus metrics endpoint on the relay
+- [ ] Helm chart for the relay + dashboard
+- [ ] Mobile-responsive canvas
+
+---
+
 ## CI / CD
 
 - **CI** (`ci.yml`) — runs `go build ./...` and `go test ./...` on every push/PR
@@ -366,13 +422,13 @@ git push origin v1.2.0
 
 ## Contributing
 
-Open an issue before submitting a large PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 
-```bash
-go test ./...
-go test ./pkg/relationships/...
-golangci-lint run ./...
-```
+1. Open an issue before a large PR
+2. Fork → branch from `main` → PR back to `main`
+3. All of these must pass: `make test`, `make lint`, `cd frontend && npm run lint`
+
+Good first issues are tagged [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
 ---
 

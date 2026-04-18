@@ -178,8 +178,9 @@ func (d *DockerExecutor) ExecCreate(ctx context.Context, containerID string, cmd
 		Cmd:          cmd,
 		AttachStdin:  true,
 		AttachStdout: true,
-		AttachStderr: true,
+		AttachStderr: false, // merged into stdout by TTY
 		Tty:          true,
+		Env:          []string{"TERM=xterm-256color", "COLORTERM=truecolor"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("exec create: %w", err)

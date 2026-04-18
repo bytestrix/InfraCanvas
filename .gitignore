@@ -69,5 +69,10 @@ QUICKSTART.md
 QUICK_DEPLOY.md
 SETUP_GUIDE.md
 
+# Internal implementation notes (not for contributors)
+**/IMPLEMENTATION_SUMMARY.md
+pkg/output/SAMPLE_OUTPUT.md
+pkg/output/integration_example.go
+
 # Root package-lock (no root package.json)
 /package-lock.json
