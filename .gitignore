@@ -33,10 +33,11 @@ node_modules/
 .next/
 npm-debug.log*
 
-# Env
+# Env (local overrides only — frontend/.env is committed as the default)
 .env
 .env.local
 .env*.local
+!frontend/.env
 
 # Build artifacts
 dist/
