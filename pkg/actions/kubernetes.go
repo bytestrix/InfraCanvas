@@ -25,6 +25,8 @@ func NewKubernetesExecutor() (*KubernetesExecutor, error) {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 
+	config.WarningHandler = rest.NoWarnings{}
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)

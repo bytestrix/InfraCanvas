@@ -28,6 +28,10 @@ func NewDiscovery() (*Discovery, error) {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 
+	// Suppress "v1 Endpoints is deprecated" and similar API server warnings
+	// that flood the logs on every discovery cycle.
+	config.WarningHandler = rest.NoWarnings{}
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
