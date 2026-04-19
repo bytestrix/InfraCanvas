@@ -100,12 +100,6 @@ Type the pair code into the "Connect a VM" field in the browser. The VM appears 
 sudo journalctl -u infracanvas-agent -n 300 | grep -v "deprecated" | grep "Pair code"
 ```
 
-### Step 4 — Uninstall
-
-```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
-```
-
 ---
 
 ## Your data stays on your servers
@@ -290,6 +284,11 @@ sudo systemctl restart infracanvas-agent
 ```bash
 INFRACANVAS_BACKEND_URL=ws://your-relay:8080 \
   curl -fsSL .../install.sh | bash
+```
+
+**Uninstall:**
+```bash
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
 ```
 
 ---
