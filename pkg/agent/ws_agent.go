@@ -917,7 +917,7 @@ func (a *WSAgent) sendExecEnd(sessionID string) {
 	if err != nil {
 		return
 	}
-	a.sendRaw(raw)
+	_ = a.sendRaw(raw)
 }
 
 // mapFrontendActionType maps the frontend action type string to an ActionType constant.
