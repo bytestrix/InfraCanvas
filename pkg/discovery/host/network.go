@@ -223,7 +223,7 @@ func parseListeningPorts(path string, protocol string) ([]models.ListeningPort, 
 
 		// Parse port from hex
 		var port int
-		fmt.Sscanf(parts[1], "%X", &port)
+		_, _ = fmt.Sscanf(parts[1], "%X", &port)
 
 		// Validate port range
 		if err := validation.ValidateRange(float64(port), 0, 65535, "port", path); err != nil {
@@ -294,7 +294,7 @@ func mapPortsToProcesses(ports []models.ListeningPort) {
 			}
 
 			var port int
-			fmt.Sscanf(parts[1], "%X", &port)
+			_, _ = fmt.Sscanf(parts[1], "%X", &port)
 
 			// Check if listening
 			state := fields[3]
@@ -360,13 +360,13 @@ func mapPortsToProcesses(ports []models.ListeningPort) {
 			// Check if it's a socket
 			if strings.HasPrefix(target, "socket:[") {
 				var inode string
-				fmt.Sscanf(target, "socket:[%s]", &inode)
+				_, _ = fmt.Sscanf(target, "socket:[%s]", &inode)
 				inode = strings.TrimSuffix(inode, "]")
 
 				// Map to port
 				if portIdx, ok := inodeToPortIdx[inode]; ok {
 					var pidInt int
-					fmt.Sscanf(pid, "%d", &pidInt)
+					_, _ = fmt.Sscanf(pid, "%d", &pidInt)
 					ports[portIdx].ProcessID = pidInt
 					ports[portIdx].Process = processName
 				}

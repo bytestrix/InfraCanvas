@@ -209,7 +209,7 @@ func (s *Server) ListenAndServe(addr string) error {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":   "ok",
 		"sessions": s.sessions.ActiveCount(),
 		"time":     time.Now().UTC().Format(time.RFC3339),
@@ -234,7 +234,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		sess.mu.RUnlock()
 	}
 	s.sessions.mu.RUnlock()
-	json.NewEncoder(w).Encode(info)
+	_ = json.NewEncoder(w).Encode(info)
 }
 
 // ── Agent WebSocket handler ───────────────────────────────────────────────────
@@ -365,18 +365,18 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	}
 	var env Envelope
 	if err := json.Unmarshal(payload, &env); err != nil || env.Type != "PAIR" {
-		writeMsg(conn, MsgError, map[string]string{"message": "first message must be PAIR"})
+		_ = writeMsg(conn, MsgError, map[string]string{"message": "first message must be PAIR"})
 		return
 	}
 	var req PairRequest
 	if err := json.Unmarshal(env.Data, &req); err != nil || req.Code == "" {
-		writeMsg(conn, MsgError, map[string]string{"message": "missing pair code"})
+		_ = writeMsg(conn, MsgError, map[string]string{"message": "missing pair code"})
 		return
 	}
 
 	sess, ok := s.sessions.AddBrowser(req.Code, conn)
 	if !ok {
-		writeMsg(conn, MsgError, map[string]string{"message": "unknown pair code"})
+		_ = writeMsg(conn, MsgError, map[string]string{"message": "unknown pair code"})
 		return
 	}
 	log.Printf("[browser] paired  session=%s  code=%s  browsers=%d",
@@ -390,7 +390,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	lastSnap := sess.LastSnapshot
 	sess.mu.RUnlock()
 	if lastSnap != nil {
-		conn.WriteMessage(websocket.TextMessage, lastSnap)
+		_ = conn.WriteMessage(websocket.TextMessage, lastSnap)
 	}
 
 	defer func() {
@@ -420,7 +420,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 			agentConn := sess.AgentConn
 			sess.mu.RUnlock()
 			if agentConn != nil {
-				agentConn.WriteMessage(websocket.TextMessage, payload)
+				_ = agentConn.WriteMessage(websocket.TextMessage, payload)
 			}
 		}
 	}
