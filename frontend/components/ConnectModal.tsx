@@ -30,8 +30,8 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
     e.preventDefault()
     const trimmed = code.trim().toUpperCase()
     if (!trimmed) { setError('Enter a pair code'); return }
-    if (!/^[A-Z]+-\d+$/.test(trimmed)) {
-      setError('Format: WORD-1234 (e.g. APEX-1483)')
+    if (!/^[A-Z]+-[A-Z]+-\d+$/.test(trimmed)) {
+      setError('Format: WORD-WORD-123456 (e.g. SEAL-CYAN-807385)')
       return
     }
     onConnect(trimmed)
@@ -46,9 +46,9 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
     },
     {
       icon: <Wifi size={13} />,
-      title: 'Get your pair code',
-      code: 'sudo journalctl -u infracanvas-agent -n 20 | grep "Pair code"',
-      desc: 'The agent prints a code like APEX-1483',
+      title: 'Copy your pair code',
+      code: null,
+      desc: 'The install command prints it automatically — look for WORD-WORD-123456 in the output',
     },
     {
       icon: <ArrowRight size={13} />,
@@ -157,7 +157,7 @@ export default function ConnectModal({ onConnect, onClose }: ConnectModalProps) 
                             type="text"
                             value={code}
                             onChange={(e) => { setCode(e.target.value.toUpperCase()); setError('') }}
-                            placeholder="APEX-1483"
+                            placeholder="SEAL-CYAN-807385"
                             style={{
                               width: '100%', padding: '10px 14px',
                               borderRadius: 9, background: '#08080E',
