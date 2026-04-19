@@ -69,7 +69,7 @@ docker compose up -d
 
 Open **http://localhost:3000** in your browser.
 
-> By default the dashboard points to a public demo relay at `ws://13.200.198.166:8080`. This is fine for trying things out. For production, [host your own relay](#self-hosting).
+> By default the agent connects to the relay at `ws://localhost:8080` (the backend you started with `docker compose up -d`). For production deployments on separate hosts, [host your own relay](#self-hosting).
 
 ### Step 2 — Install the agent on a server
 
@@ -97,7 +97,7 @@ Type the pair code into the "Connect a VM" field in the browser. The VM appears 
 
 **Missed the code?**
 ```bash
-sudo journalctl -u infracanvas-agent -n 50 | grep "Pair code"
+sudo journalctl -u infracanvas-agent -n 300 | grep -v "deprecated" | grep "Pair code"
 ```
 
 ### Step 4 — Uninstall
@@ -279,7 +279,7 @@ sudo systemctl restart infracanvas-agent
 sudo systemctl stop infracanvas-agent
 
 # Find the pair code if you missed it
-sudo journalctl -u infracanvas-agent -n 50 | grep "Pair code"
+sudo journalctl -u infracanvas-agent -n 300 | grep -v "deprecated" | grep "Pair code"
 
 # Point the agent at a different relay
 sudo nano /etc/infracanvas/agent.env
