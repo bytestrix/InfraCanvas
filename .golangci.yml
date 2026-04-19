@@ -13,7 +13,10 @@ linters:
 
 linters-settings:
   errcheck:
-    ignore: "fmt:.*,io:Close"
+    exclude-functions:
+      - fmt.*
+      - io.Close
+      - (io.Closer).Close
 
 issues:
   exclude-rules:
