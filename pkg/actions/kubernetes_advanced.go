@@ -272,13 +272,13 @@ func (k *KubernetesExecutor) GetRolloutStatus(ctx context.Context, namespace, de
 		}, err
 	}
 
-	status := "unknown"
+	status := "in_progress"
 	if deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas &&
 		deployment.Status.Replicas == *deployment.Spec.Replicas &&
 		deployment.Status.AvailableReplicas == *deployment.Spec.Replicas {
 		status = "complete"
-	} else if deployment.Status.UpdatedReplicas > 0 {
-		status = "in_progress"
+	} else if deployment.Status.UpdatedReplicas == 0 {
+		status = "unknown"
 	} else {
 		status = "pending"
 	}

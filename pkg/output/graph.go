@@ -493,26 +493,6 @@ func (f *GraphFormatter) shouldFilterEntity(entity models.Entity, stats *Filtere
 	return false
 }
 
-// isKernelThread checks if a process is a kernel thread
-func (f *GraphFormatter) isKernelThread(name string) bool {
-	kernelPrefixes := []string{
-		"kworker", "ksoftirqd", "migration", "idle_inject",
-		"cpuhp", "kdevtmpfs", "kauditd", "khungtaskd",
-		"oom_reaper", "kcompactd", "ksmd", "khugepaged",
-		"kswapd", "ecryptfs-kthread", "kthreadd", "rcu_",
-		"watchdogd", "kintegrityd", "kblockd", "ata_sff",
-		"scsi_eh", "scsi_tmf", "irq/", "acpi", "psimon",
-	}
-
-	for _, prefix := range kernelPrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // isFiltered checks if an entity ID was filtered out
 func (f *GraphFormatter) isFiltered(entityID string, entities map[string]models.Entity) bool {
 	entity, exists := entities[entityID]

@@ -282,7 +282,7 @@ func (d *Discovery) GetProcessListeningPorts(pid int) ([]int, error) {
 
 		if strings.HasPrefix(target, "socket:[") {
 			var inode string
-			fmt.Sscanf(target, "socket:[%s]", &inode)
+			_, _ = fmt.Sscanf(target, "socket:[%s]", &inode)
 			inode = strings.TrimSuffix(inode, "]")
 			socketInodes[inode] = true
 		}
@@ -327,7 +327,7 @@ func (d *Discovery) GetProcessListeningPorts(pid int) ([]int, error) {
 			}
 
 			var port int
-			fmt.Sscanf(parts[1], "%X", &port)
+			_, _ = fmt.Sscanf(parts[1], "%X", &port)
 			ports = append(ports, port)
 		}
 	}

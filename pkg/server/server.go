@@ -383,7 +383,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		sess.ID, req.Code, sess.BrowserCount())
 
 	// Notify agent it has a new viewer.
-	go writeMsg(sess.AgentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()})
+	go func() { _ = writeMsg(sess.AgentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()}) }()
 
 	// Replay the last cached snapshot so the browser doesn't wait for the next tick.
 	sess.mu.RLock()
@@ -449,6 +449,6 @@ func broadcastToBrowsers(sess *Session, msg []byte) {
 	sess.mu.RUnlock()
 
 	for _, c := range browsers {
-		go c.WriteMessage(websocket.TextMessage, msg)
+		go func(c *SafeConn) { _ = c.WriteMessage(websocket.TextMessage, msg) }(c)
 	}
 }

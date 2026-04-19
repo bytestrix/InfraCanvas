@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"infracanvas/internal/models"
@@ -39,7 +38,7 @@ func (d *Discovery) GetContainers(ctx context.Context) ([]models.Container, erro
 	}
 
 	type job struct {
-		container types.Container
+		container container.Summary
 	}
 
 	jobs := make(chan job, len(containerList))
@@ -94,12 +93,9 @@ func (d *Discovery) GetContainers(ctx context.Context) ([]models.Container, erro
 }
 
 // parseContainer parses container information from Docker API
-func (d *Discovery) parseContainer(c types.Container, inspect types.ContainerJSON) models.Container {
+func (d *Discovery) parseContainer(c container.Summary, inspect container.InspectResponse) models.Container {
 	// Parse container name (remove leading slash)
-	name := c.Names[0]
-	if strings.HasPrefix(name, "/") {
-		name = name[1:]
-	}
+	name := strings.TrimPrefix(c.Names[0], "/")
 	
 	// Parse created time
 	created, _ := time.Parse(time.RFC3339Nano, inspect.Created)
@@ -214,7 +210,7 @@ func parsePortMappings(ports nat.PortMap) []models.PortMapping {
 }
 
 // parseMounts parses Docker mounts
-func parseMounts(dockerMounts []types.MountPoint) []models.Mount {
+func parseMounts(dockerMounts []container.MountPoint) []models.Mount {
 	mounts := make([]models.Mount, 0, len(dockerMounts))
 	
 	for _, m := range dockerMounts {

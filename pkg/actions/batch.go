@@ -26,6 +26,9 @@ func NewBatchExecutor() (*BatchExecutor, error) {
 
 // ExecuteBatch executes an action across multiple targets
 func (b *BatchExecutor) ExecuteBatch(ctx context.Context, batch *BatchAction, progressChan chan<- *ActionProgress) (*BatchResult, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	result := &BatchResult{
 		BatchID:      batch.ID,
 		TotalTargets: len(batch.Targets),
@@ -132,8 +135,7 @@ func (b *BatchExecutor) ExecuteBatch(ctx context.Context, batch *BatchAction, pr
 
 			// Stop on first failure if configured
 			if !actionResult.Success && batch.Options.StopOnFirstFailure {
-				// Cancel context to stop other operations
-				// Note: This requires the context to be cancellable
+				cancel()
 			}
 		}(i, target)
 	}

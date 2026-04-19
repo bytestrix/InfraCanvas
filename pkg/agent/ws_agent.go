@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -251,7 +250,7 @@ func (a *WSAgent) disconnect() {
 	a.connMu.Lock()
 	defer a.connMu.Unlock()
 	if a.conn != nil {
-		a.conn.WriteMessage(websocket.CloseMessage,
+		_ = a.conn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		a.conn.Close()
 		a.conn = nil
@@ -338,7 +337,7 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 	switch env.Type {
 	case "PAIRED":
 		var d struct{ BrowserCount int `json:"browserCount"` }
-		json.Unmarshal(env.Data, &d)
+		_ = json.Unmarshal(env.Data, &d)
 		log.Printf("Browser connected (%d total)", d.BrowserCount)
 
 		// Re-send full snapshot immediately to the new browser.
@@ -349,14 +348,14 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 			go func() {
 				raw, err := marshalEnvelope("GRAPH_SNAPSHOT", last)
 				if err == nil {
-					a.sendRaw(raw)
+					_ = a.sendRaw(raw)
 				}
 			}()
 		}
 
 	case "COMMAND":
 		var d struct{ Action string `json:"action"` }
-		json.Unmarshal(env.Data, &d)
+		_ = json.Unmarshal(env.Data, &d)
 		log.Printf("Command from backend: %s", d.Action)
 		if d.Action == "refresh" {
 			go func() {
@@ -365,7 +364,7 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 					log.Printf("refresh error: %v", err)
 					return
 				}
-				a.sendSnapshot(graph)
+				_ = a.sendSnapshot(graph)
 				a.lastGraphMu.Lock()
 				a.lastGraph = graph
 				a.lastGraphMu.Unlock()
@@ -546,12 +545,6 @@ func printPairBanner(code string) {
 	log.Printf("Pair code: %s", code)
 }
 
-// memUsage returns current heap allocation in bytes.
-func memUsage() int64 {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	return int64(m.Alloc)
-}
 
 
 // handleActionRequest processes action execution requests from the browser.
@@ -694,7 +687,7 @@ func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, err
 	if err != nil {
 		return
 	}
-	a.sendRaw(raw)
+	_ = a.sendRaw(raw)
 }
 
 // handleExecStart creates an interactive terminal session.
@@ -766,7 +759,7 @@ func (a *WSAgent) startHostExec(ctx context.Context, cancel context.CancelFunc, 
 	go func() {
 		defer func() {
 			ptmx.Close()
-			c.Process.Kill()
+			_ = c.Process.Kill()
 			a.execSessions.Delete(sessionID)
 			a.sendExecEnd(sessionID)
 		}()
@@ -855,9 +848,9 @@ func (a *WSAgent) handleExecInput(data json.RawMessage) {
 		return
 	}
 	if es.ptmx != nil {
-		es.ptmx.Write(decoded)
+		_, _ = es.ptmx.Write(decoded)
 	} else if es.dockerSess != nil {
-		es.dockerSess.Attach.Conn.Write(decoded)
+		_, _ = es.dockerSess.Attach.Conn.Write(decoded)
 	}
 }
 
@@ -876,11 +869,11 @@ func (a *WSAgent) handleExecResize(data json.RawMessage) {
 	}
 	es := val.(*execSession)
 	if es.ptmx != nil {
-		pty.Setsize(es.ptmx, &pty.Winsize{Rows: uint16(req.Rows), Cols: uint16(req.Cols)})
+		_ = pty.Setsize(es.ptmx, &pty.Winsize{Rows: uint16(req.Rows), Cols: uint16(req.Cols)})
 	} else if es.dockerSess != nil && a.actionExecutor != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		a.actionExecutor.DockerExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
+		_ = a.actionExecutor.DockerExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
 	}
 }
 
@@ -915,7 +908,7 @@ func (a *WSAgent) sendExecData(sessionID string, data []byte, errMsg string) {
 	if err != nil {
 		return
 	}
-	a.sendRaw(raw)
+	_ = a.sendRaw(raw)
 }
 
 func (a *WSAgent) sendExecEnd(sessionID string) {
