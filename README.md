@@ -7,6 +7,8 @@
 [![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bytestrix/InfraCanvas)](https://goreportcard.com/report/github.com/bytestrix/InfraCanvas)
 
+![InfraCanvas demo](docs/infracanvas.gif)
+
 InfraCanvas runs a tiny agent on any Linux server. The agent discovers every container, pod, volume, network, and deployment on that machine and streams it to a visual canvas in your browser — live, updating every 30 seconds.
 
 **No VPN. No inbound firewall rules. No cloud account needed.**
