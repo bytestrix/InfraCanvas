@@ -9,7 +9,7 @@ set -euo pipefail
 # ── defaults ──────────────────────────────────────────────────────────────────
 # Set DEFAULT_RELAY_URL to your hosted relay domain after deployment.
 # Users can still override with --backend-url or INFRACANVAS_BACKEND_URL env var.
-DEFAULT_RELAY_URL="ws://13.200.198.166:8080"   # ← update to wss://yourdomain.com after adding TLS
+DEFAULT_RELAY_URL="ws://localhost:8080"   # ← update to wss://yourdomain.com after adding TLS
 
 BACKEND_URL="${INFRACANVAS_BACKEND_URL:-$DEFAULT_RELAY_URL}"
 AGENT_NAME="${INFRACANVAS_AGENT_NAME:-}"
@@ -123,7 +123,8 @@ WantedBy=multi-user.target
 EOF
 
   $NEED_SUDO systemctl daemon-reload
-  $NEED_SUDO systemctl enable --now "$SERVICE_NAME"
+  $NEED_SUDO systemctl enable "$SERVICE_NAME"
+  $NEED_SUDO systemctl restart "$SERVICE_NAME"
 
   echo ""
   echo -e "${GREEN}✓ Agent installed and started as systemd service${NC}"
@@ -134,15 +135,15 @@ EOF
   echo ""
 
   # Wait a moment then grab the pair code from logs
-  sleep 3
-  PAIR_CODE=$(journalctl -u "$SERVICE_NAME" --no-pager -n 50 2>/dev/null | grep -oP 'Pair code: \K[A-Z]+-[A-Z]+-\d+' | tail -1 || true)
+  sleep 5
+  PAIR_CODE=$(journalctl -u "$SERVICE_NAME" --no-pager -n 300 2>/dev/null | grep -v "Endpoints is deprecated" | grep -oP 'Pair code: \K[A-Z]+-[A-Z]+-\d+' | tail -1 || true)
   if [[ -n "$PAIR_CODE" ]]; then
     echo -e "${GREEN}════════════════════════════════════════${NC}"
     echo -e "${GREEN}  Your pair code:  ${YELLOW}${PAIR_CODE}${NC}"
     echo -e "${GREEN}  Enter this in the InfraCanvas dashboard${NC}"
     echo -e "${GREEN}════════════════════════════════════════${NC}"
   else
-    echo "  Get pair code: sudo journalctl -u $SERVICE_NAME -n 20 | grep 'Pair code'"
+    echo "  Get pair code: sudo journalctl -u $SERVICE_NAME -n 300 | grep -v 'deprecated' | grep 'Pair code'"
   fi
 
 else
