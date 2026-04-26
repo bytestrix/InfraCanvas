@@ -7,6 +7,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.2] — 2026-04-26
+
+### Fixed
+- Installer no longer silently runs the systemd service as `root` when `$SUDO_USER` is unset (e.g. when invoked from a root shell, `sudo -i`, `sudo su -`, cloud-init, or some piped `curl | sudo bash` configurations). Running as root meant `~/.kube/config` was empty and Kubernetes discovery was a no-op for users who hit this path.
+
+### Changed
+- `install-agent.sh` now picks the service user via a cascade: `--run-user` flag → `$SUDO_USER` → first user in `/home/*` with a readable `~/.kube/config` → first user in the `docker` group → first user with a real login shell → `root`. The chosen user is printed during install.
+- New `--run-user <user>` flag for explicit override.
+
+---
+
 ## [0.4.1] — 2026-04-26
 
 ### Removed

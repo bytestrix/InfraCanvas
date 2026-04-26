@@ -4,10 +4,13 @@
 #   curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 #
 # Flags (pass after `bash -s --`):
-#   --port <N>     Listen port (default 7777, auto-falls-back if taken)
-#   --no-tunnel    Don't open a Cloudflare quick-tunnel; bind the port directly
-#   --private      Imply --no-tunnel and bind 127.0.0.1 (SSH-tunnel only)
-#   --version <V>  Install a specific release tag (default: latest)
+#   --port <N>      Listen port (default 7777, auto-falls-back if taken)
+#   --no-tunnel     Don't open a Cloudflare quick-tunnel; bind the port directly
+#   --private       Imply --no-tunnel and bind 127.0.0.1 (SSH-tunnel only)
+#   --run-user <U>  Run the systemd service as this user (default: auto-detect
+#                   from $SUDO_USER, then any user with ~/.kube/config, then
+#                   any user in the docker group; falls back to root)
+#   --version <V>   Install a specific release tag (default: latest)
 
 set -euo pipefail
 
@@ -21,6 +24,7 @@ PORT=7777
 BIND_PRIVATE="false"
 USE_TUNNEL="true"
 VERSION="latest"
+RUN_USER_OVERRIDE=""
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[1;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -38,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --port)      PORT="$2";          shift 2 ;;
     --no-tunnel) USE_TUNNEL="false";  shift ;;
     --private)   BIND_PRIVATE="true"; USE_TUNNEL="false"; shift ;;
+    --run-user)  RUN_USER_OVERRIDE="$2"; shift 2 ;;
     --version)   VERSION="$2";        shift 2 ;;
     -h|--help)
       sed -n '2,11p' "$0" | sed 's/^# //; s/^#//'
@@ -169,11 +174,64 @@ if ! command -v systemctl >/dev/null || [[ ! -d /etc/systemd/system ]]; then
   exit 0
 fi
 
-# Run as the invoking sudo user so discovery sees their kubeconfig and (when
-# they're in the docker group) /var/run/docker.sock. Falls back to root.
-RUN_USER="${SUDO_USER:-root}"
+# Pick the user the systemd service should run as. Discovery sees that user's
+# ~/.kube/config and (if they're in the docker group) /var/run/docker.sock, so
+# this matters for whether Kubernetes / Docker show up in the dashboard.
+#
+# Cascade:
+#   1. --run-user flag (explicit override)
+#   2. $SUDO_USER (when run via plain `sudo …/install.sh`)
+#   3. First non-root user in /home/* whose ~/.kube/config is readable
+#   4. First non-root user in /home/* who is a member of the docker group
+#   5. First non-root user with a real shell in /home/*
+#   6. root (last resort — Kubernetes/Docker discovery may be empty)
+pick_run_user() {
+  local u
+  if [[ -n "$RUN_USER_OVERRIDE" ]]; then
+    if ! getent passwd "$RUN_USER_OVERRIDE" >/dev/null 2>&1; then
+      error "--run-user $RUN_USER_OVERRIDE: no such user"
+    fi
+    echo "$RUN_USER_OVERRIDE"; return
+  fi
+  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]] \
+       && getent passwd "$SUDO_USER" >/dev/null 2>&1; then
+    echo "$SUDO_USER"; return
+  fi
+  # Scan /home for a candidate
+  for h in /home/*/; do
+    u="$(basename "$h")"
+    [[ "$u" == "root" || "$u" == "*" ]] && continue
+    getent passwd "$u" >/dev/null 2>&1 || continue
+    if [[ -r "/home/${u}/.kube/config" ]]; then
+      echo "$u"; return
+    fi
+  done
+  for h in /home/*/; do
+    u="$(basename "$h")"
+    [[ "$u" == "root" || "$u" == "*" ]] && continue
+    getent passwd "$u" >/dev/null 2>&1 || continue
+    if id -nG "$u" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+      echo "$u"; return
+    fi
+  done
+  for h in /home/*/; do
+    u="$(basename "$h")"
+    [[ "$u" == "root" || "$u" == "*" ]] && continue
+    getent passwd "$u" >/dev/null 2>&1 || continue
+    local sh
+    sh="$(getent passwd "$u" | cut -d: -f7)"
+    case "$sh" in
+      */nologin|*/false|"") continue ;;
+      *) echo "$u"; return ;;
+    esac
+  done
+  echo "root"
+}
+
+RUN_USER="$(pick_run_user)"
 RUN_HOME="$(getent passwd "$RUN_USER" 2>/dev/null | cut -d: -f6)"
 [[ -z "$RUN_HOME" ]] && RUN_HOME="/root"
+info "Service will run as: $RUN_USER (home: $RUN_HOME)"
 
 UNIT_USER=""
 UNIT_GROUP=""
