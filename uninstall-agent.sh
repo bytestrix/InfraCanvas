@@ -51,5 +51,28 @@ fi
 # Old log files from pre-systemd installs
 run_priv rm -f /var/log/infracanvas-agent.log /var/run/infracanvas-agent.pid 2>/dev/null || true
 
+# Bundled cloudflared cache (~30 MB) for the user the service ran as.
+# Best-effort: SUDO_USER is set when invoked via `sudo`; otherwise scan /home.
+CACHE_USERS=()
+[[ -n "${SUDO_USER:-}" ]] && CACHE_USERS+=("$SUDO_USER")
+for h in /home/*/; do
+  u="$(basename "$h")"
+  [[ "$u" == "${SUDO_USER:-}" ]] && continue
+  CACHE_USERS+=("$u")
+done
+[[ -d "/root/.cache/infracanvas" ]] && CACHE_USERS+=("root")
+
+for u in "${CACHE_USERS[@]}"; do
+  if [[ "$u" == "root" ]]; then
+    cache_dir="/root/.cache/infracanvas"
+  else
+    cache_dir="/home/${u}/.cache/infracanvas"
+  fi
+  if [[ -d "$cache_dir" ]]; then
+    info "Removing cloudflared cache for $u: $cache_dir"
+    run_priv rm -rf "$cache_dir"
+  fi
+done
+
 echo ""
 echo -e "${GREEN}✓ InfraCanvas uninstalled${NC}"

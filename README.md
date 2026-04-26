@@ -6,7 +6,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
 
-InfraCanvas is a single Go binary you run on any Linux machine. It discovers every container, pod, volume, network, and deployment on that host and serves a live visual dashboard you open in your browser. No Docker required, no relay to host, no pair codes, no setup.
+InfraCanvas is a single Go binary you run on any Linux machine. It discovers every container, pod, volume, network, and deployment on that host and serves a live visual dashboard you open in your browser. No Docker required, no extra services to host, no setup.
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
@@ -73,9 +73,7 @@ Open the URL, and you see your VM's infrastructure live.
 
 ### Run multiple VMs
 
-Each VM is independent. Install on each, open the printed URL for each in a separate tab — no tunnel coordination needed.
-
-> Want **all your VMs in one canvas**, with history and alerts? That's the [hosted version](#oss-vs-hosted) we're building. The OSS binary is intentionally one-VM-per-dashboard.
+Each VM is independent. Install on each, open the printed URL for each in a separate tab — no tunnel coordination needed. The binary is intentionally one-VM-per-dashboard.
 
 ### Install options
 
@@ -95,11 +93,11 @@ curl -fsSL .../install.sh | bash -s -- --version v0.4.0
 
 ### Run on your laptop too
 
-The same binary works locally — `brew install bytestrix/tap/infracanvas` (coming soon) or build from source, then:
+The same binary works locally — build from source (see [Building from source](#building-from-source)), then:
 
 ```bash
-infracanvas
-# → http://localhost:7777/?token=…
+infracanvas serve
+# → https://*.trycloudflare.com/?token=…   (or pass --no-tunnel for http://localhost:7777)
 ```
 
 You'll see your laptop's Docker containers and Kubernetes context (if any) on the canvas. Useful for development and demos.
@@ -170,28 +168,18 @@ Edit, then `sudo systemctl restart infracanvas`.
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
 ```
 
-This removes the binary, systemd unit, and `/etc/infracanvas/`.
+The uninstaller stops and disables the systemd service, then removes:
 
----
+- `/usr/local/bin/infracanvas` — the binary
+- `/etc/systemd/system/infracanvas.service` — the unit
+- `/etc/infracanvas/` — config and auth token
+- `~/.cache/infracanvas/` — the bundled `cloudflared` binary (~30 MB), for the user the service ran as
 
-## OSS vs hosted
+If you cloned this repo, you can also run it locally:
 
-The OSS binary is deliberately one-VM-per-dashboard. That's enough for solo developers, debugging sessions, demos, weekend hacking, and small fleets you don't mind tab-switching across.
-
-The hosted SaaS (in development) adds the things that *can't* live on a single VM:
-
-| | OSS (this repo) | Hosted SaaS |
-|---|---|---|
-| All your VMs in one canvas | – | ✅ |
-| Persistent history + replay | – | ✅ |
-| Alerts on topology changes (Slack, email) | – | ✅ |
-| Teams / RBAC / SSO | – | ✅ |
-| Stable URL (no Cloudflare quick-tunnel rotation) | – | ✅ |
-| Single VM at a time | ✅ | ✅ |
-| Self-hosted, no account | ✅ | – |
-| Free | ✅ | (paid plans) |
-
-When the hosted version is ready it'll be a flag on the install command (`--workspace <key>`), reusing the exact same binary. Until then, OSS is the whole project.
+```bash
+sudo ./uninstall-agent.sh
+```
 
 ---
 
@@ -272,7 +260,7 @@ make clean              # remove bin/ and embedded dashboard
 InfraCanvas/
 ├── cmd/infracanvas/cmd/
 │   ├── serve.go              # `infracanvas serve` — boots relay + UI + agent
-│   ├── start.go              # `infracanvas start` — agent-only mode (legacy/SaaS)
+│   ├── start.go              # `infracanvas start` — agent-only mode
 │   ├── discover.go           # one-shot CLI discovery
 │   └── …
 ├── pkg/

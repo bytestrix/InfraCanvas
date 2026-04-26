@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.1] — 2026-04-26
+
+### Removed
+- "OSS vs hosted" section and table from `README.md`. The hosted SaaS doesn't exist yet; promising features that don't ship was misleading. The repo now describes only what's actually shipped.
+- "brew install … (coming soon)" line from `README.md` quick start.
+- Stale "legacy/SaaS" annotations in docs.
+
+### Changed
+- `uninstall-agent.sh` now cleans up the bundled `cloudflared` binary cached under `~/.cache/infracanvas/` (~30 MB) for `$SUDO_USER` and any other home directories.
+- `README.md` `Uninstall` section expanded to list exactly what gets removed and document the local `./uninstall-agent.sh` path for repo clones.
+
+---
+
 ## [0.4.0] — 2026-04-26
 
 Major UX overhaul. The OSS flow is now **one binary on each VM**, exposed through a free Cloudflare quick-tunnel. The installer prints a public `https://*.trycloudflare.com` URL — no Docker, no laptop relay, no pair codes, no firewall change.
@@ -21,7 +34,7 @@ Major UX overhaul. The OSS flow is now **one binary on each VM**, exposed throug
 - `make all`, `make build-frontend`, `make build-stub` targets.
 
 ### Changed
-- Frontend simplified to a single auto-connecting dashboard (no `Connect VM` modal, no per-VM cards). Multi-VM view moves to the hosted SaaS path.
+- Frontend simplified to a single auto-connecting dashboard (no `Connect VM` modal, no per-VM cards) — one VM per dashboard.
 - Relay supports `LocalMode`: browser WS auto-binds to the in-process agent without a `PAIR` exchange.
 - `agent.env` → `config.env`; service unit renamed from `infracanvas-agent` to `infracanvas` (the installer migrates the legacy unit).
 - `install-agent.sh` rewritten: drops the relay-URL config, adds `--port`, `--no-tunnel`, `--private`, `--version`.
