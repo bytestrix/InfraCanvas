@@ -37,7 +37,19 @@ The following are out of scope:
 
 ## Security model
 
-- **Agents connect outbound only** — no inbound ports needed on monitored VMs
-- **Secret redaction** — environment variables matching common secret patterns are redacted before the agent sends data
-- **Auth token** — set `INFRACANVAS_TOKEN` on the relay and in `agent.env` to authenticate agents; without it the relay runs in dev mode (no auth)
-- **Pair codes** — codes are single-use session identifiers generated server-side; they expire when the agent disconnects
+InfraCanvas (OSS) runs as a single binary on each machine. The dashboard, relay, and agent all live in the same process. The two surfaces that need protection:
+
+- **Exposed URL** — by default the binary binds `127.0.0.1:7777` and a bundled `cloudflared` opens an outbound-only Cloudflare quick-tunnel that publishes a random `https://*.trycloudflare.com` URL. Traffic is HTTPS-terminated at Cloudflare's edge; no inbound firewall rule is required. The URL is unguessable but not secret — pair it with the auth token below. `--no-tunnel` binds `0.0.0.0:7777` directly (you allow the port in your cloud security group). `--private` binds `127.0.0.1` and you reach it through SSH tunnel.
+- **UI auth token** — every install generates a random 24-character token (saved in `/etc/infracanvas/config.env`). Required as a query param on first load, then stored in an HTTP-only cookie. WebSocket calls require it too.
+
+**Once authenticated, the dashboard can:**
+- See the full topology of the host
+- Read container logs
+- Open a shell inside any container or on the host
+- Run Docker / Kubernetes actions (restart, scale, update image)
+
+Treat the URL+token like an SSH key for the box.
+
+- **Secret redaction** — env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer.
+- **No persistent storage** — graphs are recomputed every refresh; the relay does not persist data between restarts.
+- **Pair codes** — still generated for compatibility with shared-relay (SaaS) deployments; in local serve-mode the browser auto-pairs from loopback and pair codes are unused.

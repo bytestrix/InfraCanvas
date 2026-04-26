@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>InfraCanvas — dashboard not embedded</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { background:#08080E; color:#EEE8FF; font-family: system-ui, -apple-system, sans-serif;
+           min-height:100vh; margin:0; display:flex; align-items:center; justify-content:center; }
+    .card { max-width: 480px; padding: 32px; text-align:center; }
+    h1 { margin: 0 0 14px; font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    p  { margin: 0 0 12px; color: #8B82B0; font-size: 14px; line-height: 1.6; }
+    code { background:#0E0E1C; border:1px solid rgba(138,92,246,0.18); padding: 2px 8px;
+           border-radius: 6px; font-family: ui-monospace, monospace; color:#C026D3; font-size: 13px; }
+    .logo { font-size: 38px; margin-bottom: 16px; line-height: 1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">⬡</div>
+    <h1>Dashboard not embedded</h1>
+    <p>This binary was built without the dashboard. The relay and agent are running, but the UI assets aren't compiled in.</p>
+    <p>To embed the real dashboard, run <code>make all</code> from the repo root, then restart the service.</p>
+  </div>
+</body>
+</html>

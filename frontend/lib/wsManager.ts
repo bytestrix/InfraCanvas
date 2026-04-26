@@ -7,8 +7,14 @@
 import { WsInbound, WsOutbound } from '@/types'
 import { useVMStore } from '@/store/vmStore'
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8080'
-const WS_URL = WS_BASE.replace(/\/+$/, '') + '/ws/canvas'
+// In serve-mode the dashboard is served from the same origin as the relay,
+// so we derive the WS URL from window.location at connect time. The auth
+// cookie is set by the server on first load, so no query param is needed.
+function getWSURL(): string {
+  if (typeof window === 'undefined') return ''
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws/canvas`
+}
 
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS  = 30_000
@@ -45,7 +51,7 @@ export function connectVM(code: string): void {
 
 function _openSocket(code: string, attempt: number): void {
   const entry: SocketEntry = {
-    ws: new WebSocket(WS_URL),
+    ws: new WebSocket(getWSURL()),
     reconnectTimer: null,
     attempt,
     destroyed: false,

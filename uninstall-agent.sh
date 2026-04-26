@@ -1,6 +1,7 @@
-#!/bin/bash
-# InfraCanvas Agent Uninstaller
-# Usage: curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
+#!/usr/bin/env bash
+# InfraCanvas uninstaller
+# Usage:
+#   curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
 
 set -euo pipefail
 
@@ -8,50 +9,47 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 
+run_priv() {
+  if [[ $EUID -eq 0 ]]; then "$@"; else sudo "$@"; fi
+}
+
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/infracanvas"
-SERVICE_NAME="infracanvas-agent"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-LOG_FILE="/var/log/infracanvas-agent.log"
-PID_FILE="/var/run/infracanvas-agent.pid"
+SERVICES=("infracanvas" "infracanvas-agent")  # current + legacy
 
-# Stop and disable systemd service
-if command -v systemctl &>/dev/null; then
-  if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    info "Stopping $SERVICE_NAME..."
-    systemctl stop "$SERVICE_NAME"
-  fi
-  if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
-    info "Disabling $SERVICE_NAME..."
-    systemctl disable "$SERVICE_NAME"
-  fi
-  if [[ -f "$SERVICE_FILE" ]]; then
-    info "Removing systemd service..."
-    rm -f "$SERVICE_FILE"
-    systemctl daemon-reload
-  fi
-else
-  # No systemd — kill background process
-  if [[ -f "$PID_FILE" ]]; then
-    PID=$(cat "$PID_FILE")
-    if kill -0 "$PID" 2>/dev/null; then
-      info "Stopping agent (PID $PID)..."
-      kill "$PID"
+if command -v systemctl >/dev/null; then
+  for svc in "${SERVICES[@]}"; do
+    UNIT="/etc/systemd/system/${svc}.service"
+    if [[ -f "$UNIT" ]] || systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
+      if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        info "Stopping $svc..."
+        run_priv systemctl stop "$svc" || true
+      fi
+      if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+        info "Disabling $svc..."
+        run_priv systemctl disable "$svc" || true
+      fi
+      if [[ -f "$UNIT" ]]; then
+        info "Removing $UNIT"
+        run_priv rm -f "$UNIT"
+      fi
     fi
-    rm -f "$PID_FILE"
-  fi
+  done
+  run_priv systemctl daemon-reload
 fi
 
-# Remove binary
 if [[ -f "$INSTALL_DIR/infracanvas" ]]; then
   info "Removing binary..."
-  rm -f "$INSTALL_DIR/infracanvas"
+  run_priv rm -f "$INSTALL_DIR/infracanvas"
 fi
 
-# Remove config and logs
-info "Removing config and logs..."
-rm -rf "$CONFIG_DIR"
-rm -f "$LOG_FILE"
+if [[ -d "$CONFIG_DIR" ]]; then
+  info "Removing config..."
+  run_priv rm -rf "$CONFIG_DIR"
+fi
+
+# Old log files from pre-systemd installs
+run_priv rm -f /var/log/infracanvas-agent.log /var/run/infracanvas-agent.pid 2>/dev/null || true
 
 echo ""
-echo -e "${GREEN}✓ InfraCanvas agent uninstalled${NC}"
+echo -e "${GREEN}✓ InfraCanvas uninstalled${NC}"

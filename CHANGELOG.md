@@ -7,6 +7,36 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] — 2026-04-26
+
+Major UX overhaul. The OSS flow is now **one binary on each VM**, exposed through a free Cloudflare quick-tunnel. The installer prints a public `https://*.trycloudflare.com` URL — no Docker, no laptop relay, no pair codes, no firewall change.
+
+### Added
+- `infracanvas serve` (default command) — boots relay, embedded dashboard, and in-process agent on a single port.
+- **Cloudflare quick-tunnel by default**: `pkg/tunnel` manages a `cloudflared` child process and prints a public HTTPS URL. The binary downloads `cloudflared` on first run (Linux); on macOS install via `brew install cloudflared`. `--no-tunnel` disables it and binds the port directly. `--private` implies `--no-tunnel` and binds `127.0.0.1`.
+- Random per-install UI auth token, stored in `/etc/infracanvas/config.env`. Token is required via `?token=` query param on first load; subsequent requests use an HTTP-only cookie.
+- Static-export Next.js dashboard embedded into the Go binary via `go:embed` under build tag `embed_full`. Default builds embed a placeholder so plain `go build` works without a Node toolchain.
+- Install-script port preflight, binary self-test, systemd unit verification, and tunnel-URL extraction from `journalctl` (filtered by restart timestamp) for the final banner.
+- Installer auto-detects `$SUDO_USER` and writes `User=`/`Group=` into the systemd unit so the agent runs as the invoking user — Kubernetes discovery picks up `~/.kube/config` automatically, and `SupplementaryGroups=docker` is added when the user is in the `docker` group.
+- `make all`, `make build-frontend`, `make build-stub` targets.
+
+### Changed
+- Frontend simplified to a single auto-connecting dashboard (no `Connect VM` modal, no per-VM cards). Multi-VM view moves to the hosted SaaS path.
+- Relay supports `LocalMode`: browser WS auto-binds to the in-process agent without a `PAIR` exchange.
+- `agent.env` → `config.env`; service unit renamed from `infracanvas-agent` to `infracanvas` (the installer migrates the legacy unit).
+- `install-agent.sh` rewritten: drops the relay-URL config, adds `--port`, `--no-tunnel`, `--private`, `--version`.
+
+### Removed
+- `cmd/infracanvas-server/` (standalone relay binary — folded into `serve`).
+- `Dockerfile.server`, `docker-compose.yml`, `docker-compose.prod.yml`, `frontend/Dockerfile`, `Caddyfile`, `Caddyfile.prod`, `.dockerignore`, `.env.example` — all artifacts of the old laptop-relay model.
+- `frontend/components/ConnectModal.tsx`, `frontend/components/VMCard.tsx`, `frontend/app/vm/[code]/page.tsx`.
+- `start.sh`, `examples/agent-config.yaml`, `examples/infracanvas-agent.service`.
+
+### Migration
+The installer detects the legacy `infracanvas-agent` systemd unit and removes it before installing `infracanvas`. Re-run the install one-liner to upgrade.
+
+---
+
 ## [0.3.0] — 2026-04-19
 
 ### Added

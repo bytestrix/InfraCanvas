@@ -21,24 +21,36 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build agent binaries
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build embedded dashboard
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+          rm -rf pkg/webui/dist
+          mkdir -p pkg/webui/dist
+          cp -r frontend/out/. pkg/webui/dist/
+
+      - name: Build release binaries
         run: |
           mkdir -p dist
           VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION} -X infracanvas/cmd/infracanvas/cmd.GitCommit=${COMMIT} -X infracanvas/cmd/infracanvas/cmd.BuildDate=${BUILD_DATE}"
 
-          GOOS=linux  GOARCH=amd64 go build -ldflags="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION}" \
-            -o dist/infracanvas-linux-amd64   ./cmd/infracanvas
+          for tgt in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            GOOS=${tgt%-*} GOARCH=${tgt#*-} \
+              go build -tags embed_full -ldflags "$LDFLAGS" \
+                -o dist/infracanvas-${tgt} ./cmd/infracanvas
+          done
 
-          GOOS=linux  GOARCH=arm64 go build -ldflags="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION}" \
-            -o dist/infracanvas-linux-arm64   ./cmd/infracanvas
-
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION}" \
-            -o dist/infracanvas-darwin-amd64  ./cmd/infracanvas
-
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X infracanvas/cmd/infracanvas/cmd.Version=${VERSION}" \
-            -o dist/infracanvas-darwin-arm64  ./cmd/infracanvas
-
-          # Also include install/uninstall scripts in release
           cp install-agent.sh dist/install.sh
           cp uninstall-agent.sh dist/uninstall.sh
 
@@ -52,10 +64,10 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            ## Install on your VM
+            ## Install on a Linux VM
 
             ```bash
             curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
             ```
 
-            See [README](https://github.com/${{ github.repository }}#readme) for setup instructions.
+            The installer brings up the dashboard and prints a public URL via Cloudflare's free quick-tunnel — no firewall config or signup required. Pass `--no-tunnel` if you'd rather bind a local port directly. See the [README](https://github.com/${{ github.repository }}#readme) for full options.

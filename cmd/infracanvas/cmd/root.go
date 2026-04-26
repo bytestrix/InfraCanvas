@@ -15,13 +15,19 @@ var (
 	quiet        bool
 )
 
-// rootCmd represents the base command
+// rootCmd represents the base command. With no subcommand, it runs `serve`
+// so a bare `infracanvas` brings up the dashboard immediately.
 var rootCmd = &cobra.Command{
 	Use:   "infracanvas",
-	Short: "Infrastructure Discovery CLI",
-	Long: `infracanvas is a comprehensive infrastructure discovery tool that provides complete 
-visibility into system infrastructure across bare metal, virtual machines, 
-containers, and Kubernetes environments.`,
+	Short: "Run a local infrastructure dashboard for this machine",
+	Long: `InfraCanvas shows you what's running on this machine — host, Docker, Kubernetes —
+in a live visual canvas. Run with no arguments to start the dashboard.
+
+  infracanvas              # start the dashboard (same as 'serve')
+  infracanvas serve        # explicit form, with flags
+  infracanvas discover     # one-shot CLI discovery
+  infracanvas start        # agent-only mode (connects to a remote relay)`,
+	RunE: runServe,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

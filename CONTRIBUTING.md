@@ -4,40 +4,42 @@ Thank you for your interest in contributing. This document covers how to set up 
 
 ## Development setup
 
-**Requirements:** Go 1.21+, Node.js 20+, Docker (optional, for full stack)
+**Requirements:** Go 1.21+, Node.js 20+
 
 ```bash
 git clone https://github.com/bytestrix/InfraCanvas.git
 cd InfraCanvas
 
-# Build the agent binary
-make build
+# Build dashboard + binary (with embedded UI)
+make all
 
 # Run all Go tests
 make test
 
-# Run the full stack locally (relay + dashboard)
-make deploy-local
+# Run the dashboard locally
+./bin/infracanvas       # → http://localhost:7777/?token=…
 ```
 
-Frontend development:
+Frontend-only iteration (against a separately running binary):
 
 ```bash
-cd frontend
-npm install
-npm run dev    # starts on http://localhost:3000
+# Terminal 1 — run the binary in stub mode for fast rebuilds
+make build-stub && ./bin/infracanvas serve --port 7777 --token dev
+
+# Terminal 2 — Next dev server
+cd frontend && npm install && npm run dev    # http://localhost:3000
 ```
 
 ## Project structure
 
 ```
-cmd/infracanvas/        Agent CLI
-cmd/infracanvas-server/ Relay server
-pkg/agent/              WebSocket agent logic
+cmd/infracanvas/cmd/    CLI commands (serve, start, discover, …)
+pkg/agent/              WebSocket agent: discover, diff, exec, actions
+pkg/server/             Relay: WebSocket broker, sessions, auth, static UI
+pkg/webui/              Embedded dashboard (build-tagged)
 pkg/discovery/          Host / Docker / Kubernetes discovery
-pkg/server/             WebSocket relay broker
-pkg/actions/            Docker and Kubernetes action executors
-frontend/               Next.js dashboard
+pkg/actions/            Docker / K8s / Host action executors
+frontend/               Next.js dashboard (statically exported)
 ```
 
 ## Making changes
@@ -85,7 +87,7 @@ cd frontend && npm run lint
 Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md). Please include:
 - InfraCanvas version (`infracanvas version`)
 - OS and architecture of both the VM and the browser host
-- Relevant log output (`sudo journalctl -u infracanvas-agent -n 50`)
+- Relevant log output (`sudo journalctl -u infracanvas -n 50`)
 
 ## Security vulnerabilities
 

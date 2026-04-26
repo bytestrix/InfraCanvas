@@ -144,7 +144,9 @@ const nodeTypes: NodeTypes = {
 
 interface InfraCanvasProps {
   vm: VMState
-  onBack: () => void
+  // Optional — when omitted, the back button is hidden. In single-VM
+  // local mode there is no parent view to return to.
+  onBack?: () => void
 }
 
 export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
@@ -419,13 +421,16 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         background: 'rgba(8,8,14,0.97)', borderBottom: '1px solid rgba(138,92,246,0.12)',
         backdropFilter: 'blur(12px)',
       }}>
-        <button onClick={onBack} style={ICON_BTN}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(138,92,246,0.1)'; e.currentTarget.style.color = '#8B82B0' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52496E' }}>
-          <ArrowLeft size={15} />
-        </button>
-
-        <div style={DIVIDER} />
+        {onBack && (
+          <>
+            <button onClick={onBack} style={ICON_BTN}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(138,92,246,0.1)'; e.currentTarget.style.color = '#8B82B0' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52496E' }}>
+              <ArrowLeft size={15} />
+            </button>
+            <div style={DIVIDER} />
+          </>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Server size={13} color="#C026D3" />

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -108,47 +109,84 @@ type PairRequest struct {
 	Code string `json:"code"`
 }
 
+// Options configures a Server.
+type Options struct {
+	// AgentToken is the shared secret an agent presents on /ws/agent
+	// (Authorization: Bearer <token>). Empty disables agent auth.
+	AgentToken string
+
+	// UIToken gates browser access to /ws/canvas and the static UI.
+	// Empty disables UI auth (only safe when bound to loopback).
+	UIToken string
+
+	// LocalMode bypasses pair-code lookup: the first agent connection
+	// becomes the implicit local session and any browser connecting to
+	// /ws/canvas auto-binds to it. Used by `infracanvas serve`.
+	LocalMode bool
+
+	// AllowedOrigins, if non-empty, restricts CORS for WS upgrades.
+	AllowedOrigins []string
+}
+
 // Server is the InfraCanvas WebSocket relay server.
 type Server struct {
 	sessions       *SessionStore
 	upgrader       websocket.Upgrader
 	mux            *http.ServeMux
-	token          string // shared secret; empty = auth disabled (dev mode)
+	agentToken     string
+	uiToken        string
+	localMode      bool
 	allowedOrigins map[string]bool
+
+	localMu      sync.RWMutex
+	localSession *Session
 }
 
-// New creates and configures a Server.
+// New creates a Server using environment-based config (legacy SaaS-style).
 func New() *Server {
-	token := os.Getenv("INFRACANVAS_TOKEN")
-	if token == "" {
-		log.Println("[WARN] INFRACANVAS_TOKEN is not set — auth disabled. Set it in production!")
-	} else {
-		log.Println("[INFO] Agent auth enabled via INFRACANVAS_TOKEN")
+	opts := Options{
+		AgentToken: os.Getenv("INFRACANVAS_TOKEN"),
 	}
-
-	// Build allowed-origins map from INFRACANVAS_ALLOWED_ORIGINS (comma-separated).
-	// Empty = allow all (dev mode).
-	allowedOrigins := map[string]bool{}
 	if raw := os.Getenv("INFRACANVAS_ALLOWED_ORIGINS"); raw != "" {
 		for _, o := range strings.Split(raw, ",") {
 			if o = strings.TrimSpace(o); o != "" {
-				allowedOrigins[o] = true
+				opts.AllowedOrigins = append(opts.AllowedOrigins, o)
 			}
 		}
-		log.Printf("[INFO] Allowed origins: %v", raw)
 	}
+	if opts.AgentToken == "" {
+		log.Println("[WARN] INFRACANVAS_TOKEN is not set — agent auth disabled.")
+	}
+	return NewWithOptions(opts)
+}
 
+// NewLocal creates a Server in local-mode for `infracanvas serve`:
+// auto-pairing, UI gated by a token, no agent auth (the agent is in-process).
+func NewLocal(uiToken string) *Server {
+	return NewWithOptions(Options{
+		LocalMode: true,
+		UIToken:   uiToken,
+	})
+}
+
+// NewWithOptions creates a Server with explicit configuration.
+func NewWithOptions(opts Options) *Server {
 	s := &Server{
 		sessions:       NewSessionStore(),
-		token:          token,
-		allowedOrigins: allowedOrigins,
+		agentToken:     opts.AgentToken,
+		uiToken:        opts.UIToken,
+		localMode:      opts.LocalMode,
+		allowedOrigins: map[string]bool{},
+	}
+	for _, o := range opts.AllowedOrigins {
+		s.allowedOrigins[o] = true
 	}
 	s.upgrader = websocket.Upgrader{
 		ReadBufferSize:  64 * 1024,
 		WriteBufferSize: 64 * 1024,
 		CheckOrigin: func(r *http.Request) bool {
 			if len(s.allowedOrigins) == 0 {
-				return true // dev mode
+				return true
 			}
 			origin := r.Header.Get("Origin")
 			return s.allowedOrigins[origin]
@@ -158,21 +196,24 @@ func New() *Server {
 	s.mux.HandleFunc("/ws/agent", s.handleAgentWS)
 	s.mux.HandleFunc("/ws/canvas", s.handleBrowserWS)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
-	s.mux.HandleFunc("/api/sessions", s.requireToken(s.handleSessions))
-	// Catch-all for debugging
-	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[debug] unhandled request: %s %s", r.Method, r.RequestURI)
-		http.NotFound(w, r)
-	})
+	s.mux.HandleFunc("/api/sessions", s.requireAgentToken(s.handleSessions))
 	return s
 }
 
-// requireToken is middleware that checks the Authorization header for the shared token.
-func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
+// MountUI serves the embedded dashboard at /, gated by the UI token.
+// Requests with ?token=<UIToken> set a cookie and redirect to a clean URL.
+// Subsequent requests use the cookie.
+func (s *Server) MountUI(fsys fs.FS) {
+	fileServer := http.FileServer(http.FS(fsys))
+	s.mux.Handle("/", s.requireUIAuth(fileServer))
+}
+
+// requireAgentToken protects API routes with the agent shared secret.
+func (s *Server) requireAgentToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.token != "" {
+		if s.agentToken != "" {
 			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+s.token {
+			if auth != "Bearer "+s.agentToken {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -181,14 +222,74 @@ func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// checkAgentToken validates the Authorization header on a WebSocket upgrade request.
-// Returns true if the connection should be allowed.
+// checkAgentToken validates the Authorization header on /ws/agent.
 func (s *Server) checkAgentToken(r *http.Request) bool {
-	if s.token == "" {
-		return true // auth disabled
+	if s.agentToken == "" {
+		return true
 	}
 	auth := r.Header.Get("Authorization")
-	return auth == "Bearer "+s.token
+	return auth == "Bearer "+s.agentToken
+}
+
+// checkUIToken accepts the token from the cookie or ?token= query param.
+func (s *Server) checkUIToken(r *http.Request) bool {
+	if s.uiToken == "" {
+		return true
+	}
+	if c, err := r.Cookie("infracanvas_token"); err == nil && c.Value == s.uiToken {
+		return true
+	}
+	return r.URL.Query().Get("token") == s.uiToken
+}
+
+// requireUIAuth gates static-UI requests. On first visit with ?token=…
+// it sets a cookie and redirects to a clean URL; thereafter the cookie carries auth.
+// Missing/invalid auth returns a small HTML page asking for the token.
+func (s *Server) requireUIAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.uiToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if q := r.URL.Query().Get("token"); q != "" {
+			if q == s.uiToken {
+				http.SetCookie(w, &http.Cookie{
+					Name:     "infracanvas_token",
+					Value:    q,
+					Path:     "/",
+					HttpOnly: true,
+					SameSite: http.SameSiteStrictMode,
+					MaxAge:   60 * 60 * 24 * 30,
+				})
+				u := *r.URL
+				qq := u.Query()
+				qq.Del("token")
+				u.RawQuery = qq.Encode()
+				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther)
+				return
+			}
+			s.writeUnauthorizedHTML(w, "Invalid token.")
+			return
+		}
+		if c, err := r.Cookie("infracanvas_token"); err == nil && c.Value == s.uiToken {
+			next.ServeHTTP(w, r)
+			return
+		}
+		s.writeUnauthorizedHTML(w, "Auth token required.")
+	})
+}
+
+func (s *Server) writeUnauthorizedHTML(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>InfraCanvas — Auth required</title>` +
+		`<style>body{background:#08080E;color:#EEE8FF;font-family:system-ui,-apple-system,sans-serif;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center}` +
+		`.card{max-width:440px;padding:32px;text-align:center}` +
+		`h1{margin:0 0 12px;font-size:22px;font-weight:600;letter-spacing:-.3px}` +
+		`p{margin:0 0 12px;color:#8B82B0;font-size:14px;line-height:1.6}` +
+		`code{background:#0E0E1C;border:1px solid rgba(138,92,246,.18);padding:2px 8px;border-radius:6px;font-family:ui-monospace,monospace;color:#C026D3;font-size:13px}</style></head>` +
+		`<body><div class="card"><h1>InfraCanvas</h1><p>` + msg +
+		`</p><p>Append <code>?token=&lt;your-token&gt;</code> to the URL — the token was printed when InfraCanvas started.</p></div></body></html>`))
 }
 
 // Handler returns the HTTP handler (useful for testing or custom listeners).
@@ -256,7 +357,15 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	sess := s.sessions.Create(conn)
 	log.Printf("[agent] connected  session=%s  code=%s", sess.ID, sess.PairCode)
 
-	// Immediately tell the agent its pair code.
+	// In local mode the first agent becomes the implicit local session;
+	// browsers auto-bind to it without a pair code.
+	if s.localMode {
+		s.localMu.Lock()
+		s.localSession = sess
+		s.localMu.Unlock()
+	}
+
+	// Send the pair code (still useful in shared-relay mode; harmless locally).
 	if err := writeMsg(conn, MsgPairCode, PairCodeData{Code: sess.PairCode}); err != nil {
 		log.Printf("[agent] failed to send PAIR_CODE: %v", err)
 		conn.Close()
@@ -267,6 +376,13 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		conn.Close()
 		s.sessions.Delete(sess)
+		if s.localMode {
+			s.localMu.Lock()
+			if s.localSession == sess {
+				s.localSession = nil
+			}
+			s.localMu.Unlock()
+		}
 		log.Printf("[agent] disconnected  session=%s", sess.ID)
 		// Notify all paired browsers.
 		msg := mustMarshalEnvelope(MsgAgentDisconnected, struct{}{})
@@ -350,6 +466,10 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 // ── Browser WebSocket handler ─────────────────────────────────────────────────
 
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
+	if !s.checkUIToken(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	raw, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("browser upgrade error: %v", err)
@@ -358,29 +478,58 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	conn := newSafeConn(raw)
 	defer conn.Close()
 
-	// First message from browser must be PAIR.
-	_, payload, err := conn.ReadMessage()
-	if err != nil {
-		return
-	}
-	var env Envelope
-	if err := json.Unmarshal(payload, &env); err != nil || env.Type != "PAIR" {
-		_ = writeMsg(conn, MsgError, map[string]string{"message": "first message must be PAIR"})
-		return
-	}
-	var req PairRequest
-	if err := json.Unmarshal(env.Data, &req); err != nil || req.Code == "" {
-		_ = writeMsg(conn, MsgError, map[string]string{"message": "missing pair code"})
-		return
-	}
+	var sess *Session
 
-	sess, ok := s.sessions.AddBrowser(req.Code, conn)
-	if !ok {
-		_ = writeMsg(conn, MsgError, map[string]string{"message": "unknown pair code"})
-		return
+	if s.localMode {
+		// Auto-pair: bind to the local session without requiring a PAIR message.
+		// If the agent hasn't connected yet, wait briefly for it.
+		for i := 0; i < 50; i++ { // up to ~5s
+			s.localMu.RLock()
+			sess = s.localSession
+			s.localMu.RUnlock()
+			if sess != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if sess == nil {
+			_ = writeMsg(conn, MsgError, map[string]string{"message": "agent not yet ready — refresh in a moment"})
+			return
+		}
+		s.sessions.mu.Lock()
+		sess.mu.Lock()
+		sess.Browsers = append(sess.Browsers, conn)
+		if sess.PairedAt.IsZero() {
+			sess.PairedAt = time.Now()
+		}
+		sess.mu.Unlock()
+		s.sessions.mu.Unlock()
+		log.Printf("[browser] auto-paired (local)  session=%s  browsers=%d", sess.ID, sess.BrowserCount())
+	} else {
+		// Shared-relay mode: first message must be PAIR with a code.
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var env Envelope
+		if err := json.Unmarshal(payload, &env); err != nil || env.Type != "PAIR" {
+			_ = writeMsg(conn, MsgError, map[string]string{"message": "first message must be PAIR"})
+			return
+		}
+		var req PairRequest
+		if err := json.Unmarshal(env.Data, &req); err != nil || req.Code == "" {
+			_ = writeMsg(conn, MsgError, map[string]string{"message": "missing pair code"})
+			return
+		}
+		var ok bool
+		sess, ok = s.sessions.AddBrowser(req.Code, conn)
+		if !ok {
+			_ = writeMsg(conn, MsgError, map[string]string{"message": "unknown pair code"})
+			return
+		}
+		log.Printf("[browser] paired  session=%s  code=%s  browsers=%d",
+			sess.ID, req.Code, sess.BrowserCount())
 	}
-	log.Printf("[browser] paired  session=%s  code=%s  browsers=%d",
-		sess.ID, req.Code, sess.BrowserCount())
 
 	// Notify agent it has a new viewer.
 	go func() { _ = writeMsg(sess.AgentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()}) }()

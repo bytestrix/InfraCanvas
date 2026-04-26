@@ -34,6 +34,10 @@ type WSConfig struct {
 	RefreshSeconds  int      // how often to re-discover and send diffs (default 30)
 	TLSInsecure     bool
 	EnableRedaction bool
+	// QuietPairBanner suppresses the "Pair code: …" stdout banner. Used when
+	// the agent runs in-process under `infracanvas serve`, where pair codes
+	// are irrelevant (local auto-pair).
+	QuietPairBanner bool
 }
 
 // DefaultWSConfig returns sensible defaults.
@@ -152,8 +156,10 @@ func (a *WSAgent) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Print pairing instructions.
-	printPairBanner(pairCode)
+	// Print pairing instructions (skip in serve-mode where it's noise).
+	if !a.cfg.QuietPairBanner {
+		printPairBanner(pairCode)
+	}
 
 	// Run the first full snapshot.
 	snap, graph, err := a.collectAndFormatGraph(ctx)
