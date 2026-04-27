@@ -362,19 +362,26 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
     # but isn't actually reachable yet — we want to flag that LOUDLY because
     # the symptom otherwise is a confusing browser error after install seems
     # to succeed.
-    info "Verifying tunnel is reachable from the public internet..."
-    for _ in $(seq 1 30); do
+    info "Verifying tunnel is reachable from the public internet (up to 90s)..."
+    # Cloudflare's anycast DNS for a freshly-published trycloudflare.com host
+    # can take 30-90s to propagate to some resolvers (notably EC2's), so the
+    # probe needs to be patient. Print a dot per iteration so the install
+    # doesn't look hung — also keeps SSH sessions alive on slow networks.
+    code=000
+    for _ in $(seq 1 45); do
       # -s (not -fsS): a 4xx is still a "reachable" signal — the Cloudflare
       # edge forwarded our request. -w always prints %{http_code}, even on
       # connect failure (in which case it's 000), so no `|| echo` fallback
       # is needed (and adding one concatenates output and breaks the match).
-      code=$(curl -s -o /dev/null -w '%{http_code}' -m 4 "$TUNNEL_URL" 2>/dev/null)
+      code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$TUNNEL_URL" 2>/dev/null)
       [[ -z "$code" ]] && code=000
       case "$code" in
         2*|3*|401|403) TUNNEL_REACHABLE="true"; break ;;
       esac
-      sleep 2
+      printf '.'
+      sleep 1
     done
+    printf '\n'
     if [[ "$TUNNEL_REACHABLE" != "true" ]]; then
       warn "Tunnel URL not reachable yet (last HTTP code: ${code:-none})."
       warn "  This usually clears in a few seconds, but if it sticks (Cloudflare 1033),"
