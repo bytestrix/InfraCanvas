@@ -371,9 +371,14 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
     for _ in $(seq 1 45); do
       # -s (not -fsS): a 4xx is still a "reachable" signal — the Cloudflare
       # edge forwarded our request. -w always prints %{http_code}, even on
-      # connect failure (in which case it's 000), so no `|| echo` fallback
-      # is needed (and adding one concatenates output and breaks the match).
-      code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$TUNNEL_URL" 2>/dev/null)
+      # connect failure (in which case it's 000).
+      #
+      # The trailing `|| code=000` is load-bearing: when DNS resolution fails
+      # curl exits 6, and on bash >=5.3 `set -e` propagates that exit out of
+      # the `$()` assignment and kills the install script silently mid-probe
+      # (the symptom on EC2 was an install that printed "Verifying..." and
+      # then never returned a banner). Treat any curl failure as 000 instead.
+      code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$TUNNEL_URL" 2>/dev/null) || code=000
       [[ -z "$code" ]] && code=000
       case "$code" in
         2*|3*|401|403) TUNNEL_REACHABLE="true"; break ;;
