@@ -339,10 +339,12 @@ STATE_FILE="/var/lib/infracanvas/state.json"
 if [[ "$USE_TUNNEL" == "true" ]]; then
   info "Waiting for Cloudflare quick-tunnel to publish a URL (up to 60s)..."
   for _ in $(seq 1 60); do
-    # Prefer the state file written by `serve` — it holds the latest URL after
-    # any cloudflared respawn. Fall back to scraping the journal for older
-    # binaries that haven't redeployed yet.
-    if [[ -r "$STATE_FILE" ]]; then
+    # The state file holds the live URL, but a stale one survives across
+    # `systemctl restart` until the new serve process overwrites it. Only
+    # trust the state file when its mtime is newer than RESTART_AT — the
+    # journal (filtered with --since RESTART_AT) is the safe fallback.
+    TUNNEL_URL=""
+    if [[ -r "$STATE_FILE" ]] && run_priv find "$STATE_FILE" -newermt "$RESTART_AT" -print 2>/dev/null | grep -q .; then
       TUNNEL_URL=$(run_priv grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$STATE_FILE" 2>/dev/null | tail -1 || true)
     fi
     if [[ -z "$TUNNEL_URL" ]]; then
