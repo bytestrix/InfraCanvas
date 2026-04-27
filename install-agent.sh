@@ -357,36 +357,14 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
   if [[ -z "$TUNNEL_URL" ]]; then
     warn "Tunnel URL didn't appear within 60s — check: sudo journalctl -u $SERVICE_NAME -n 50"
   else
-    # Health-probe the tunnel: a 200/401 means the Cloudflare edge is forwarding
-    # to our local server. Anything else (1033, timeout) means the URL exists
-    # but isn't actually reachable yet — we want to flag that LOUDLY because
-    # the symptom otherwise is a confusing browser error after install seems
-    # to succeed.
-    info "Verifying tunnel is reachable from the public internet (up to 90s)..."
-    # Cloudflare's anycast DNS for a freshly-published trycloudflare.com host
-    # can take 30-90s to propagate to some resolvers (notably EC2's), so the
-    # probe needs to be patient. Print a dot per iteration so the install
-    # doesn't look hung — also keeps SSH sessions alive on slow networks.
-    code=000
-    for _ in $(seq 1 45); do
-      # -s (not -fsS): a 4xx is still a "reachable" signal — the Cloudflare
-      # edge forwarded our request. -w always prints %{http_code}, even on
-      # connect failure (in which case it's 000).
-      #
-      # The trailing `|| code=000` is load-bearing: when DNS resolution fails
-      # curl exits 6, and on bash >=5.3 `set -e` propagates that exit out of
-      # the `$()` assignment and kills the install script silently mid-probe
-      # (the symptom on EC2 was an install that printed "Verifying..." and
-      # then never returned a banner). Treat any curl failure as 000 instead.
-      code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$TUNNEL_URL" 2>/dev/null) || code=000
-      [[ -z "$code" ]] && code=000
-      case "$code" in
-        2*|3*|401|403) TUNNEL_REACHABLE="true"; break ;;
-      esac
-      printf '.'
-      sleep 1
-    done
-    printf '\n'
+    # cloudflared only prints the trycloudflare.com URL on stderr *after* it
+    # has registered with the Cloudflare edge, so seeing the URL in the journal
+    # is itself proof the tunnel is live. We deliberately do not HTTP-probe
+    # the URL from this VM: many cloud VPC resolvers (EC2 in particular) won't
+    # resolve a freshly-published trycloudflare.com hostname for 60+ seconds,
+    # so probes were producing false-negative warnings even when the tunnel
+    # was healthy from the public internet.
+    TUNNEL_REACHABLE="true"
     if [[ "$TUNNEL_REACHABLE" != "true" ]]; then
       warn "Tunnel URL not reachable yet (last HTTP code: ${code:-none})."
       warn "  This usually clears in a few seconds, but if it sticks (Cloudflare 1033),"
