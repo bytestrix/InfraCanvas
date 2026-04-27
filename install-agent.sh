@@ -270,6 +270,12 @@ ${UNIT_SUPP_GROUPS}
 ${UNIT_HOME}
 ${UNIT_KUBECONFIG}
 EnvironmentFile=${CONFIG_DIR}/config.env
+# StateDirectory= creates /var/lib/infracanvas, owned by the service user, and
+# exposes it as \$STATE_DIRECTORY. The serve command writes the live tunnel
+# URL there so \`infracanvas url\` can recover it after the install banner
+# scrolls off-screen (or after cloudflared respawns with a new hostname).
+StateDirectory=infracanvas
+StateDirectoryMode=0755
 ExecStart=${INSTALL_DIR}/infracanvas serve --port \${INFRACANVAS_PORT}${SERVE_FLAGS}
 Restart=on-failure
 RestartSec=5
@@ -328,16 +334,46 @@ detect_public_ip() {
 }
 
 TUNNEL_URL=""
+TUNNEL_REACHABLE="false"
+STATE_FILE="/var/lib/infracanvas/state.json"
 if [[ "$USE_TUNNEL" == "true" ]]; then
   info "Waiting for Cloudflare quick-tunnel to publish a URL (up to 60s)..."
   for _ in $(seq 1 60); do
-    TUNNEL_URL=$(run_priv journalctl -u "$SERVICE_NAME" --no-pager --since "$RESTART_AT" 2>/dev/null \
-      | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
+    # Prefer the state file written by `serve` — it holds the latest URL after
+    # any cloudflared respawn. Fall back to scraping the journal for older
+    # binaries that haven't redeployed yet.
+    if [[ -r "$STATE_FILE" ]]; then
+      TUNNEL_URL=$(run_priv grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$STATE_FILE" 2>/dev/null | tail -1 || true)
+    fi
+    if [[ -z "$TUNNEL_URL" ]]; then
+      TUNNEL_URL=$(run_priv journalctl -u "$SERVICE_NAME" --no-pager --since "$RESTART_AT" 2>/dev/null \
+        | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
+    fi
     [[ -n "$TUNNEL_URL" ]] && break
     sleep 1
   done
   if [[ -z "$TUNNEL_URL" ]]; then
     warn "Tunnel URL didn't appear within 60s — check: sudo journalctl -u $SERVICE_NAME -n 50"
+  else
+    # Health-probe the tunnel: a 200/401 means the Cloudflare edge is forwarding
+    # to our local server. Anything else (1033, timeout) means the URL exists
+    # but isn't actually reachable yet — we want to flag that LOUDLY because
+    # the symptom otherwise is a confusing browser error after install seems
+    # to succeed.
+    info "Verifying tunnel is reachable from the public internet..."
+    for _ in $(seq 1 30); do
+      code=$(curl -fsS -o /dev/null -w '%{http_code}' -m 4 "$TUNNEL_URL" 2>/dev/null || echo 000)
+      case "$code" in
+        2*|3*|401|403) TUNNEL_REACHABLE="true"; break ;;
+      esac
+      sleep 2
+    done
+    if [[ "$TUNNEL_REACHABLE" != "true" ]]; then
+      warn "Tunnel URL not reachable yet (last HTTP code: ${code:-none})."
+      warn "  This usually clears in a few seconds, but if it sticks (Cloudflare 1033),"
+      warn "  cloudflared lost its edge connection. The watchdog will respawn it —"
+      warn "  run \`infracanvas url\` to fetch the current URL."
+    fi
   fi
 fi
 
@@ -358,10 +394,20 @@ if [[ -n "$TUNNEL_URL" ]]; then
   echo -e "  ${BOLD}Open in your browser:${NC}"
   echo -e "    ${CYAN}${TUNNEL_URL}/?token=${TOKEN}${NC}"
   echo ""
-  echo -e "  This URL works from anywhere — Cloudflare's free quick-tunnel needs"
-  echo -e "  no firewall rule. The URL is ephemeral; it changes whenever the"
-  echo -e "  service restarts. Run with ${BOLD}--no-tunnel${NC} for a stable URL on your"
-  echo -e "  own port (requires opening it in your cloud security group)."
+  if [[ "$TUNNEL_REACHABLE" == "true" ]]; then
+    echo -e "  ${GREEN}✓${NC} Verified reachable from the public internet."
+  else
+    echo -e "  ${YELLOW}!${NC} Tunnel URL didn't respond in time. It may come up in a few"
+    echo -e "    seconds, or cloudflared may need to respawn. The watchdog handles"
+    echo -e "    that automatically; just re-fetch the live URL with:"
+    echo -e "      ${CYAN}sudo infracanvas url${NC}"
+  fi
+  echo ""
+  echo -e "  Cloudflare's free quick-tunnel needs no firewall rule, but each"
+  echo -e "  cloudflared restart yields a new random hostname. Whenever the URL"
+  echo -e "  goes stale, run ${BOLD}sudo infracanvas url${NC} to print the current one."
+  echo -e "  For a stable URL, reinstall with ${BOLD}--no-tunnel${NC} and open the port in"
+  echo -e "  your cloud security group."
 elif [[ "$BIND_PRIVATE" == "true" ]]; then
   echo -e "  Bound to ${BOLD}127.0.0.1:${PORT}${NC} — only this machine can reach it."
   echo ""
@@ -405,6 +451,7 @@ echo "  Auth token:  $TOKEN"
 echo "  Saved to:    $CONFIG_DIR/config.env"
 echo ""
 echo "  Manage the service:"
+echo "    sudo infracanvas url                    # print the current public URL"
 echo "    sudo systemctl status   $SERVICE_NAME"
 echo "    sudo systemctl restart  $SERVICE_NAME"
 echo "    sudo journalctl -u $SERVICE_NAME -f"

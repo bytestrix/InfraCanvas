@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
+	"infracanvas/pkg/runstate"
 	"infracanvas/pkg/server"
 	"infracanvas/pkg/tunnel"
 	"infracanvas/pkg/webui"
@@ -105,11 +106,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
-	// Bring up the tunnel if requested.
+	// Bring up the tunnel if requested. The watchdog will keep it alive and
+	// publish every new URL to the state file so `infracanvas url` can recover
+	// it after the launching shell is gone.
 	var tnl *tunnel.Tunnel
 	if useTunnel {
 		log.Println("Starting Cloudflare quick-tunnel...")
-		tnl, err = tunnel.Start(ctx, fmt.Sprintf("http://127.0.0.1:%d", chosenPort))
+		onURL := func(u string) {
+			if err := runstate.Update(func(s *runstate.State) { s.TunnelURL = u }); err != nil {
+				log.Printf("[state] write tunnel url: %v", err)
+			}
+		}
+		tnl, err = tunnel.Start(ctx, fmt.Sprintf("http://127.0.0.1:%d", chosenPort), onURL)
 		if err != nil {
 			cancel()
 			_ = httpSrv.Close()
@@ -124,8 +132,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	tunnelURL := ""
 	if tnl != nil {
-		tunnelURL = tnl.URL
+		tunnelURL = tnl.URL()
 	}
+
+	if err := runstate.Update(func(s *runstate.State) {
+		s.Port = chosenPort
+		s.Token = token
+		s.TunnelURL = tunnelURL
+	}); err != nil {
+		log.Printf("[state] write: %v", err)
+	}
+
 	printServeBanner(host, chosenPort, token, publicIP, tunnelURL)
 
 	go func() {
@@ -327,10 +344,11 @@ func printServeBanner(host string, port int, token, publicIP, tunnelURL string) 
 		fmt.Printf("  Open in your browser:\n")
 		fmt.Printf("    \033[1;36m%s/?token=%s\033[0m\n", tunnelURL, token)
 		fmt.Println()
-		fmt.Println("  This URL works from anywhere — Cloudflare quick-tunnels are free")
-		fmt.Println("  and need no firewall changes. The URL is ephemeral; restart the")
-		fmt.Println("  service to get a new one. Pass --no-tunnel for a stable URL on")
-		fmt.Println("  your own port (requires opening it in your cloud security group).")
+		fmt.Println("  Cloudflare quick-tunnels are free and need no firewall changes,")
+		fmt.Println("  but each cloudflared restart yields a new random hostname. The")
+		fmt.Println("  watchdog respawns cloudflared automatically — run `infracanvas url`")
+		fmt.Println("  any time to print the current URL. Pass --no-tunnel for a stable")
+		fmt.Println("  URL on your own port (requires opening it in your cloud security group).")
 
 	case servePrivate:
 		fmt.Printf("  Bound to 127.0.0.1:%d — only this machine can reach it.\n", port)
