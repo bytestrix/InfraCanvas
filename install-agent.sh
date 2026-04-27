@@ -362,7 +362,12 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
     # to succeed.
     info "Verifying tunnel is reachable from the public internet..."
     for _ in $(seq 1 30); do
-      code=$(curl -fsS -o /dev/null -w '%{http_code}' -m 4 "$TUNNEL_URL" 2>/dev/null || echo 000)
+      # -s (not -fsS): a 4xx is still a "reachable" signal — the Cloudflare
+      # edge forwarded our request. -w always prints %{http_code}, even on
+      # connect failure (in which case it's 000), so no `|| echo` fallback
+      # is needed (and adding one concatenates output and breaks the match).
+      code=$(curl -s -o /dev/null -w '%{http_code}' -m 4 "$TUNNEL_URL" 2>/dev/null)
+      [[ -z "$code" ]] && code=000
       case "$code" in
         2*|3*|401|403) TUNNEL_REACHABLE="true"; break ;;
       esac
