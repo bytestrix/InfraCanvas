@@ -8,7 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { type GraphNode, getNodeColor, getNodeIcon } from '@/types'
-import { sendAction, subscribeActionResult, subscribeActionProgress } from '@/lib/wsManager'
+import { sendAction, sendCommand, subscribeActionResult, subscribeActionProgress } from '@/lib/wsManager'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -377,13 +377,21 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
       } else {
         setActionStatus('success')
         setActionMsg(data.message ?? 'Done')
+        // Mutating actions (image update, scale, restart, delete...) change cluster
+        // state — kick a discovery refresh immediately and again a few seconds later
+        // to catch rollout progress (new replicaset, pod phase transitions). Without
+        // this the panel still shows the pre-action snapshot until the next periodic
+        // scan or a manual refresh click.
+        sendCommand(vmCode, 'refresh')
+        setTimeout(() => sendCommand(vmCode, 'refresh'), 3000)
+        setTimeout(() => sendCommand(vmCode, 'refresh'), 10000)
       }
     })
     const unsubProgress = subscribeActionProgress((data) => {
       setActionMsg(data.message ?? `${data.progress ?? 0}%`)
     })
     return () => { unsubResult(); unsubProgress() }
-  }, [])
+  }, [vmCode])
 
   function openAction(action: ActionDef) {
     if (activeActionId === action.id) { setActiveActionId(null); setActionStatus('idle'); setActionMsg(''); return }
