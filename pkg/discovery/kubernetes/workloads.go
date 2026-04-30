@@ -7,6 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"infracanvas/internal/models"
 )
@@ -45,18 +46,7 @@ func (d *Discovery) parseDeployment(deploy *appsv1.Deployment) models.Deployment
 		replicas = *deploy.Spec.Replicas
 	}
 
-	// Parse containers
-	containers := make([]models.ContainerSpec, 0, len(deploy.Spec.Template.Spec.Containers))
-	for _, c := range deploy.Spec.Template.Spec.Containers {
-		containers = append(containers, models.ContainerSpec{
-			Name:  c.Name,
-			Image: c.Image,
-			Resources: models.ResourceRequirements{
-				Requests: parseResourceList(c.Resources.Requests),
-				Limits:   parseResourceList(c.Resources.Limits),
-			},
-		})
-	}
+	containers := parseContainerSpecs(deploy.Spec.Template.Spec.Containers)
 
 	// Determine health
 	health := models.HealthHealthy
@@ -73,6 +63,11 @@ func (d *Discovery) parseDeployment(deploy *appsv1.Deployment) models.Deployment
 		strategy = string(deploy.Spec.Strategy.Type)
 	}
 
+	pullSecrets := make([]string, 0, len(deploy.Spec.Template.Spec.ImagePullSecrets))
+	for _, s := range deploy.Spec.Template.Spec.ImagePullSecrets {
+		pullSecrets = append(pullSecrets, s.Name)
+	}
+
 	deployment := models.Deployment{
 		BaseEntity: models.BaseEntity{
 			ID:          fmt.Sprintf("deployment/%s/%s", deploy.Namespace, deploy.Name),
@@ -82,18 +77,65 @@ func (d *Discovery) parseDeployment(deploy *appsv1.Deployment) models.Deployment
 			Health:      health,
 			Timestamp:   time.Now(),
 		},
-		Name:              deploy.Name,
-		Namespace:         deploy.Namespace,
-		Replicas:          replicas,
-		AvailableReplicas: deploy.Status.AvailableReplicas,
-		ReadyReplicas:     deploy.Status.ReadyReplicas,
-		UpdatedReplicas:   deploy.Status.UpdatedReplicas,
-		Selector:          deploy.Spec.Selector.MatchLabels,
-		Containers:        containers,
-		Strategy:          strategy,
+		Name:               deploy.Name,
+		Namespace:          deploy.Namespace,
+		Replicas:           replicas,
+		AvailableReplicas:  deploy.Status.AvailableReplicas,
+		ReadyReplicas:      deploy.Status.ReadyReplicas,
+		UpdatedReplicas:    deploy.Status.UpdatedReplicas,
+		Selector:           deploy.Spec.Selector.MatchLabels,
+		Containers:         containers,
+		Strategy:           strategy,
+		Generation:         deploy.Generation,
+		ObservedGeneration: deploy.Status.ObservedGeneration,
+		ServiceAccount:     deploy.Spec.Template.Spec.ServiceAccountName,
+		ImagePullSecrets:   pullSecrets,
+		ChartVersion:       deploy.Labels["helm.sh/chart"],
+		HelmRelease:        deploy.Annotations["meta.helm.sh/release-name"],
 	}
 
 	return deployment
+}
+
+// parseContainerSpecs extracts ContainerSpec list from k8s containers including
+// ports and env-key (not value) info so the UI can show shape without leaking secrets.
+func parseContainerSpecs(cs []corev1.Container) []models.ContainerSpec {
+	out := make([]models.ContainerSpec, 0, len(cs))
+	for _, c := range cs {
+		ports := make([]models.ContainerPort, 0, len(c.Ports))
+		for _, p := range c.Ports {
+			ports = append(ports, models.ContainerPort{
+				Name:          p.Name,
+				ContainerPort: p.ContainerPort,
+				Protocol:      string(p.Protocol),
+			})
+		}
+		envKeys := make([]string, 0, len(c.Env))
+		for _, e := range c.Env {
+			envKeys = append(envKeys, e.Name)
+		}
+		envFrom := make([]string, 0, len(c.EnvFrom))
+		for _, ef := range c.EnvFrom {
+			if ef.ConfigMapRef != nil {
+				envFrom = append(envFrom, "configmap/"+ef.ConfigMapRef.Name)
+			}
+			if ef.SecretRef != nil {
+				envFrom = append(envFrom, "secret/"+ef.SecretRef.Name)
+			}
+		}
+		out = append(out, models.ContainerSpec{
+			Name:  c.Name,
+			Image: c.Image,
+			Resources: models.ResourceRequirements{
+				Requests: parseResourceList(c.Resources.Requests),
+				Limits:   parseResourceList(c.Resources.Limits),
+			},
+			Ports:   ports,
+			EnvKeys: envKeys,
+			EnvFrom: envFrom,
+		})
+	}
+	return out
 }
 
 // GetStatefulSets collects all statefulsets in the specified namespace
@@ -130,18 +172,7 @@ func (d *Discovery) parseStatefulSet(sts *appsv1.StatefulSet) models.StatefulSet
 		replicas = *sts.Spec.Replicas
 	}
 
-	// Parse containers
-	containers := make([]models.ContainerSpec, 0, len(sts.Spec.Template.Spec.Containers))
-	for _, c := range sts.Spec.Template.Spec.Containers {
-		containers = append(containers, models.ContainerSpec{
-			Name:  c.Name,
-			Image: c.Image,
-			Resources: models.ResourceRequirements{
-				Requests: parseResourceList(c.Resources.Requests),
-				Limits:   parseResourceList(c.Resources.Limits),
-			},
-		})
-	}
+	containers := parseContainerSpecs(sts.Spec.Template.Spec.Containers)
 
 	// Parse volume claim templates
 	vcts := make([]string, 0, len(sts.Spec.VolumeClaimTemplates))
@@ -212,18 +243,7 @@ func (d *Discovery) GetDaemonSets(ctx context.Context, namespace string) ([]mode
 }
 
 func (d *Discovery) parseDaemonSet(ds *appsv1.DaemonSet) models.DaemonSet {
-	// Parse containers
-	containers := make([]models.ContainerSpec, 0, len(ds.Spec.Template.Spec.Containers))
-	for _, c := range ds.Spec.Template.Spec.Containers {
-		containers = append(containers, models.ContainerSpec{
-			Name:  c.Name,
-			Image: c.Image,
-			Resources: models.ResourceRequirements{
-				Requests: parseResourceList(c.Resources.Requests),
-				Limits:   parseResourceList(c.Resources.Limits),
-			},
-		})
-	}
+	containers := parseContainerSpecs(ds.Spec.Template.Spec.Containers)
 
 	// Determine health
 	health := models.HealthHealthy

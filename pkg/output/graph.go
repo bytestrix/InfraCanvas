@@ -301,24 +301,59 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 	case models.EntityTypeDeployment:
 		deployment := entity.(*models.Deployment)
 		node.Label = deployment.Name
+		node.Metadata["name"] = deployment.Name
 		node.Metadata["namespace"] = deployment.Namespace
 		node.Metadata["replicas"] = deployment.Replicas
 		node.Metadata["ready"] = deployment.ReadyReplicas
+		node.Metadata["ready_replicas"] = deployment.ReadyReplicas
 		node.Metadata["available"] = deployment.AvailableReplicas
+		node.Metadata["updated_replicas"] = deployment.UpdatedReplicas
+		node.Metadata["strategy"] = deployment.Strategy
+		node.Metadata["generation"] = deployment.Generation
+		node.Metadata["observed_generation"] = deployment.ObservedGeneration
+		node.Metadata["service_account"] = deployment.ServiceAccount
+		node.Metadata["selector"] = deployment.Selector
+		if deployment.HelmRelease != "" {
+			node.Metadata["helm_release"] = deployment.HelmRelease
+		}
+		if deployment.ChartVersion != "" {
+			node.Metadata["chart_version"] = deployment.ChartVersion
+		}
+		if len(deployment.ImagePullSecrets) > 0 {
+			node.Metadata["image_pull_secrets"] = deployment.ImagePullSecrets
+		}
+		if len(deployment.Containers) > 0 {
+			node.Metadata["image"] = deployment.Containers[0].Image
+			node.Metadata["containers"] = serializeContainerSpecs(deployment.Containers)
+		}
 
 	case models.EntityTypeStatefulSet:
 		ss := entity.(*models.StatefulSet)
 		node.Label = ss.Name
+		node.Metadata["name"] = ss.Name
 		node.Metadata["namespace"] = ss.Namespace
 		node.Metadata["replicas"] = ss.Replicas
 		node.Metadata["ready"] = ss.ReadyReplicas
+		node.Metadata["ready_replicas"] = ss.ReadyReplicas
+		node.Metadata["service_name"] = ss.ServiceName
+		node.Metadata["selector"] = ss.Selector
+		if len(ss.Containers) > 0 {
+			node.Metadata["image"] = ss.Containers[0].Image
+			node.Metadata["containers"] = serializeContainerSpecs(ss.Containers)
+		}
 
 	case models.EntityTypeDaemonSet:
 		ds := entity.(*models.DaemonSet)
 		node.Label = ds.Name
+		node.Metadata["name"] = ds.Name
 		node.Metadata["namespace"] = ds.Namespace
 		node.Metadata["desired"] = ds.DesiredNumberScheduled
 		node.Metadata["ready"] = ds.NumberReady
+		node.Metadata["selector"] = ds.Selector
+		if len(ds.Containers) > 0 {
+			node.Metadata["image"] = ds.Containers[0].Image
+			node.Metadata["containers"] = serializeContainerSpecs(ds.Containers)
+		}
 
 	case models.EntityTypeJob:
 		job := entity.(*models.Job)
@@ -502,4 +537,31 @@ func (f *GraphFormatter) isFiltered(entityID string, entities map[string]models.
 
 	stats := &FilteredStats{}
 	return f.shouldFilterEntity(entity, stats)
+}
+
+// serializeContainerSpecs converts ContainerSpec list to maps for JSON metadata.
+// Used by deployment/statefulset/daemonset nodes so the UI can render container
+// shape (image, ports, env keys, resources) without re-querying the API.
+func serializeContainerSpecs(cs []models.ContainerSpec) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(cs))
+	for _, c := range cs {
+		ports := make([]map[string]interface{}, 0, len(c.Ports))
+		for _, p := range c.Ports {
+			ports = append(ports, map[string]interface{}{
+				"name":          p.Name,
+				"containerPort": p.ContainerPort,
+				"protocol":      p.Protocol,
+			})
+		}
+		out = append(out, map[string]interface{}{
+			"name":     c.Name,
+			"image":    c.Image,
+			"ports":    ports,
+			"envKeys":  c.EnvKeys,
+			"envFrom":  c.EnvFrom,
+			"requests": c.Resources.Requests,
+			"limits":   c.Resources.Limits,
+		})
+	}
+	return out
 }

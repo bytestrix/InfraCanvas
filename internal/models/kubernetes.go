@@ -69,6 +69,12 @@ type Deployment struct {
 	Selector          map[string]string `json:"selector"`
 	Containers        []ContainerSpec   `json:"containers"`
 	Strategy          string            `json:"strategy"`
+	Generation        int64             `json:"generation,omitempty"`
+	ObservedGeneration int64            `json:"observed_generation,omitempty"`
+	ServiceAccount    string            `json:"service_account,omitempty"`
+	ImagePullSecrets  []string          `json:"image_pull_secrets,omitempty"`
+	ChartVersion      string            `json:"chart_version,omitempty"`
+	HelmRelease       string            `json:"helm_release,omitempty"`
 }
 
 // StatefulSet represents a Kubernetes StatefulSet
@@ -135,6 +141,16 @@ type ContainerSpec struct {
 	Name      string               `json:"name"`
 	Image     string               `json:"image"`
 	Resources ResourceRequirements `json:"resources"`
+	Ports     []ContainerPort      `json:"ports,omitempty"`
+	EnvKeys   []string             `json:"env_keys,omitempty"`
+	EnvFrom   []string             `json:"env_from,omitempty"` // configmap/secret references
+}
+
+// ContainerPort represents a container port declaration
+type ContainerPort struct {
+	Name          string `json:"name,omitempty"`
+	ContainerPort int32  `json:"container_port"`
+	Protocol      string `json:"protocol,omitempty"`
 }
 
 // ResourceRequirements represents resource requests and limits

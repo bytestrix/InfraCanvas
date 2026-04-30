@@ -12,12 +12,23 @@ import { sendAction, subscribeActionResult, subscribeActionProgress } from '@/li
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface FormFieldOption {
+  value: string
+  label: string
+  // Optional payload bag that other fields can read when this option is picked
+  // (e.g. selecting a container should pre-fill the image field with its current image).
+  prefill?: Record<string, string>
+}
+
 interface FormField {
   key: string
   label: string
   placeholder?: string
-  type?: 'text' | 'number'
+  type?: 'text' | 'number' | 'select'
   defaultValue?: (node: GraphNode) => string
+  // For 'select' fields. Returning an empty list falls back to a text input so
+  // the action stays usable even when container metadata is missing.
+  options?: (node: GraphNode) => FormFieldOption[]
 }
 
 interface ActionDef {
@@ -67,7 +78,25 @@ const ACTIONS: Record<string, ActionDef[]> = {
   deployment: [
     { id: 'scale', label: 'Scale', Icon: Layers, color: '#10b981', form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
     { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, color: '#6366f1', confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
-    { id: 'update_image', label: 'Update Image', Icon: Tag, color: '#8b5cf6', form: [{ key: 'container', label: 'Container (optional)', placeholder: 'leave blank for first', defaultValue: () => '' }, { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: () => '' }], buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { image: v.image, container: v.container } }) },
+    {
+      id: 'update_image', label: 'Update Image', Icon: Tag, color: '#8b5cf6',
+      form: [
+        {
+          key: 'container', label: 'Container', type: 'select',
+          defaultValue: (n) => (n.metadata.containers?.[0]?.name ?? ''),
+          options: (n) => (n.metadata.containers ?? []).map((c: any) => ({
+            value: c.name,
+            label: `${c.name}  —  ${c.image}`,
+            prefill: { image: c.image },
+          })),
+        },
+        {
+          key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0',
+          defaultValue: (n) => (n.metadata.containers?.[0]?.image ?? ''),
+        },
+      ],
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { image: v.image, container: v.container } }),
+    },
   ],
   statefulset: [
     { id: 'scale', label: 'Scale', Icon: Layers, color: '#10b981', form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
@@ -91,9 +120,9 @@ const ACTIONS: Record<string, ActionDef[]> = {
 const KEY_META_FIELDS: Record<string, string[]> = {
   container:   ['state', 'image', 'restart_count'],
   image:       ['tag', 'registry', 'size'],
-  deployment:  ['namespace', 'replicas', 'ready_replicas', 'strategy'],
-  statefulset: ['namespace', 'replicas', 'ready_replicas'],
-  daemonset:   ['namespace', 'desired', 'ready'],
+  deployment:  ['namespace', 'replicas', 'ready_replicas', 'updated_replicas', 'strategy', 'image', 'service_account', 'helm_release', 'chart_version'],
+  statefulset: ['namespace', 'replicas', 'ready_replicas', 'service_name', 'image'],
+  daemonset:   ['namespace', 'desired', 'ready', 'image'],
   pod:         ['namespace', 'node', 'phase', 'ip'],
   node:        ['roles', 'status', 'kernel_version', 'os_image'],
   host:        ['os', 'kernel', 'cpu_cores', 'memory_total'],
@@ -220,6 +249,56 @@ function MountsPanel({ mounts }: { mounts: Array<{ source: string; destination: 
   )
 }
 
+function WorkloadContainersPanel({ containers }: { containers: any[] }) {
+  if (!containers || containers.length === 0) return <p style={{ fontSize: 11, color: '#334155', padding: '8px 16px' }}>No containers</p>
+  return (
+    <div style={{ padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {containers.map((c, i) => {
+        const req = c.requests ?? {}
+        const lim = c.limits ?? {}
+        const ports: any[] = c.ports ?? []
+        const envKeys: string[] = c.envKeys ?? []
+        const envFrom: string[] = c.envFrom ?? []
+        return (
+          <div key={i} style={{ background: '#07070f', borderRadius: 6, padding: '8px 10px', border: '1px solid #1e1e3a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#e2e8f0' }}>{c.name}</span>
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8', wordBreak: 'break-all', marginBottom: 6, padding: '3px 6px', background: '#0d0d1e', borderRadius: 4 }} title={c.image}>{c.image}</div>
+            {(req.cpu || req.memory || lim.cpu || lim.memory) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', gap: '2px 6px', fontSize: 10, marginBottom: 6 }}>
+                <span style={{ color: '#475569' }}>req cpu</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{req.cpu ?? '—'}</span>
+                <span style={{ color: '#475569' }}>req mem</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{req.memory ?? '—'}</span>
+                <span style={{ color: '#475569' }}>lim cpu</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{lim.cpu ?? '—'}</span>
+                <span style={{ color: '#475569' }}>lim mem</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{lim.memory ?? '—'}</span>
+              </div>
+            )}
+            {ports.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                {ports.map((p, pi) => (
+                  <span key={pi} style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', padding: '1px 5px', background: '#070d14', color: '#89b4fa', borderRadius: 3 }}>
+                    {p.name ? `${p.name}:` : ''}{p.containerPort}/{p.protocol || 'TCP'}
+                  </span>
+                ))}
+              </div>
+            )}
+            {envKeys.length > 0 && (
+              <div style={{ fontSize: 10, color: '#475569', marginBottom: envFrom.length > 0 ? 4 : 0 }}>
+                env: <span style={{ color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>{envKeys.slice(0, 6).join(', ')}{envKeys.length > 6 ? ` +${envKeys.length - 6}` : ''}</span>
+              </div>
+            )}
+            {envFrom.length > 0 && (
+              <div style={{ fontSize: 10, color: '#475569' }}>
+                envFrom: <span style={{ color: '#a78bfa', fontFamily: 'JetBrains Mono, monospace' }}>{envFrom.join(', ')}</span>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ImageDetailsPanel({ node }: { node: GraphNode }) {
   const usedBy: string[] = node.metadata.usedByContainers ?? []
   return (
@@ -279,6 +358,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const [openPorts,  setOpenPorts]  = useState(true)
   const [openMounts, setOpenMounts] = useState(false)
   const [openImage,  setOpenImage]  = useState(true)
+  const [openContainers, setOpenContainers] = useState(true)
   const [openMeta,   setOpenMeta]   = useState(false)
 
   useEffect(() => {
@@ -433,6 +513,14 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
           </div>
         )}
 
+        {/* Containers — workloads */}
+        {(node.type === 'deployment' || node.type === 'statefulset' || node.type === 'daemonset') && Array.isArray(node.metadata.containers) && node.metadata.containers.length > 0 && (
+          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+            <SectionHeader title="Containers" count={node.metadata.containers.length} open={openContainers} onToggle={() => setOpenContainers(v => !v)} />
+            {openContainers && <WorkloadContainersPanel containers={node.metadata.containers} />}
+          </div>
+        )}
+
         {/* Actions */}
         {actions.length > 0 && (
           <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e1e3a' }}>
@@ -459,16 +547,38 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                 <div style={{ background: '#070711', border: '1px solid #1e1e3a', borderRadius: 8, padding: 12 }}>
                   {action.form && actionStatus === 'idle' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-                      {action.form.map((field) => (
-                        <div key={field.key}>
-                          <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 4 }}>{field.label}</label>
-                          <input type={field.type ?? 'text'} value={formValues[field.key] ?? ''} onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))} placeholder={field.placeholder}
-                            style={{ width: '100%', boxSizing: 'border-box' as const, background: '#0a0a16', border: '1px solid #1e1e3a', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#e2e8f0', outline: 'none' }}
-                            onFocus={(e) => { e.currentTarget.style.borderColor = action.color }}
-                            onBlur={(e) => { e.currentTarget.style.borderColor = '#1e1e3a' }}
-                          />
-                        </div>
-                      ))}
+                      {action.form.map((field) => {
+                        const baseStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box' as const, background: '#0a0a16', border: '1px solid #1e1e3a', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#e2e8f0', outline: 'none' }
+                        const opts = field.type === 'select' ? (field.options?.(node) ?? []) : []
+                        const useSelect = field.type === 'select' && opts.length > 0
+                        return (
+                          <div key={field.key}>
+                            <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 4 }}>{field.label}</label>
+                            {useSelect ? (
+                              <select
+                                value={formValues[field.key] ?? ''}
+                                onChange={(e) => {
+                                  const picked = opts.find((o) => o.value === e.target.value)
+                                  setFormValues((prev) => ({ ...prev, [field.key]: e.target.value, ...(picked?.prefill ?? {}) }))
+                                }}
+                                style={baseStyle}
+                              >
+                                {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            ) : (
+                              <input
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                value={formValues[field.key] ?? ''}
+                                onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                placeholder={field.placeholder}
+                                style={baseStyle}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = action.color }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = '#1e1e3a' }}
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                   {action.confirm && actionStatus === 'confirming' && (
