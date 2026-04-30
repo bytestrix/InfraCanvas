@@ -547,6 +547,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           Refresh
         </button>
 
+        <LastUpdated ts={vm.lastUpdated} />
+
+
         <div style={DIVIDER} />
 
         {/* Export dropdown */}
@@ -737,4 +740,33 @@ const ICON_BTN: React.CSSProperties = {
 
 const DIVIDER: React.CSSProperties = {
   width: 1, height: 16, background: 'rgba(138,92,246,0.12)', flexShrink: 0,
+}
+
+// LastUpdated shows relative time since the last GRAPH_SNAPSHOT or GRAPH_DIFF
+// landed in the store. Ticks once a second so the value stays honest without
+// requiring re-renders elsewhere. Hidden until the first snapshot arrives.
+function LastUpdated({ ts }: { ts: number | null }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  if (!ts) return null
+  const sec = Math.max(0, Math.floor((now - ts) / 1000))
+  const label =
+    sec < 5         ? 'just now' :
+    sec < 60        ? `${sec}s ago` :
+    sec < 3600      ? `${Math.floor(sec / 60)}m ago` :
+                      `${Math.floor(sec / 3600)}h ago`
+  const stale = sec >= 60
+  const color = stale ? '#f59e0b' : '#52496E'
+  return (
+    <span
+      title={`Last updated ${new Date(ts).toLocaleTimeString()}`}
+      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color, fontFamily: 'JetBrains Mono, monospace' }}
+    >
+      <Clock size={10} />
+      {label}
+    </span>
+  )
 }
