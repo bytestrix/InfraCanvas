@@ -177,6 +177,24 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 		node.Metadata["architecture"] = host.Architecture
 		node.Metadata["cloudProvider"] = host.CloudProvider
 		node.Metadata["instanceType"] = host.InstanceType
+		if len(host.Filesystems) > 0 {
+			type fsMeta struct {
+				MountPoint   string  `json:"mount_point"`
+				UsagePercent float64 `json:"usage_percent"`
+				UsedBytes    int64   `json:"used_bytes"`
+				TotalBytes   int64   `json:"total_bytes"`
+			}
+			fsList := make([]fsMeta, 0, len(host.Filesystems))
+			for _, fs := range host.Filesystems {
+				fsList = append(fsList, fsMeta{
+					MountPoint:   fs.MountPoint,
+					UsagePercent: fs.UsagePercent,
+					UsedBytes:    fs.UsedBytes,
+					TotalBytes:   fs.TotalBytes,
+				})
+			}
+			node.Metadata["filesystems"] = fsList
+		}
 
 	case models.EntityTypeContainer:
 		container := entity.(*models.Container)
