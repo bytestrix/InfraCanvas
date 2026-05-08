@@ -944,6 +944,10 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 		return actions.ActionK8sGetLogs, "kubernetes"
 	case "k8s_rollout_restart":
 		return actions.ActionK8sRolloutRestart, "kubernetes"
+	case "update_agent":
+		return actions.ActionUpdateAgent, "host"
+	case "restart_service":
+		return actions.ActionRestartService, "host"
 	default:
 		return actions.ActionType(frontendType), ""
 	}
