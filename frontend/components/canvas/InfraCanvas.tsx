@@ -159,6 +159,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   )
   const [expandedGroups] = useState<Set<string>>(new Set())
   const [drawerGroup, setDrawerGroup] = useState<GroupInfo | null>(null)
+  const [drawerInitialFilter, setDrawerInitialFilter] = useState<string | undefined>(undefined)
   const [groupsMap, setGroupsMap] = useState<Map<string, GroupInfo>>(new Map())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -321,6 +322,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       if (group) {
         setSelectedNodeId(null)
         setDrawerGroup(group)
+        setDrawerInitialFilter(undefined)
         setShowLogs(false)
         setShowTerminal(false)
       }
@@ -593,20 +595,23 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           gap: 12,
         }}>
           <AlertTriangle size={13} color="#F87171" />
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {criticalGroups.map((a) => (
               <button
                 key={a.type}
                 onClick={() => {
                   const g = groupsMap.get(a.type)
-                  if (g) { setDrawerGroup(g); setSelectedNodeId(null) }
+                  if (g) { setDrawerGroup(g); setDrawerInitialFilter('degraded'); setSelectedNodeId(null) }
                 }}
                 style={{
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  fontSize: 11, color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: 5,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '3px 10px', borderRadius: 6,
+                  border: '1px solid rgba(248,113,113,0.25)',
+                  background: 'rgba(248,113,113,0.08)',
+                  cursor: 'pointer', fontSize: 11, color: '#FCA5A5',
                 }}
               >
-                ⚠ {a.label}: <strong>{a.degraded} degraded</strong> — click to inspect
+                ⚠ {a.label}: <strong>{a.degraded} degraded</strong> — view &amp; act →
               </button>
             ))}
           </div>
@@ -661,7 +666,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {drawerGroup && (
           <GroupDrawer
             group={drawerGroup}
-            onClose={() => setDrawerGroup(null)}
+            vmCode={vm.code}
+            initialHealthFilter={drawerInitialFilter}
+            onClose={() => { setDrawerGroup(null); setDrawerInitialFilter(undefined) }}
             onSelectNode={handleSelectNodeFromDrawer}
           />
         )}
