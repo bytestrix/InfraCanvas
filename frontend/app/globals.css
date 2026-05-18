@@ -2,31 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-geist: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-geist-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+}
 
 /* ─── Design tokens ────────────────────────────────────────────────────────── */
 :root {
-  --bg:              #08080E;
-  --surface:         #0E0E1C;
-  --surface-2:       #141428;
-  --surface-3:       #1C1C38;
-  --border:          rgba(138,92,246,0.12);
-  --border-bright:   rgba(138,92,246,0.25);
-  --text-primary:    #EEE8FF;
-  --text-secondary:  #8B82B0;
-  --text-muted:      #52496E;
-  --accent:          #C026D3;
-  --accent-hover:    #D946EF;
-  --accent-subtle:   rgba(192,38,211,0.12);
-  --accent-glow:     rgba(192,38,211,0.28);
-  --purple:          #7C3AED;
-  --purple-subtle:   rgba(124,58,237,0.12);
-  --success:         #4ADE80;
-  --success-subtle:  rgba(74,222,128,0.12);
-  --warning:         #FBBF24;
-  --warning-subtle:  rgba(251,191,36,0.12);
-  --danger:          #F87171;
-  --danger-subtle:   rgba(248,113,113,0.12);
+  --bg:       #0A0A0A;
+  --surface:  #111111;
+  --surface-2:#161616;
+  --line:     #1E1E1E;
+  --line2:    #2A2A2A;
+  --line3:    #383838;
+  --ink:      #FAFAFA;
+  --ink2:     #A1A1A1;
+  --ink3:     #6E6E6E;
+  --ink4:     #454545;
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────────  */
@@ -36,8 +30,8 @@ html, body {
   margin: 0;
   padding: 0;
   background: var(--bg);
-  color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  font-family: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -45,153 +39,67 @@ html, body {
 /* ─── Scrollbar ─────────────────────────────────────────────────────────────  */
 ::-webkit-scrollbar          { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track    { background: transparent; }
-::-webkit-scrollbar-thumb    { background: rgba(138,92,246,0.2); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(138,92,246,0.35); }
+::-webkit-scrollbar-thumb    { background: #2A2A2A; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #383838; }
 
 /* ─── ReactFlow overrides ───────────────────────────────────────────────────  */
-.react-flow__background              { background-color: var(--bg) !important; }
-.react-flow__background pattern circle { fill: rgba(138,92,246,0.06) !important; }
+.react-flow__background              { background-color: #0A0A0A !important; }
+.react-flow__background pattern circle { fill: rgba(255,255,255,0.03) !important; }
 
 .react-flow__minimap {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
+  background: #111111 !important;
+  border: 1px solid #1E1E1E !important;
   border-radius: 10px !important;
   overflow: hidden;
 }
-.react-flow__minimap-mask            { fill: rgba(192,38,211,0.08) !important; }
+.react-flow__minimap-mask            { fill: rgba(0,0,0,0.5) !important; }
 
 .react-flow__controls {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
+  background: #111111 !important;
+  border: 1px solid #1E1E1E !important;
   border-radius: 10px !important;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
 }
 .react-flow__controls-button {
   background: transparent !important;
-  border-bottom: 1px solid var(--border) !important;
-  color: var(--text-secondary) !important;
-  transition: background 0.15s, color 0.15s !important;
+  border-bottom: 1px solid #1E1E1E !important;
+  color: #454545 !important;
+  transition: background 0.1s, color 0.1s !important;
 }
 .react-flow__controls-button:last-child { border-bottom: none !important; }
 .react-flow__controls-button:hover {
-  background: var(--surface-2) !important;
-  color: var(--text-primary) !important;
+  background: #1E1E1E !important;
+  color: #FAFAFA !important;
 }
 .react-flow__controls-button svg { fill: currentColor !important; }
 
 .react-flow__edge-path {
-  stroke: rgba(138,92,246,0.18) !important;
+  stroke: #2A2A2A !important;
   stroke-width: 1.5 !important;
 }
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover    .react-flow__edge-path {
-  stroke: var(--accent) !important;
+  stroke: #A1A1A1 !important;
   stroke-width: 2 !important;
 }
-.react-flow__edge-textbg { fill: var(--surface) !important; }
+.react-flow__edge-textbg { fill: #111111 !important; }
 .react-flow__edge-text {
-  fill: var(--text-muted) !important;
+  fill: #454545 !important;
   font-size: 9px !important;
-  font-family: 'JetBrains Mono', monospace !important;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace !important;
 }
 .react-flow__node.selected > div {
-  outline: 2px solid var(--accent) !important;
+  outline: 1px solid #FAFAFA !important;
   outline-offset: 2px;
 }
 
-/* ─── Utilities ─────────────────────────────────────────────────────────────  */
-.glass {
-  background: rgba(14,14,28,0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-.code-text {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--purple));
-  color: #fff;
-  border: none;
-  border-radius: 9px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
-}
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px var(--accent-glow);
-}
-
-.btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.btn-ghost:hover {
-  background: var(--surface-2);
-  border-color: var(--border-bright);
-  color: var(--text-primary);
-}
-
-/* ─── Progress bar ──────────────────────────────────────────────────────────  */
-.progress-bar {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--surface-3);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.5s ease;
-}
-
-/* ─── Modal backdrop ────────────────────────────────────────────────────────  */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(4,4,10,0.80);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.15s ease-out;
-}
-
 /* ─── Animations ────────────────────────────────────────────────────────────  */
-@keyframes fadeIn    { from { opacity: 0 }                             to { opacity: 1 } }
-@keyframes slideUp   { from { transform: translateY(14px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes pulse        { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+@keyframes fadeIn       { from { opacity: 0 }                              to { opacity: 1 } }
+@keyframes slideUp      { from { transform: translateY(14px); opacity: 0 } to { transform: none; opacity: 1 } }
 @keyframes slideInRight { from { transform: translateX(100%); opacity: 0 } to { transform: none; opacity: 1 } }
-@keyframes pulseDot  { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
-@keyframes shimmer   { 0% { transform: translateX(-100%) } 100% { transform: translateX(100%) } }
+@keyframes shimmer      { 0% { transform: translateX(-100%) }              100% { transform: translateX(100%) } }
 
 .animate-slide-up       { animation: slideUp 0.2s ease-out; }
 .animate-slide-in-right { animation: slideInRight 0.22s ease-out; }
-.status-dot-pulse       { animation: pulseDot 2.2s ease-in-out infinite; }
-
-.shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.shimmer::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(192,38,211,0.06), transparent);
-  animation: shimmer 2s infinite;
-}

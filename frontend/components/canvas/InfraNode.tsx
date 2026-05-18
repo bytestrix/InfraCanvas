@@ -2,7 +2,8 @@
 
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
-import { getNodeColor, getHealthColor, getNodeIcon, NodeHealth } from '@/types'
+import { NodeHealth } from '@/types'
+import NodeSvgIcon from './NodeSvgIcon'
 
 export interface InfraNodeData {
   nodeType: string
@@ -12,26 +13,30 @@ export interface InfraNodeData {
   selected?: boolean
 }
 
-function getKeyMetadata(nodeType: string, metadata: Record<string, any>): string[] {
-  const lines: string[] = []
+const HEALTH_DOT: Record<NodeHealth, string> = {
+  healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'#6b7280',
+}
+const HEALTH_BAR: Record<NodeHealth, string> = {
+  healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'#383838',
+}
 
+function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
+  const lines: string[] = []
   switch (nodeType) {
     case 'pod':
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
       if (metadata.phase) lines.push(metadata.phase)
-      if (metadata.restartCount) lines.push(`restarts: ${metadata.restartCount}`)
+      if (metadata.restartCount > 0) lines.push(`↻ ${metadata.restartCount}`)
       break
     case 'deployment':
     case 'statefulset':
     case 'daemonset':
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
-      if (metadata.replicas !== undefined) lines.push(`replicas: ${metadata.replicas}`)
-      if (metadata.readyReplicas !== undefined) lines.push(`ready: ${metadata.readyReplicas}`)
+      if (metadata.replicas !== undefined) lines.push(`${metadata.readyReplicas ?? '?'}/${metadata.replicas} ready`)
       break
     case 'k8s_service':
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
       if (metadata.type) lines.push(metadata.type)
-      if (metadata.clusterIP) lines.push(metadata.clusterIP)
       break
     case 'namespace':
       if (metadata.status) lines.push(metadata.status)
@@ -40,162 +45,105 @@ function getKeyMetadata(nodeType: string, metadata: Record<string, any>): string
       if (metadata.image) lines.push(metadata.image.split('/').pop()?.split(':')[0] ?? metadata.image)
       if (metadata.status) lines.push(metadata.status)
       break
-    case 'node':
+    case 'node': {
+      const nIP = metadata.internalIP ?? metadata.ip
+      if (nIP) lines.push(nIP)
       if (metadata.osImage) lines.push(metadata.osImage)
-      if (metadata.cpu) lines.push(`cpu: ${metadata.cpu}`)
-      if (metadata.memory) lines.push(`mem: ${metadata.memory}`)
       break
-    case 'host':
+    }
+    case 'host': {
+      const hIP = metadata.ip ?? metadata.ip_address ?? metadata.ipAddress
+      if (hIP && hIP !== '127.0.0.1' && !String(hIP).startsWith('127.')) lines.push(hIP)
       if (metadata.os) lines.push(metadata.os)
-      if (metadata.cpu) lines.push(`cpu: ${metadata.cpu}`)
-      if (metadata.memory) lines.push(`mem: ${metadata.memory}`)
+      break
+    }
+    case 'cluster':
+      if (metadata.version) lines.push(`v${metadata.version}`)
       break
     case 'ingress':
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
       if (metadata.host) lines.push(metadata.host)
       break
     case 'pvc':
-      if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
       if (metadata.capacity) lines.push(metadata.capacity)
-      if (metadata.accessModes) lines.push(metadata.accessModes)
       break
     case 'cronjob':
     case 'job':
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
       if (metadata.schedule) lines.push(metadata.schedule)
       break
-    case 'cluster':
-      if (metadata.platform) lines.push(metadata.platform)
-      if (metadata.version) lines.push(`v${metadata.version}`)
-      break
-    case 'image':
-      if (metadata.size) lines.push(metadata.size)
-      break
     default:
       if (metadata.namespace) lines.push(`ns: ${metadata.namespace}`)
-      break
   }
-
   return lines.slice(0, 2)
-}
-
-function HealthDot({ health }: { health: NodeHealth }) {
-  const color = getHealthColor(health)
-  return (
-    <span
-      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-      style={{ background: color }}
-      title={health}
-    />
-  )
 }
 
 const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
   const { nodeType, label, health, metadata } = data
-  const color = getNodeColor(nodeType, health)
-  const icon = getNodeIcon(nodeType)
-  const keyMeta = getKeyMetadata(nodeType, metadata)
-
-  const displayLabel = label.length > 28 ? label.slice(0, 26) + '…' : label
+  const keyMeta = getKeyMeta(nodeType, metadata)
+  const dotColor = HEALTH_DOT[health] ?? '#454545'
+  const barColor = HEALTH_BAR[health] ?? '#383838'
+  const isUnhealthy = health === 'unhealthy' || health === 'degraded'
 
   return (
-    <div
-      className="relative rounded-lg overflow-hidden"
-      style={{
-        width: 220,
-        background: '#0e0e1a',
-        border: `1px solid ${selected ? color : '#1e1e3a'}`,
-        boxShadow: selected ? `0 0 0 2px ${color}33, 0 4px 16px rgba(0,0,0,0.5)` : '0 2px 12px rgba(0,0,0,0.4)',
-        transition: 'border-color 0.15s, box-shadow 0.15s',
-      }}
-    >
-      {/* Left color accent bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-0.5"
-        style={{ background: color }}
-      />
+    <div style={{
+      width: 220,
+      background: '#111111',
+      border: `1px solid ${selected ? '#FAFAFA' : isUnhealthy ? '#383838' : '#1E1E1E'}`,
+      borderRadius: 9,
+      boxShadow: selected ? '0 0 0 1px #FAFAFA' : '0 2px 8px rgba(0,0,0,0.5)',
+      transition: 'border-color 0.12s, box-shadow 0.12s',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* health bar top */}
+      <div style={{ height: 2, background: barColor, width: '100%' }} />
 
-      {/* Content */}
-      <div className="pl-3 pr-2.5 py-2.5">
-        {/* Top row: icon + label + health */}
-        <div className="flex items-center gap-2 mb-1">
-          <span
-            className="text-sm flex-shrink-0 leading-none"
-            style={{ color, fontFamily: 'system-ui' }}
-          >
-            {icon}
+      <div style={{ padding: '9px 10px 9px 12px' }}>
+        {/* Row 1: icon + label + dot */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <NodeSvgIcon type={nodeType} size={14} />
+          </div>
+          <span style={{
+            fontSize: 12, fontWeight: 500, color: '#FAFAFA', flex: 1,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            letterSpacing: '-0.01em',
+          }} title={label}>
+            {label.length > 22 ? label.slice(0, 20) + '…' : label}
           </span>
-          <span
-            className="text-xs font-semibold flex-1 min-w-0 truncate leading-tight"
-            style={{ color: '#e2e8f0' }}
-            title={label}
-          >
-            {displayLabel}
-          </span>
-          <HealthDot health={health} />
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} title={health} />
         </div>
 
-        {/* Type badge */}
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <span
-            className="text-xs px-1.5 py-0.5 rounded font-medium leading-none"
-            style={{
-              background: `${color}18`,
-              color: color,
-              border: `1px solid ${color}28`,
-              fontFamily: 'JetBrains Mono, monospace',
-            }}
-          >
-            {nodeType}
-          </span>
+        {/* Row 2: type badge */}
+        <div style={{ marginBottom: keyMeta.length ? 5 : 0 }}>
+          <span style={{
+            fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
+            background: '#1E1E1E', color: '#6E6E6E', border: '1px solid #2A2A2A',
+            fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
+            letterSpacing: '0.04em',
+          }}>{nodeType}</span>
         </div>
 
-        {/* Key metadata */}
+        {/* Row 3: key meta */}
         {keyMeta.length > 0 && (
-          <div className="flex flex-col gap-0.5">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {keyMeta.map((line, i) => (
-              <p
-                key={i}
-                className="text-xs truncate leading-snug"
-                style={{
-                  color: '#475569',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '10px',
-                }}
-                title={line}
-              >
-                {line}
-              </p>
+              <span key={i} style={{
+                fontSize: 10, color: '#6E6E6E',
+                fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }} title={line}>{line}</span>
             ))}
           </div>
         )}
       </div>
 
-      {/* React Flow handles */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        style={{
-          background: color,
-          width: 6,
-          height: 6,
-          border: '1px solid #070711',
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={{
-          background: color,
-          width: 6,
-          height: 6,
-          border: '1px solid #070711',
-        }}
-      />
+      <Handle type="target" position={Position.Top}    style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
     </div>
   )
 })
 
 InfraNode.displayName = 'InfraNode'
-
 export default InfraNode

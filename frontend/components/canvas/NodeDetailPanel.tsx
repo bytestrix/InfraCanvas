@@ -7,16 +7,15 @@ import {
   AlertTriangle, FileText, Terminal, Eye, EyeOff,
   type LucideIcon,
 } from 'lucide-react'
-import { type GraphNode, getNodeColor, getNodeIcon } from '@/types'
+import { type GraphNode } from '@/types'
 import { sendAction, sendCommand, subscribeActionResult, subscribeActionProgress } from '@/lib/wsManager'
+import NodeSvgIcon from './NodeSvgIcon'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface FormFieldOption {
   value: string
   label: string
-  // Optional payload bag that other fields can read when this option is picked
-  // (e.g. selecting a container should pre-fill the image field with its current image).
   prefill?: Record<string, string>
 }
 
@@ -26,8 +25,6 @@ interface FormField {
   placeholder?: string
   type?: 'text' | 'number' | 'select'
   defaultValue?: (node: GraphNode) => string
-  // For 'select' fields. Returning an empty list falls back to a text input so
-  // the action stays usable even when container metadata is missing.
   options?: (node: GraphNode) => FormFieldOption[]
 }
 
@@ -35,7 +32,6 @@ interface ActionDef {
   id: string
   label: string
   Icon: LucideIcon
-  color: string
   danger?: boolean
   confirm?: boolean
   form?: FormField[]
@@ -47,19 +43,19 @@ interface ActionDef {
 const ACTIONS: Record<string, ActionDef[]> = {
   container: [
     {
-      id: 'restart', label: 'Restart', Icon: RotateCw, color: '#6366f1', confirm: true,
+      id: 'restart', label: 'Restart', Icon: RotateCw, confirm: true,
       buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'docker_restart_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
     },
     {
-      id: 'stop', label: 'Stop', Icon: Square, color: '#f59e0b', confirm: true,
+      id: 'stop', label: 'Stop', Icon: Square, confirm: true,
       buildPayload: (n) => ({ action_id: `stop-${Date.now()}`, type: 'docker_stop_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
     },
     {
-      id: 'start', label: 'Start', Icon: Play, color: '#10b981', confirm: true,
+      id: 'start', label: 'Start', Icon: Play, confirm: true,
       buildPayload: (n) => ({ action_id: `start-${Date.now()}`, type: 'docker_start_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
     },
     {
-      id: 'update_image', label: 'Update Image', Icon: Tag, color: '#8b5cf6',
+      id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [
         { key: 'image', label: 'New Image:Tag', placeholder: 'nginx:1.25', defaultValue: (n) => n.metadata.image ?? '' },
       ],
@@ -68,7 +64,7 @@ const ACTIONS: Record<string, ActionDef[]> = {
   ],
   image: [
     {
-      id: 'change_tag', label: 'Change Tag', Icon: Tag, color: '#6366f1',
+      id: 'change_tag', label: 'Change Tag', Icon: Tag,
       form: [
         { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:newtag', defaultValue: (n) => n.metadata.repository && n.metadata.tag ? `${n.metadata.repository}:${n.metadata.tag}` : n.label },
       ],
@@ -76,10 +72,10 @@ const ACTIONS: Record<string, ActionDef[]> = {
     },
   ],
   deployment: [
-    { id: 'scale', label: 'Scale', Icon: Layers, color: '#10b981', form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, color: '#6366f1', confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'scale', label: 'Scale', Icon: Layers, form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
     {
-      id: 'update_image', label: 'Update Image', Icon: Tag, color: '#8b5cf6',
+      id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [
         {
           key: 'container', label: 'Container', type: 'select',
@@ -99,21 +95,21 @@ const ACTIONS: Record<string, ActionDef[]> = {
     },
   ],
   statefulset: [
-    { id: 'scale', label: 'Scale', Icon: Layers, color: '#10b981', form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, color: '#6366f1', confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'scale', label: 'Scale', Icon: Layers, form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
   ],
   daemonset: [
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, color: '#6366f1', confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_daemonset', target: { layer: 'kubernetes', entity_type: 'daemonset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_daemonset', target: { layer: 'kubernetes', entity_type: 'daemonset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
   ],
   pod: [
-    { id: 'delete', label: 'Delete / Restart', Icon: Trash2, color: '#ef4444', danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_pod', target: { layer: 'kubernetes', entity_type: 'pod', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'delete', label: 'Delete / Restart', Icon: Trash2, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_pod', target: { layer: 'kubernetes', entity_type: 'pod', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
   ],
   node: [
-    { id: 'cordon', label: 'Cordon', Icon: Square, color: '#f59e0b', confirm: true, buildPayload: (n) => ({ action_id: `cordon-${Date.now()}`, type: 'k8s_cordon_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: {} }) },
-    { id: 'drain', label: 'Drain', Icon: Layers, color: '#ef4444', danger: true, confirm: true, buildPayload: (n) => ({ action_id: `drain-${Date.now()}`, type: 'k8s_drain_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: { ignore_daemonsets: 'true', delete_emptydir_data: 'true' } }) },
+    { id: 'cordon', label: 'Cordon', Icon: Square, confirm: true, buildPayload: (n) => ({ action_id: `cordon-${Date.now()}`, type: 'k8s_cordon_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: {} }) },
+    { id: 'drain', label: 'Drain', Icon: Layers, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `drain-${Date.now()}`, type: 'k8s_drain_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: { ignore_daemonsets: 'true', delete_emptydir_data: 'true' } }) },
   ],
   job: [
-    { id: 'delete', label: 'Delete Job', Icon: Trash2, color: '#ef4444', danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_job', target: { layer: 'kubernetes', entity_type: 'job', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'delete', label: 'Delete Job', Icon: Trash2, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_job', target: { layer: 'kubernetes', entity_type: 'job', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
   ],
 }
 
@@ -137,8 +133,10 @@ const KEY_META_FIELDS: Record<string, string[]> = {
 }
 
 const HEALTH_COLOR: Record<string, string> = {
-  healthy: '#10b981', degraded: '#f59e0b', unhealthy: '#ef4444', unknown: '#64748b',
+  healthy: '#22c55e', degraded: '#f59e0b', unhealthy: '#ef4444', unknown: '#6b7280',
 }
+
+const MONO = "var(--font-geist-mono,'Geist Mono','JetBrains Mono',ui-monospace,monospace)"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -158,13 +156,13 @@ function SectionHeader({ title, count, open, onToggle }: { title: string; count?
   return (
     <button
       onClick={onToggle}
-      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'transparent', border: 'none', borderBottom: open ? '1px solid #0f0f1e' : 'none', cursor: 'pointer', color: '#334155' }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#0c0c18' }}
+      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'transparent', border: 'none', borderBottom: open ? '1px solid #111111' : 'none', cursor: 'pointer', color: '#454545' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#111111' }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>{title}</span>
-        {count != null && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 10, background: '#1e1e3a', color: '#475569' }}>{count}</span>}
+        {count != null && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 10, background: '#1E1E1E', color: '#6E6E6E' }}>{count}</span>}
       </div>
       {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
     </button>
@@ -174,14 +172,14 @@ function SectionHeader({ title, count, open, onToggle }: { title: string; count?
 function EnvVarsPanel({ env }: { env: Record<string, string> }) {
   const [showSecrets, setShowSecrets] = useState(false)
   const entries = Object.entries(env)
-  if (entries.length === 0) return <p style={{ fontSize: 11, color: '#334155', padding: '8px 16px' }}>No environment variables</p>
+  if (entries.length === 0) return <p style={{ fontSize: 11, color: '#454545', padding: '8px 16px' }}>No environment variables</p>
 
   return (
     <div style={{ padding: '6px 12px 10px' }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
         <button
           onClick={() => setShowSecrets(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#475569', background: 'transparent', border: '1px solid #1e1e3a', borderRadius: 4, padding: '2px 7px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6E6E6E', background: 'transparent', border: '1px solid #1E1E1E', borderRadius: 4, padding: '2px 7px', cursor: 'pointer' }}
         >
           {showSecrets ? <EyeOff size={9} /> : <Eye size={9} />}
           {showSecrets ? 'Hide secrets' : 'Show secrets'}
@@ -192,9 +190,9 @@ function EnvVarsPanel({ env }: { env: Record<string, string> }) {
           const isSecret = SECRET_PATTERN.test(k) || v === '[REDACTED]'
           const display = isSecret && !showSecrets ? '••••••••' : v
           return (
-            <div key={k} style={{ display: 'flex', background: '#07070f', borderRadius: 4, overflow: 'hidden', marginBottom: 2 }}>
-              <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#6366f1', padding: '3px 6px', background: '#0d0d1e', flexShrink: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={k}>{k}</span>
-              <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: isSecret && !showSecrets ? '#334155' : '#94a3b8', padding: '3px 6px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={display}>{display}</span>
+            <div key={k} style={{ display: 'flex', background: '#0A0A0A', borderRadius: 4, overflow: 'hidden', marginBottom: 2 }}>
+              <span style={{ fontSize: 10, fontFamily: MONO, color: '#A1A1A1', padding: '3px 6px', background: '#111111', flexShrink: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={k}>{k}</span>
+              <span style={{ fontSize: 10, fontFamily: MONO, color: isSecret && !showSecrets ? '#454545' : '#6E6E6E', padding: '3px 6px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={display}>{display}</span>
             </div>
           )
         })}
@@ -204,21 +202,21 @@ function EnvVarsPanel({ env }: { env: Record<string, string> }) {
 }
 
 function PortsPanel({ ports }: { ports: any[] }) {
-  if (!ports || ports.length === 0) return <p style={{ fontSize: 11, color: '#334155', padding: '8px 16px' }}>No port mappings</p>
+  if (!ports || ports.length === 0) return <p style={{ fontSize: 11, color: '#454545', padding: '8px 16px' }}>No port mappings</p>
   return (
     <div style={{ padding: '8px 12px 10px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '3px 8px', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, color: '#334155', fontWeight: 600 }}>HOST</span>
+        <span style={{ fontSize: 9, color: '#454545', fontWeight: 600 }}>HOST</span>
         <span />
-        <span style={{ fontSize: 9, color: '#334155', fontWeight: 600 }}>CONTAINER</span>
+        <span style={{ fontSize: 9, color: '#454545', fontWeight: 600 }}>CONTAINER</span>
         {ports.map((p, i) => (
           <>
-            <span key={`h${i}`} style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#34d399', background: '#07140e', borderRadius: 4, padding: '2px 6px', textAlign: 'right' }}>
+            <span key={`h${i}`} style={{ fontSize: 11, fontFamily: MONO, color: '#A1A1A1', background: '#111111', borderRadius: 4, padding: '2px 6px', textAlign: 'right' }}>
               {p.hostIP && p.hostIP !== '0.0.0.0' ? `${p.hostIP}:` : ''}{p.hostPort}
             </span>
-            <span key={`a${i}`} style={{ fontSize: 9, color: '#475569', textAlign: 'center' }}>→</span>
-            <span key={`c${i}`} style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#89b4fa', background: '#070d14', borderRadius: 4, padding: '2px 6px' }}>
-              {p.containerPort}<span style={{ color: '#334155' }}>/{p.protocol}</span>
+            <span key={`a${i}`} style={{ fontSize: 9, color: '#454545', textAlign: 'center' }}>→</span>
+            <span key={`c${i}`} style={{ fontSize: 11, fontFamily: MONO, color: '#A1A1A1', background: '#111111', borderRadius: 4, padding: '2px 6px' }}>
+              {p.containerPort}<span style={{ color: '#454545' }}>/{p.protocol}</span>
             </span>
           </>
         ))}
@@ -228,20 +226,19 @@ function PortsPanel({ ports }: { ports: any[] }) {
 }
 
 function MountsPanel({ mounts }: { mounts: Array<{ source: string; destination: string; mode: string; type: string }> }) {
-  if (!mounts || mounts.length === 0) return <p style={{ fontSize: 11, color: '#334155', padding: '8px 16px' }}>No mounts</p>
-  const typeColor: Record<string, string> = { volume: '#a78bfa', bind: '#f59e0b', tmpfs: '#06b6d4' }
+  if (!mounts || mounts.length === 0) return <p style={{ fontSize: 11, color: '#454545', padding: '8px 16px' }}>No mounts</p>
   return (
     <div style={{ padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {mounts.map((m, i) => (
-        <div key={i} style={{ background: '#07070f', borderRadius: 6, padding: '6px 8px', border: '1px solid #1e1e3a' }}>
+        <div key={i} style={{ background: '#0A0A0A', borderRadius: 6, padding: '6px 8px', border: '1px solid #1E1E1E' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: `${typeColor[m.type] ?? '#64748b'}18`, color: typeColor[m.type] ?? '#64748b', fontWeight: 600 }}>{m.type}</span>
-            <span style={{ fontSize: 9, color: m.mode === 'ro' ? '#f59e0b' : '#334155' }}>{m.mode === 'ro' ? 'read-only' : 'rw'}</span>
+            <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#1E1E1E', color: '#A1A1A1', fontWeight: 600 }}>{m.type}</span>
+            <span style={{ fontSize: 9, color: m.mode === 'ro' ? '#f59e0b' : '#454545' }}>{m.mode === 'ro' ? 'read-only' : 'rw'}</span>
           </div>
-          <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8', marginBottom: 2, wordBreak: 'break-all', lineHeight: 1.4 }}>{m.source || '(anonymous)'}</div>
+          <div style={{ fontSize: 10, fontFamily: MONO, color: '#6E6E6E', marginBottom: 2, wordBreak: 'break-all', lineHeight: 1.4 }}>{m.source || '(anonymous)'}</div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-            <span style={{ fontSize: 9, color: '#334155', flexShrink: 0, paddingTop: 1 }}>→</span>
-            <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#6366f1', wordBreak: 'break-all', lineHeight: 1.4 }}>{m.destination}</span>
+            <span style={{ fontSize: 9, color: '#454545', flexShrink: 0, paddingTop: 1 }}>→</span>
+            <span style={{ fontSize: 10, fontFamily: MONO, color: '#A1A1A1', wordBreak: 'break-all', lineHeight: 1.4 }}>{m.destination}</span>
           </div>
         </div>
       ))}
@@ -250,7 +247,7 @@ function MountsPanel({ mounts }: { mounts: Array<{ source: string; destination: 
 }
 
 function WorkloadContainersPanel({ containers }: { containers: any[] }) {
-  if (!containers || containers.length === 0) return <p style={{ fontSize: 11, color: '#334155', padding: '8px 16px' }}>No containers</p>
+  if (!containers || containers.length === 0) return <p style={{ fontSize: 11, color: '#454545', padding: '8px 16px' }}>No containers</p>
   return (
     <div style={{ padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {containers.map((c, i) => {
@@ -260,36 +257,36 @@ function WorkloadContainersPanel({ containers }: { containers: any[] }) {
         const envKeys: string[] = c.envKeys ?? []
         const envFrom: string[] = c.envFrom ?? []
         return (
-          <div key={i} style={{ background: '#07070f', borderRadius: 6, padding: '8px 10px', border: '1px solid #1e1e3a' }}>
+          <div key={i} style={{ background: '#0A0A0A', borderRadius: 6, padding: '8px 10px', border: '1px solid #1E1E1E' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#e2e8f0' }}>{c.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#FAFAFA' }}>{c.name}</span>
             </div>
-            <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8', wordBreak: 'break-all', marginBottom: 6, padding: '3px 6px', background: '#0d0d1e', borderRadius: 4 }} title={c.image}>{c.image}</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: '#6E6E6E', wordBreak: 'break-all', marginBottom: 6, padding: '3px 6px', background: '#111111', borderRadius: 4 }} title={c.image}>{c.image}</div>
             {(req.cpu || req.memory || lim.cpu || lim.memory) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', gap: '2px 6px', fontSize: 10, marginBottom: 6 }}>
-                <span style={{ color: '#475569' }}>req cpu</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{req.cpu ?? '—'}</span>
-                <span style={{ color: '#475569' }}>req mem</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{req.memory ?? '—'}</span>
-                <span style={{ color: '#475569' }}>lim cpu</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{lim.cpu ?? '—'}</span>
-                <span style={{ color: '#475569' }}>lim mem</span><span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{lim.memory ?? '—'}</span>
+                <span style={{ color: '#454545' }}>req cpu</span><span style={{ fontFamily: MONO, color: '#6E6E6E' }}>{req.cpu ?? '—'}</span>
+                <span style={{ color: '#454545' }}>req mem</span><span style={{ fontFamily: MONO, color: '#6E6E6E' }}>{req.memory ?? '—'}</span>
+                <span style={{ color: '#454545' }}>lim cpu</span><span style={{ fontFamily: MONO, color: '#6E6E6E' }}>{lim.cpu ?? '—'}</span>
+                <span style={{ color: '#454545' }}>lim mem</span><span style={{ fontFamily: MONO, color: '#6E6E6E' }}>{lim.memory ?? '—'}</span>
               </div>
             )}
             {ports.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
                 {ports.map((p, pi) => (
-                  <span key={pi} style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', padding: '1px 5px', background: '#070d14', color: '#89b4fa', borderRadius: 3 }}>
+                  <span key={pi} style={{ fontSize: 10, fontFamily: MONO, padding: '1px 5px', background: '#111111', color: '#A1A1A1', borderRadius: 3 }}>
                     {p.name ? `${p.name}:` : ''}{p.containerPort}/{p.protocol || 'TCP'}
                   </span>
                 ))}
               </div>
             )}
             {envKeys.length > 0 && (
-              <div style={{ fontSize: 10, color: '#475569', marginBottom: envFrom.length > 0 ? 4 : 0 }}>
-                env: <span style={{ color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>{envKeys.slice(0, 6).join(', ')}{envKeys.length > 6 ? ` +${envKeys.length - 6}` : ''}</span>
+              <div style={{ fontSize: 10, color: '#454545', marginBottom: envFrom.length > 0 ? 4 : 0 }}>
+                env: <span style={{ color: '#6E6E6E', fontFamily: MONO }}>{envKeys.slice(0, 6).join(', ')}{envKeys.length > 6 ? ` +${envKeys.length - 6}` : ''}</span>
               </div>
             )}
             {envFrom.length > 0 && (
-              <div style={{ fontSize: 10, color: '#475569' }}>
-                envFrom: <span style={{ color: '#a78bfa', fontFamily: 'JetBrains Mono, monospace' }}>{envFrom.join(', ')}</span>
+              <div style={{ fontSize: 10, color: '#454545' }}>
+                envFrom: <span style={{ color: '#A1A1A1', fontFamily: MONO }}>{envFrom.join(', ')}</span>
               </div>
             )}
           </div>
@@ -312,15 +309,15 @@ function ImageDetailsPanel({ node }: { node: GraphNode }) {
         ['Digest', node.metadata.digest ? node.metadata.digest.slice(0, 19) + '…' : '—'],
       ].filter(([, v]) => v && v !== '—').map(([k, v]) => (
         <div key={k as string} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10, color: '#475569' }}>{k}</span>
-          <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v as string}</span>
+          <span style={{ fontSize: 10, color: '#454545' }}>{k}</span>
+          <span style={{ fontSize: 11, fontFamily: MONO, color: '#6E6E6E', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v as string}</span>
         </div>
       ))}
       {usedBy.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          <p style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>Used by {usedBy.length} container{usedBy.length !== 1 ? 's' : ''}</p>
+          <p style={{ fontSize: 10, color: '#454545', marginBottom: 4 }}>Used by {usedBy.length} container{usedBy.length !== 1 ? 's' : ''}</p>
           {usedBy.slice(0, 5).map((id: string) => (
-            <div key={id} style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#64748b', padding: '2px 6px', background: '#07070f', borderRadius: 3, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
+            <div key={id} style={{ fontSize: 10, fontFamily: MONO, color: '#6E6E6E', padding: '2px 6px', background: '#0A0A0A', borderRadius: 3, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
           ))}
         </div>
       )}
@@ -341,10 +338,26 @@ interface NodeDetailPanelProps {
 type ActionStatus = 'idle' | 'confirming' | 'running' | 'success' | 'error'
 const TOOLS_NODES = new Set(['container', 'pod', 'host'])
 
+// Action button accent colors (functional — kept for UX clarity)
+const ACTION_COLORS: Record<string, string> = {
+  restart: '#6366f1',
+  stop: '#f59e0b',
+  start: '#22c55e',
+  update_image: '#8b5cf6',
+  change_tag: '#6366f1',
+  scale: '#22c55e',
+  cordon: '#f59e0b',
+  drain: '#ef4444',
+  delete: '#ef4444',
+}
+
+function getActionColor(id: string, danger?: boolean): string {
+  if (danger) return '#ef4444'
+  return ACTION_COLORS[id] ?? '#A1A1A1'
+}
+
 export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onShowTerminal }: NodeDetailPanelProps) {
-  const color = getNodeColor(node.type, node.health)
-  const icon = getNodeIcon(node.type)
-  const hc = HEALTH_COLOR[node.health] ?? '#64748b'
+  const hc = HEALTH_COLOR[node.health] ?? '#6b7280'
   const actions = ACTIONS[node.type] ?? []
 
   const [activeActionId, setActiveActionId] = useState<string | null>(null)
@@ -353,13 +366,12 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const [actionMsg, setActionMsg] = useState('')
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Collapsible section states
-  const [openEnv,    setOpenEnv]    = useState(true)
-  const [openPorts,  setOpenPorts]  = useState(true)
-  const [openMounts, setOpenMounts] = useState(false)
-  const [openImage,  setOpenImage]  = useState(true)
+  const [openEnv,        setOpenEnv]        = useState(true)
+  const [openPorts,      setOpenPorts]      = useState(true)
+  const [openMounts,     setOpenMounts]     = useState(false)
+  const [openImage,      setOpenImage]      = useState(true)
   const [openContainers, setOpenContainers] = useState(true)
-  const [openMeta,   setOpenMeta]   = useState(false)
+  const [openMeta,       setOpenMeta]       = useState(false)
 
   useEffect(() => {
     setActiveActionId(null)
@@ -377,11 +389,6 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
       } else {
         setActionStatus('success')
         setActionMsg(data.message ?? 'Done')
-        // Mutating actions (image update, scale, restart, delete...) change cluster
-        // state — kick a discovery refresh immediately and again a few seconds later
-        // to catch rollout progress (new replicaset, pod phase transitions). Without
-        // this the panel still shows the pre-action snapshot until the next periodic
-        // scan or a manual refresh click.
         sendCommand(vmCode, 'refresh')
         setTimeout(() => sendCommand(vmCode, 'refresh'), 3000)
         setTimeout(() => sendCommand(vmCode, 'refresh'), 10000)
@@ -413,7 +420,6 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
     }, 20_000)
   }
 
-  // Derive inspection data from metadata (backend uses camelCase)
   const env: Record<string, string>   = node.metadata.environment ?? {}
   const ports: any[]                  = node.metadata.portMappings ?? []
   const mounts: any[]                 = node.metadata.mounts ?? []
@@ -423,16 +429,18 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const allMetaEntries                = Object.entries(node.metadata)
 
   return (
-    <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 340, background: '#0a0a16', borderLeft: '1px solid #1e1e3a', display: 'flex', flexDirection: 'column', zIndex: 30, boxShadow: '-8px 0 32px rgba(0,0,0,0.5)' }}>
+    <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 340, background: '#111111', borderLeft: '1px solid #1E1E1E', display: 'flex', flexDirection: 'column', zIndex: 30, boxShadow: '-8px 0 32px rgba(0,0,0,0.5)' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #1e1e3a', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 8, background: `${color}18`, border: `1px solid ${color}28`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>{icon}</div>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: '#1E1E1E', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <NodeSvgIcon type={node.type} size={16} />
+          </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={node.label}>{node.label}</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#FAFAFA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={node.label}>{node.label}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: `${color}18`, color, border: `1px solid ${color}28`, fontFamily: 'monospace' }}>{node.type}</span>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#1E1E1E', color: '#6E6E6E', border: '1px solid #2A2A2A', fontFamily: MONO }}>{node.type}</span>
               <span style={{ fontSize: 10, color: hc, display: 'flex', alignItems: 'center', gap: 3 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: hc, display: 'inline-block' }} />{node.health}
               </span>
@@ -440,8 +448,8 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
           </div>
         </div>
         <button onClick={onClose} style={ICON_BTN}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#13131f'; e.currentTarget.style.color = '#94a3b8' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#475569' }}>
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#161616'; e.currentTarget.style.color = '#A1A1A1' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#454545' }}>
           <X size={14} />
         </button>
       </div>
@@ -451,15 +459,15 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Key metadata */}
         {keyMeta.length > 0 && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #0f0f1e' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #111111' }}>
             {keyMeta.map(([k, v]) => {
               const str = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '')
               const display = k === 'size' ? formatBytes(Number(v)) : str
               const isPath = k === 'mountpoint' || k === 'image'
               return (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 10, color: '#475569', flexShrink: 0 }}>{k}</span>
-                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8', textAlign: 'right', ...(isPath ? { wordBreak: 'break-all' as const, whiteSpace: 'normal' as const } : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 190 }) }} title={str}>{display}</span>
+                  <span style={{ fontSize: 10, color: '#454545', flexShrink: 0 }}>{k}</span>
+                  <span style={{ fontSize: 11, fontFamily: MONO, color: '#6E6E6E', textAlign: 'right', ...(isPath ? { wordBreak: 'break-all' as const, whiteSpace: 'normal' as const } : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 190 }) }} title={str}>{display}</span>
                 </div>
               )
             })}
@@ -468,20 +476,20 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Tools */}
         {TOOLS_NODES.has(node.type) && (onShowLogs || onShowTerminal) && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e1e3a' }}>
-            <p style={{ fontSize: 10, fontWeight: 600, color: '#334155', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Tools</p>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #1E1E1E' }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#454545', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Tools</p>
             <div style={{ display: 'flex', gap: 6 }}>
               {onShowLogs && (
                 <button onClick={onShowLogs} style={TOOL_BTN}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.color = '#10b981'; e.currentTarget.style.background = '#10b98110' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#070711' }}>
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#FAFAFA'; e.currentTarget.style.background = '#1E1E1E' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.color = '#6E6E6E'; e.currentTarget.style.background = '#0A0A0A' }}>
                   <FileText size={11} /> Logs
                 </button>
               )}
               {onShowTerminal && (
                 <button onClick={onShowTerminal} style={TOOL_BTN}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.background = '#6366f110' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#070711' }}>
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#FAFAFA'; e.currentTarget.style.background = '#1E1E1E' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.color = '#6E6E6E'; e.currentTarget.style.background = '#0A0A0A' }}>
                   <Terminal size={11} /> Terminal
                 </button>
               )}
@@ -491,7 +499,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Image details section */}
         {node.type === 'image' && (
-          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+          <div style={{ borderBottom: '1px solid #1E1E1E' }}>
             <SectionHeader title="Image Details" open={openImage} onToggle={() => setOpenImage(v => !v)} />
             {openImage && <ImageDetailsPanel node={node} />}
           </div>
@@ -499,7 +507,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Env vars — containers */}
         {node.type === 'container' && envCount > 0 && (
-          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+          <div style={{ borderBottom: '1px solid #1E1E1E' }}>
             <SectionHeader title="Environment" count={envCount} open={openEnv} onToggle={() => setOpenEnv(v => !v)} />
             {openEnv && <EnvVarsPanel env={env} />}
           </div>
@@ -507,7 +515,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Port mappings — containers */}
         {node.type === 'container' && (
-          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+          <div style={{ borderBottom: '1px solid #1E1E1E' }}>
             <SectionHeader title="Ports" count={ports.length} open={openPorts} onToggle={() => setOpenPorts(v => !v)} />
             {openPorts && <PortsPanel ports={ports} />}
           </div>
@@ -515,7 +523,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Mounts — containers */}
         {node.type === 'container' && (
-          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+          <div style={{ borderBottom: '1px solid #1E1E1E' }}>
             <SectionHeader title="Mounts" count={mounts.length} open={openMounts} onToggle={() => setOpenMounts(v => !v)} />
             {openMounts && <MountsPanel mounts={mounts} />}
           </div>
@@ -523,7 +531,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Containers — workloads */}
         {(node.type === 'deployment' || node.type === 'statefulset' || node.type === 'daemonset') && Array.isArray(node.metadata.containers) && node.metadata.containers.length > 0 && (
-          <div style={{ borderBottom: '1px solid #1e1e3a' }}>
+          <div style={{ borderBottom: '1px solid #1E1E1E' }}>
             <SectionHeader title="Containers" count={node.metadata.containers.length} open={openContainers} onToggle={() => setOpenContainers(v => !v)} />
             {openContainers && <WorkloadContainersPanel containers={node.metadata.containers} />}
           </div>
@@ -531,16 +539,17 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
         {/* Actions */}
         {actions.length > 0 && (
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e1e3a' }}>
-            <p style={{ fontSize: 10, fontWeight: 600, color: '#334155', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Actions</p>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #1E1E1E' }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#454545', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Actions</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeActionId ? 12 : 0 }}>
               {actions.map((action) => {
                 const isOpen = activeActionId === action.id
+                const ac = getActionColor(action.id, action.danger)
                 return (
                   <button key={action.id} onClick={() => openAction(action)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: `1px solid ${isOpen ? action.color : '#1e1e3a'}`, background: isOpen ? `${action.color}18` : '#070711', color: isOpen ? action.color : '#64748b', cursor: 'pointer', transition: 'all 0.15s' }}
-                    onMouseEnter={(e) => { if (!isOpen) { e.currentTarget.style.borderColor = action.color; e.currentTarget.style.color = action.color; e.currentTarget.style.background = `${action.color}10` } }}
-                    onMouseLeave={(e) => { if (!isOpen) { e.currentTarget.style.borderColor = '#1e1e3a'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#070711' } }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: `1px solid ${isOpen ? ac : '#1E1E1E'}`, background: isOpen ? `${ac}18` : '#0A0A0A', color: isOpen ? ac : '#6E6E6E', cursor: 'pointer', transition: 'all 0.15s' }}
+                    onMouseEnter={(e) => { if (!isOpen) { e.currentTarget.style.borderColor = ac; e.currentTarget.style.color = ac; e.currentTarget.style.background = `${ac}10` } }}
+                    onMouseLeave={(e) => { if (!isOpen) { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.color = '#6E6E6E'; e.currentTarget.style.background = '#0A0A0A' } }}
                   >
                     <action.Icon size={11} />{action.label}
                     {isOpen ? <ChevronDown size={10} style={{ opacity: 0.5 }} /> : <ChevronRight size={10} style={{ opacity: 0.3 }} />}
@@ -551,17 +560,18 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
             {activeActionId && (() => {
               const action = actions.find((a) => a.id === activeActionId)!
+              const ac = getActionColor(action.id, action.danger)
               return (
-                <div style={{ background: '#070711', border: '1px solid #1e1e3a', borderRadius: 8, padding: 12 }}>
+                <div style={{ background: '#0A0A0A', border: '1px solid #1E1E1E', borderRadius: 8, padding: 12 }}>
                   {action.form && actionStatus === 'idle' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
                       {action.form.map((field) => {
-                        const baseStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box' as const, background: '#0a0a16', border: '1px solid #1e1e3a', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#e2e8f0', outline: 'none' }
+                        const baseStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box' as const, background: '#111111', border: '1px solid #1E1E1E', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: MONO, color: '#FAFAFA', outline: 'none' }
                         const opts = field.type === 'select' ? (field.options?.(node) ?? []) : []
                         const useSelect = field.type === 'select' && opts.length > 0
                         return (
                           <div key={field.key}>
-                            <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 4 }}>{field.label}</label>
+                            <label style={{ fontSize: 10, color: '#454545', display: 'block', marginBottom: 4 }}>{field.label}</label>
                             {useSelect ? (
                               <select
                                 value={formValues[field.key] ?? ''}
@@ -580,8 +590,8 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                                 onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                                 placeholder={field.placeholder}
                                 style={baseStyle}
-                                onFocus={(e) => { e.currentTarget.style.borderColor = action.color }}
-                                onBlur={(e) => { e.currentTarget.style.borderColor = '#1e1e3a' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = '#2A2A2A' }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = '#1E1E1E' }}
                               />
                             )}
                           </div>
@@ -592,24 +602,24 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                   {action.confirm && actionStatus === 'confirming' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                       {action.danger && <AlertTriangle size={12} color="#f59e0b" />}
-                      <span style={{ fontSize: 11, color: action.danger ? '#fcd34d' : '#94a3b8' }}>
+                      <span style={{ fontSize: 11, color: action.danger ? '#f59e0b' : '#A1A1A1' }}>
                         {action.danger ? 'This is a destructive action. Confirm?' : `Run "${action.label}" on ${node.label}?`}
                       </span>
                     </div>
                   )}
-                  {actionStatus === 'running' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><Loader2 size={13} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} /><span style={{ fontSize: 11, color: '#64748b' }}>{actionMsg}</span></div>}
-                  {actionStatus === 'success' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><CheckCircle2 size={13} color="#10b981" /><span style={{ fontSize: 11, color: '#6ee7b7' }}>{actionMsg}</span></div>}
+                  {actionStatus === 'running' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><Loader2 size={13} color="#A1A1A1" style={{ animation: 'spin 1s linear infinite' }} /><span style={{ fontSize: 11, color: '#6E6E6E' }}>{actionMsg}</span></div>}
+                  {actionStatus === 'success' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><CheckCircle2 size={13} color="#22c55e" /><span style={{ fontSize: 11, color: '#22c55e' }}>{actionMsg}</span></div>}
                   {actionStatus === 'error' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}><XCircle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} /><span style={{ fontSize: 11, color: '#fca5a5', wordBreak: 'break-word' }}>{actionMsg}</span></div>}
                   {(actionStatus === 'idle' || actionStatus === 'confirming') && (
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => handleSubmit(action)} style={{ flex: 1, padding: '6px 10px', borderRadius: 6, background: action.danger ? '#ef444420' : `${action.color}20`, color: action.danger ? '#ef4444' : action.color, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${action.danger ? '#ef444440' : `${action.color}40`}` } as React.CSSProperties} onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8' }} onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}>
+                      <button onClick={() => handleSubmit(action)} style={{ flex: 1, padding: '6px 10px', borderRadius: 6, background: `${ac}20`, color: ac, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${ac}40` } as React.CSSProperties} onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8' }} onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}>
                         {action.confirm ? `Confirm ${action.label}` : `Apply ${action.label}`}
                       </button>
-                      <button onClick={() => { setActiveActionId(null); setActionStatus('idle') }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #1e1e3a', background: 'transparent', color: '#475569', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={() => { setActiveActionId(null); setActionStatus('idle') }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #1E1E1E', background: 'transparent', color: '#6E6E6E', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
                     </div>
                   )}
                   {(actionStatus === 'success' || actionStatus === 'error') && (
-                    <button onClick={() => { setActiveActionId(null); setActionStatus('idle'); setActionMsg('') }} style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #1e1e3a', background: 'transparent', color: '#475569', fontSize: 11, cursor: 'pointer', marginTop: 4 }}>Dismiss</button>
+                    <button onClick={() => { setActiveActionId(null); setActionStatus('idle'); setActionMsg('') }} style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #1E1E1E', background: 'transparent', color: '#6E6E6E', fontSize: 11, cursor: 'pointer', marginTop: 4 }}>Dismiss</button>
                   )}
                 </div>
               )
@@ -623,20 +633,20 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
           {openMeta && (
             <div style={{ padding: '8px 16px' }}>
               <div style={{ marginBottom: 8 }}>
-                <p style={{ fontSize: 10, color: '#334155', marginBottom: 2 }}>id</p>
-                <p style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#475569', wordBreak: 'break-all' }}>{node.id}</p>
+                <p style={{ fontSize: 10, color: '#454545', marginBottom: 2 }}>id</p>
+                <p style={{ fontSize: 10, fontFamily: MONO, color: '#6E6E6E', wordBreak: 'break-all' }}>{node.id}</p>
               </div>
               {allMetaEntries.length === 0
-                ? <p style={{ fontSize: 12, color: '#334155' }}>No metadata</p>
+                ? <p style={{ fontSize: 12, color: '#454545' }}>No metadata</p>
                 : allMetaEntries.map(([k, v]) => {
                   const str = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v ?? '')
                   const isLong = str.length > 38 || str.includes('\n')
                   return (
                     <div key={k} style={{ marginBottom: 8 }}>
-                      <p style={{ fontSize: 10, color: '#334155', marginBottom: 2 }}>{k}</p>
+                      <p style={{ fontSize: 10, color: '#454545', marginBottom: 2 }}>{k}</p>
                       {isLong
-                        ? <pre style={{ fontSize: 10, background: '#070711', color: '#64748b', border: '1px solid #1e1e3a', borderRadius: 5, padding: '5px 7px', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{str}</pre>
-                        : <p style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#94a3b8' }}>{str}</p>
+                        ? <pre style={{ fontSize: 10, background: '#0A0A0A', color: '#6E6E6E', border: '1px solid #1E1E1E', borderRadius: 5, padding: '5px 7px', fontFamily: MONO, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{str}</pre>
+                        : <p style={{ fontSize: 11, fontFamily: MONO, color: '#6E6E6E' }}>{str}</p>
                       }
                     </div>
                   )
@@ -652,5 +662,5 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const ICON_BTN: React.CSSProperties = { width: 28, height: 28, borderRadius: 7, border: 'none', background: 'transparent', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
-const TOOL_BTN: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: '1px solid #1e1e3a', background: '#070711', color: '#64748b', cursor: 'pointer' }
+const ICON_BTN: React.CSSProperties = { width: 28, height: 28, borderRadius: 7, border: 'none', background: 'transparent', color: '#454545', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+const TOOL_BTN: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, fontSize: 11, fontWeight: 500, border: '1px solid #1E1E1E', background: '#0A0A0A', color: '#6E6E6E', cursor: 'pointer' }

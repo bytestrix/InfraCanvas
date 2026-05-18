@@ -217,10 +217,10 @@ export const NODE_COLORS: Record<string, string> = {
 }
 
 export const HEALTH_COLORS: Record<NodeHealth, string> = {
-  healthy: '#10b981',
+  healthy: '#22c55e',
   degraded: '#f59e0b',
   unhealthy: '#ef4444',
-  unknown: '#64748b',
+  unknown: '#6b7280',
 }
 
 export const NODE_ICONS: Record<string, string> = {

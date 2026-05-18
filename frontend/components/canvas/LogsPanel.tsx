@@ -11,6 +11,8 @@ interface LogsPanelProps {
   onClose: () => void
 }
 
+const MONO = 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)'
+
 export default function LogsPanel({ node, vmCode, onClose }: LogsPanelProps) {
   const [lines, setLines] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,23 +83,23 @@ export default function LogsPanel({ node, vmCode, onClose }: LogsPanelProps) {
   return (
     <div style={{
       position: 'absolute', left: 0, right: 340, bottom: 0, height: 320,
-      background: '#080812', borderTop: '1px solid #1e1e3a',
+      background: '#0A0A0A', borderTop: '1px solid #1E1E1E',
       display: 'flex', flexDirection: 'column', zIndex: 25,
       boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
     }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px', borderBottom: '1px solid #1e1e3a', flexShrink: 0,
+        padding: '8px 14px', borderBottom: '1px solid #1E1E1E', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#A1A1A1', letterSpacing: '0.06em', fontFamily: MONO }}>
             LOGS
           </span>
-          <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 11, color: '#6E6E6E', fontFamily: MONO }}>
             {node.label}
           </span>
-          {loading && <Loader2 size={11} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />}
+          {loading && <Loader2 size={11} color="#A1A1A1" style={{ animation: 'spin 1s linear infinite' }} />}
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           <IconBtn onClick={fetchLogs} title="Refresh logs"><RefreshCw size={12} /></IconBtn>
@@ -109,14 +111,14 @@ export default function LogsPanel({ node, vmCode, onClose }: LogsPanelProps) {
       {/* Log output */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: '8px 14px',
-        fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 11, lineHeight: '1.6',
-        color: '#94a3b8',
+        fontFamily: MONO, fontSize: 11, lineHeight: '1.6',
+        color: '#A1A1A1',
       }}>
         {error && (
           <div style={{ color: '#ef4444', marginBottom: 6 }}>Error: {error}</div>
         )}
         {lines.length === 0 && !loading && !error && (
-          <div style={{ color: '#334155', fontStyle: 'italic' }}>No log output.</div>
+          <div style={{ color: '#454545', fontStyle: 'italic' }}>No log output.</div>
         )}
         {lines.map((line, i) => (
           <div key={i} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
@@ -135,12 +137,12 @@ function IconBtn({ children, onClick, title }: { children: React.ReactNode; onCl
       onClick={onClick}
       title={title}
       style={{
-        background: 'transparent', border: 'none', color: '#475569',
+        background: 'transparent', border: 'none', color: '#6E6E6E',
         cursor: 'pointer', padding: '3px 5px', borderRadius: 4,
         display: 'flex', alignItems: 'center',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = '#13131f' }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.background = 'transparent' }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = '#A1A1A1'; e.currentTarget.style.background = '#161616' }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = '#6E6E6E'; e.currentTarget.style.background = 'transparent' }}
     >
       {children}
     </button>
@@ -164,7 +166,7 @@ function colorizeLog(line: string): React.ReactNode {
     if (dateEnd > 0) {
       return (
         <>
-          <span style={{ color: '#475569' }}>{line.slice(0, line.indexOf(trimmed) + dateEnd + 1)}</span>
+          <span style={{ color: '#454545' }}>{line.slice(0, line.indexOf(trimmed) + dateEnd + 1)}</span>
           <span>{line.slice(line.indexOf(trimmed) + dateEnd + 1)}</span>
         </>
       )
