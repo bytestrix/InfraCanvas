@@ -8,6 +8,8 @@ import { AlertCircle } from 'lucide-react'
 
 const LOCAL_KEY = 'local'
 
+const MONO = 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)'
+
 export default function Dashboard() {
   const { vms } = useVMStore()
   const vm = vms[LOCAL_KEY]
@@ -31,17 +33,17 @@ export default function Dashboard() {
 
 function LoadingScreen() {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#08080E' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
         <div
           className="animate-spin"
           style={{
             width: 38, height: 38, borderRadius: '50%',
-            border: '2.5px solid rgba(192,38,211,0.2)',
-            borderTopColor: '#C026D3',
+            border: '2.5px solid rgba(250,250,250,0.08)',
+            borderTopColor: '#A1A1A1',
           }}
         />
-        <p style={{ fontSize: 13, color: '#8B82B0' }}>Discovering infrastructure…</p>
+        <p style={{ fontSize: 13, color: '#6E6E6E', fontFamily: MONO }}>Discovering infrastructure…</p>
       </div>
     </div>
   )
@@ -49,10 +51,10 @@ function LoadingScreen() {
 
 function ErrorScreen({ message }: { message: string }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#08080E', padding: 16 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A', padding: 16 }}>
       <div style={{
         maxWidth: 460, width: '100%',
-        background: '#0E0E1C', border: '1px solid rgba(138,92,246,0.12)',
+        background: '#111111', border: '1px solid #1E1E1E',
         borderRadius: 16, padding: '28px 28px 24px',
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
@@ -66,21 +68,21 @@ function ErrorScreen({ message }: { message: string }) {
             <AlertCircle size={20} />
           </div>
           <div>
-            <p style={{ fontSize: 15, fontWeight: 600, color: '#EEE8FF', margin: 0 }}>Connection failed</p>
-            <p style={{ fontSize: 12, color: '#52496E', margin: '3px 0 0' }}>The dashboard couldn&apos;t reach the local agent</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Connection failed</p>
+            <p style={{ fontSize: 12, color: '#6E6E6E', margin: '3px 0 0' }}>The dashboard couldn&apos;t reach the local agent</p>
           </div>
         </div>
         <p style={{
-          fontSize: 12, color: '#8B82B0', margin: 0,
+          fontSize: 12, color: '#A1A1A1', margin: 0,
           padding: '12px 14px', borderRadius: 9,
-          background: '#08080E', border: '1px solid rgba(138,92,246,0.1)',
-          fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.6,
+          background: '#0A0A0A', border: '1px solid #1E1E1E',
+          fontFamily: MONO, lineHeight: 1.6,
         }}>
           {message}
         </p>
-        <p style={{ fontSize: 12, color: '#52496E', margin: 0, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 12, color: '#6E6E6E', margin: 0, lineHeight: 1.6 }}>
           Check that the InfraCanvas service is running:
-          <br /><code style={{ color: '#C026D3' }}>sudo systemctl status infracanvas</code>
+          <br /><code style={{ color: '#A1A1A1', fontFamily: MONO }}>sudo systemctl status infracanvas</code>
         </p>
       </div>
     </div>

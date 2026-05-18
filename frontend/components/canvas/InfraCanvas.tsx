@@ -70,7 +70,7 @@ const FILTER_GROUPS = {
   },
   docker: {
     label: 'Docker',
-    color: '#10b981',
+    color: '#22c55e',
     types: ['container', 'container_runtime', 'image', 'image_group', 'volume', 'network'],
   },
   host: {
@@ -123,10 +123,10 @@ function buildFlatFlowElements(
       target: e.target,
       label: e.type,
       type: 'smoothstep',
-      markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
-      style: { stroke: '#2d2d52', strokeWidth: 1.5 },
-      labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' },
-      labelBgStyle: { fill: '#070711', fillOpacity: 0.9 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2A2A2A' },
+      style: { stroke: '#2A2A2A', strokeWidth: 1.5 },
+      labelStyle: { fill: '#6E6E6E', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
+      labelBgStyle: { fill: '#0A0A0A', fillOpacity: 0.9 },
     }))
 
   return { nodes, edges }
@@ -144,8 +144,6 @@ const nodeTypes: NodeTypes = {
 
 interface InfraCanvasProps {
   vm: VMState
-  // Optional — when omitted, the back button is hidden. In single-VM
-  // local mode there is no parent view to return to.
   onBack?: () => void
 }
 
@@ -168,10 +166,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [terminalLayer, setTerminalLayer] = useState<'docker' | 'host'>('docker')
   const canvasWrapRef = useRef<HTMLDivElement>(null)
 
-  // Spotlight: which filter key to dim everything else for (null = no spotlight)
   const [spotlightKey, setSpotlightKey] = useState<FilterKey | null>(null)
 
-  // ReactFlow instance — for programmatic pan/zoom
   const rfRef = useRef<ReactFlowInstance | null>(null)
 
   const selectedNode = useMemo(() => {
@@ -218,8 +214,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       return
     }
 
-    // Grouped mode: fixed zone positions — no layout algorithm needed
-    // Flat mode: rooted dagre for proper hierarchy
     let ln: Node[]
     let le: Edge[]
     if (viewMode === 'grouped') {
@@ -231,7 +225,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       le = laid.edges
     }
 
-    // Apply spotlight opacity if active
     const finalNodes = applySpotlight(ln, spotlightKey, viewMode)
     setNodes(finalNodes)
     setEdges(le)
@@ -264,28 +257,22 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     })
   }
 
-  // ── Filter toggle — first click activates, second spotlights, third deactivates
   function handleFilterClick(key: FilterKey) {
     if (!activeFilters.has(key)) {
-      // Activate it
       setActiveFilters((prev) => new Set([...prev, key]))
       setSpotlightKey(null)
       return
     }
     if (spotlightKey === key) {
-      // Already spotlit → clear spotlight
       setSpotlightKey(null)
     } else {
-      // Active but not spotlit → spotlight it
       setSpotlightKey(key)
-      // Zoom to those nodes
       zoomToFilterGroup(key)
     }
   }
 
   function handleFilterRightClick(e: React.MouseEvent, key: FilterKey) {
     e.preventDefault()
-    // Right-click = deactivate (if more than 1 active)
     setActiveFilters((prev) => {
       const next = new Set(prev)
       if (next.size > 1) next.delete(key)
@@ -336,7 +323,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   }, [groupsMap])
 
   function handleSelectNodeFromDrawer(nodeId: string) {
-    // Find which group contains this raw node, zoom to its group node on canvas
     const groupEntry = [...groupsMap.entries()].find(
       ([, g]) => g.nodes.some((n) => n.id === nodeId)
     )
@@ -368,7 +354,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     if (!canvasWrapRef.current) return
     try {
       const { toPng } = await import('html-to-image')
-      const dataUrl = await toPng(canvasWrapRef.current, { backgroundColor: '#08080E', pixelRatio: 2 })
+      const dataUrl = await toPng(canvasWrapRef.current, { backgroundColor: '#0A0A0A', pixelRatio: 2 })
       const a = document.createElement('a')
       a.href = dataUrl
       a.download = `${vm.hostname ?? vm.code}-canvas.png`
@@ -414,20 +400,20 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#08080E', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#0A0A0A', overflow: 'hidden' }}>
 
       {/* ── Top bar ──────────────────────────────────────────────── */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
         padding: '0 14px', height: 50, zIndex: 10,
-        background: 'rgba(8,8,14,0.97)', borderBottom: '1px solid rgba(138,92,246,0.12)',
+        background: 'rgba(10,10,10,0.97)', borderBottom: '1px solid #1E1E1E',
         backdropFilter: 'blur(12px)',
       }}>
         {onBack && (
           <>
             <button onClick={onBack} style={ICON_BTN}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(138,92,246,0.1)'; e.currentTarget.style.color = '#8B82B0' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52496E' }}>
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#1E1E1E'; e.currentTarget.style.color = '#A1A1A1' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6E6E6E' }}>
               <ArrowLeft size={15} />
             </button>
             <div style={DIVIDER} />
@@ -435,9 +421,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Server size={13} color="#C026D3" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#EEE8FF' }}>{vm.hostname ?? vm.code}</span>
-          <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: 'rgba(192,38,211,0.1)', color: '#C026D3', border: '1px solid rgba(192,38,211,0.22)', fontFamily: 'monospace' }}>
+          <Server size={13} color="#A1A1A1" strokeWidth={1.5} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#FAFAFA' }}>{vm.hostname ?? vm.code}</span>
+          <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: '#1E1E1E', color: '#A1A1A1', border: '1px solid #2A2A2A', fontFamily: 'monospace' }}>
             {vm.code}
           </span>
         </div>
@@ -445,15 +431,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {stats && (
           <>
             <div style={DIVIDER} />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#52496E' }}>
-              <GitBranch size={11} /><span style={{ color: '#8B82B0' }}>{stats.totalNodes}</span> nodes
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6E6E6E' }}>
+              <GitBranch size={11} /><span style={{ color: '#A1A1A1' }}>{stats.totalNodes}</span> nodes
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#52496E' }}>
-              <Layers size={11} /><span style={{ color: '#8B82B0' }}>{stats.totalEdges}</span> edges
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6E6E6E' }}>
+              <Layers size={11} /><span style={{ color: '#A1A1A1' }}>{stats.totalEdges}</span> edges
             </span>
             {snapshot?.collectionDuration != null && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#52496E' }}>
-                <Clock size={11} /><span style={{ color: '#8B82B0' }}>{fmt(snapshot.collectionDuration)}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6E6E6E' }}>
+                <Clock size={11} /><span style={{ color: '#A1A1A1' }}>{fmt(snapshot.collectionDuration)}</span>
               </span>
             )}
           </>
@@ -463,15 +449,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         {/* Spotlight hint */}
         {spotlightKey && (
-          <span style={{ fontSize: 10, color: '#FBBF24', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#FBBF24', display: 'inline-block' }} />
+          <span style={{ fontSize: 10, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
             Spotlight: {FILTER_GROUPS[spotlightKey].label}
-            <button onClick={() => setSpotlightKey(null)} style={{ background: 'none', border: 'none', color: '#FBBF24', cursor: 'pointer', padding: 0, fontSize: 11 }}>✕</button>
+            <button onClick={() => setSpotlightKey(null)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', padding: 0, fontSize: 11 }}>✕</button>
           </span>
         )}
 
         {/* View mode toggle */}
-        <div style={{ display: 'flex', gap: 1, background: 'rgba(138,92,246,0.06)', border: '1px solid rgba(138,92,246,0.14)', borderRadius: 8, padding: 2 }}>
+        <div style={{ display: 'flex', gap: 1, background: '#111111', border: '1px solid #1E1E1E', borderRadius: 8, padding: 2 }}>
           {(['grouped', 'flat'] as const).map((m) => (
             <button key={m} onClick={() => setViewMode(m)}
               title={m === 'grouped' ? 'Grouped — one card per type' : 'Flat — every node'}
@@ -479,8 +465,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
                 fontSize: 11, fontWeight: viewMode === m ? 600 : 400,
-                background: viewMode === m ? 'rgba(138,92,246,0.18)' : 'transparent',
-                color: viewMode === m ? '#EEE8FF' : '#52496E',
+                background: viewMode === m ? '#1E1E1E' : 'transparent',
+                color: viewMode === m ? '#FAFAFA' : '#6E6E6E',
                 transition: 'all 0.15s',
               }}>
               {m === 'grouped' ? <Rows3 size={11} /> : <Network size={11} />}
@@ -493,7 +479,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         {/* Filter chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Filter size={11} color="#52496E" />
+          <Filter size={11} color="#6E6E6E" />
           {(['k8s', 'docker', 'host'] as FilterKey[]).map((key) => {
             const g = FILTER_GROUPS[key]
             const active = activeFilters.has(key)
@@ -506,16 +492,16 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                 style={{
                   padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                   fontWeight: active ? 600 : 400,
-                  background: spotlit ? g.color : active ? `${g.color}22` : 'rgba(138,92,246,0.04)',
-                  color: spotlit ? '#fff' : active ? g.color : '#52496E',
-                  border: `1px solid ${spotlit ? g.color : active ? `${g.color}40` : 'rgba(138,92,246,0.1)'}`,
+                  background: spotlit ? g.color : active ? `${g.color}22` : 'transparent',
+                  color: spotlit ? '#fff' : active ? g.color : '#6E6E6E',
+                  border: `1px solid ${spotlit ? g.color : active ? `${g.color}40` : '#1E1E1E'}`,
                   transition: 'all 0.15s',
                 }}>
                 {g.label}
               </button>
             )
           })}
-          <span style={{ width: 1, height: 13, background: 'rgba(138,92,246,0.12)', display: 'inline-block', margin: '0 2px' }} />
+          <span style={{ width: 1, height: 13, background: '#1E1E1E', display: 'inline-block', margin: '0 2px' }} />
           {(['pods', 'storage', 'events'] as FilterKey[]).map((key) => {
             const g = FILTER_GROUPS[key]
             const active = activeFilters.has(key)
@@ -529,8 +515,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                   padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                   fontWeight: active ? 600 : 400,
                   background: spotlit ? g.color : active ? `${g.color}18` : 'transparent',
-                  color: spotlit ? '#fff' : active ? g.color : '#3D3554',
-                  border: `1px dashed ${spotlit ? g.color : active ? `${g.color}35` : 'rgba(138,92,246,0.1)'}`,
+                  color: spotlit ? '#fff' : active ? g.color : '#6E6E6E',
+                  border: `1px dashed ${spotlit ? g.color : active ? `${g.color}35` : '#1E1E1E'}`,
                   transition: 'all 0.15s',
                 }}>
                 {g.label}
@@ -542,15 +528,14 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         <div style={DIVIDER} />
 
         <button onClick={handleRefresh}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(138,92,246,0.12)', background: 'transparent', color: '#8B82B0', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(138,92,246,0.28)'; e.currentTarget.style.color = '#EEE8FF' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(138,92,246,0.12)'; e.currentTarget.style.color = '#8B82B0' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid #1E1E1E', background: 'transparent', color: '#A1A1A1', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#FAFAFA' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.color = '#A1A1A1' }}>
           <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           Refresh
         </button>
 
         <LastUpdated ts={vm.lastUpdated} />
-
 
         <div style={DIVIDER} />
 
@@ -562,20 +547,20 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               const menu = document.getElementById('export-menu')
               if (menu) menu.style.display = menu.style.display === 'none' ? 'flex' : 'none'
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(138,92,246,0.12)', background: 'transparent', color: '#8B82B0', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(138,92,246,0.28)'; e.currentTarget.style.color = '#EEE8FF' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(138,92,246,0.12)'; e.currentTarget.style.color = '#8B82B0' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid #1E1E1E', background: 'transparent', color: '#A1A1A1', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#FAFAFA' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.color = '#A1A1A1' }}>
             <Download size={12} /> Export
           </button>
-          <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#0E0E1C', border: '1px solid rgba(138,92,246,0.18)', borderRadius: 10, overflow: 'hidden', minWidth: 130, zIndex: 50, boxShadow: '0 12px 32px rgba(0,0,0,0.6)' }}>
+          <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#111111', border: '1px solid #1E1E1E', borderRadius: 10, overflow: 'hidden', minWidth: 130, zIndex: 50, boxShadow: '0 12px 32px rgba(0,0,0,0.6)' }}>
             {[
               { label: 'Export PNG', action: () => { handleExportPNG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
               { label: 'Export JSON', action: () => { handleExportJSON(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
             ].map(({ label, action }) => (
               <button key={label} onClick={action}
-                style={{ padding: '9px 14px', background: 'transparent', border: 'none', color: '#8B82B0', fontSize: 12, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.12s' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(138,92,246,0.08)'; e.currentTarget.style.color = '#EEE8FF' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8B82B0' }}>
+                style={{ padding: '9px 14px', background: 'transparent', border: 'none', color: '#A1A1A1', fontSize: 12, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.12s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#1E1E1E'; e.currentTarget.style.color = '#FAFAFA' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A1A1A1' }}>
                 {label}
               </button>
             ))}
@@ -594,7 +579,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           alignItems: 'center',
           gap: 12,
         }}>
-          <AlertTriangle size={13} color="#F87171" />
+          <AlertTriangle size={13} color="#ef4444" strokeWidth={1.5} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {criticalGroups.map((a) => (
               <button
@@ -608,7 +593,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                   padding: '3px 10px', borderRadius: 6,
                   border: '1px solid rgba(248,113,113,0.25)',
                   background: 'rgba(248,113,113,0.08)',
-                  cursor: 'pointer', fontSize: 11, color: '#FCA5A5',
+                  cursor: 'pointer', fontSize: 11, color: '#fca5a5',
                 }}
               >
                 ⚠ {a.label}: <strong>{a.degraded} degraded</strong> — view &amp; act →
@@ -623,15 +608,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {!vm.graph ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2.5px solid rgba(192,38,211,0.2)', borderTopColor: '#C026D3' }} className="animate-spin" />
-              <p style={{ fontSize: 13, color: '#52496E' }}>Loading infrastructure graph…</p>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2.5px solid rgba(250,250,250,0.08)', borderTopColor: '#A1A1A1' }} className="animate-spin" />
+              <p style={{ fontSize: 13, color: '#6E6E6E' }}>Loading infrastructure graph…</p>
             </div>
           </div>
         ) : nodes.length === 0 ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#EEE8FF', marginBottom: 6 }}>No nodes to display</p>
-              <p style={{ fontSize: 13, color: '#52496E' }}>Try enabling more filter categories</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#FAFAFA', marginBottom: 6 }}>No nodes to display</p>
+              <p style={{ fontSize: 13, color: '#6E6E6E' }}>Try enabling more filter categories</p>
             </div>
           </div>
         ) : (
@@ -650,14 +635,14 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             maxZoom={2.5}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(255,255,255,0.06)" />
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(255,255,255,0.04)" />
             <Controls style={{ bottom: 80, left: 16 }} showInteractive={false} />
             <MiniMap
               nodeColor={(n) => {
                 if (n.type === 'groupNode') return getNodeColor((n.data as GroupNodeData).groupType)
                 return getNodeColor((n.data as InfraNodeData)?.nodeType, (n.data as InfraNodeData)?.health)
               }}
-              maskColor="rgba(99,102,241,0.07)"
+              maskColor="rgba(0,0,0,0.5)"
               style={{ bottom: 16, right: 16, width: 160, height: 100 }}
             />
           </ReactFlow>
@@ -708,25 +693,25 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       {/* ── Status bar ───────────────────────────────────────────── */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 14px', height: 24, background: '#08080E', borderTop: '1px solid rgba(138,92,246,0.08)',
+        padding: '0 14px', height: 24, background: '#0A0A0A', borderTop: '1px solid #1E1E1E',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {viewMode === 'grouped' && groupsMap.size > 0 && (
-            <span style={{ fontSize: 10, color: 'rgba(138,92,246,0.3)' }}>
+            <span style={{ fontSize: 10, color: '#454545' }}>
               {groupsMap.size} groups · click card to drill down · right-click filter to hide
             </span>
           )}
           {stats && Object.entries(stats.nodesByType)
             .sort(([, a], [, b]) => b - a).slice(0, 4)
             .map(([type, count]) => (
-              <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'rgba(138,92,246,0.3)' }}>
+              <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#454545' }}>
                 <span style={{ color: getNodeColor(type) }}>●</span>
                 {type}:{count}
               </span>
             ))}
         </div>
         {snapshot?.timestamp && (
-          <span style={{ fontSize: 10, color: 'rgba(138,92,246,0.3)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: 10, color: '#454545', fontFamily: 'Geist Mono, JetBrains Mono, monospace' }}>
             {new Date(snapshot.timestamp).toLocaleTimeString()}
           </span>
         )}
@@ -740,18 +725,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
 const ICON_BTN: React.CSSProperties = {
   width: 28, height: 28, borderRadius: 7, border: 'none',
-  background: 'transparent', color: '#52496E', cursor: 'pointer',
+  background: 'transparent', color: '#6E6E6E', cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   transition: 'background 0.15s, color 0.15s',
 }
 
 const DIVIDER: React.CSSProperties = {
-  width: 1, height: 16, background: 'rgba(138,92,246,0.12)', flexShrink: 0,
+  width: 1, height: 16, background: '#1E1E1E', flexShrink: 0,
 }
 
-// LastUpdated shows relative time since the last GRAPH_SNAPSHOT or GRAPH_DIFF
-// landed in the store. Ticks once a second so the value stays honest without
-// requiring re-renders elsewhere. Hidden until the first snapshot arrives.
 function LastUpdated({ ts }: { ts: number | null }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -766,11 +748,11 @@ function LastUpdated({ ts }: { ts: number | null }) {
     sec < 3600      ? `${Math.floor(sec / 60)}m ago` :
                       `${Math.floor(sec / 3600)}h ago`
   const stale = sec >= 60
-  const color = stale ? '#f59e0b' : '#52496E'
+  const color = stale ? '#f59e0b' : '#6E6E6E'
   return (
     <span
       title={`Last updated ${new Date(ts).toLocaleTimeString()}`}
-      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color, fontFamily: 'JetBrains Mono, monospace' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color, fontFamily: 'Geist Mono, JetBrains Mono, monospace' }}
     >
       <Clock size={10} />
       {label}

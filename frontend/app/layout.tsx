@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen antialiased" style={{ background: '#111110', color: '#F0EDE7' }}>
+      <body className="min-h-screen antialiased" style={{ background: '#0A0A0A', color: '#FAFAFA' }}>
         {children}
       </body>
     </html>
