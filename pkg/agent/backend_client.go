@@ -26,7 +26,8 @@ type BackendClient struct {
 func NewBackendClient(config *Config) *BackendClient {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: config.TLSInsecure,
+			InsecureSkipVerify: config.TLSInsecure, //nolint:gosec // user-controlled opt-in flag
+			MinVersion:         tls.VersionTLS12,
 		},
 	}
 

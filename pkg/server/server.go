@@ -185,11 +185,18 @@ func NewWithOptions(opts Options) *Server {
 		ReadBufferSize:  64 * 1024,
 		WriteBufferSize: 64 * 1024,
 		CheckOrigin: func(r *http.Request) bool {
-			if len(s.allowedOrigins) == 0 {
+			origin := r.Header.Get("Origin")
+			// Empty origin = non-browser client (curl, native agent) — allow.
+			if origin == "" {
 				return true
 			}
-			origin := r.Header.Get("Origin")
-			return s.allowedOrigins[origin]
+			// Explicit allowlist takes priority.
+			if len(s.allowedOrigins) > 0 {
+				return s.allowedOrigins[origin]
+			}
+			// Default: same-origin check — strip scheme and compare host.
+			bare := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+			return bare == r.Host
 		},
 	}
 	s.mux = http.NewServeMux()
@@ -258,6 +265,7 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 					Value:    q,
 					Path:     "/",
 					HttpOnly: true,
+					Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 					SameSite: http.SameSiteStrictMode,
 					MaxAge:   60 * 60 * 24 * 30,
 				})
