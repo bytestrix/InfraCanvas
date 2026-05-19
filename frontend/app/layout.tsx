@@ -6,14 +6,14 @@ export const metadata: Metadata = {
   title: 'InfraCanvas — Infrastructure at a glance',
   description: 'Real-time visual infrastructure discovery for VMs, containers, and Kubernetes.',
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>",
+    icon: '/logo.png',
   },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen antialiased" style={{ background: '#0A0A0A', color: '#FAFAFA' }}>
+    <html lang="en" data-theme="dark">
+      <body className="min-h-screen antialiased">
         {children}
       </body>
     </html>

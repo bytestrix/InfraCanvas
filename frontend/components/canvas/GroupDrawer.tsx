@@ -169,8 +169,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
         top: 0,
         bottom: 0,
         width: 360,
-        background: '#0A0A0A',
-        borderLeft: '1px solid #1E1E1E',
+        background: 'var(--bg)',
+        borderLeft: '1px solid var(--line)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 30,
@@ -184,7 +184,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
           alignItems: 'center',
           gap: 10,
           padding: '12px 16px',
-          borderBottom: '1px solid #1E1E1E',
+          borderBottom: '1px solid var(--line)',
           flexShrink: 0,
         }}
       >
@@ -193,8 +193,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
             width: 32,
             height: 32,
             borderRadius: 8,
-            background: '#161616',
-            border: '1px solid #2A2A2A',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--line2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -204,10 +204,10 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
           <NodeSvgIcon type={group.type} size={16} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#FAFAFA', lineHeight: 1 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', lineHeight: 1 }}>
             {group.label}
           </p>
-          <p style={{ fontSize: 11, color: '#6E6E6E', marginTop: 2 }}>
+          <p style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 2 }}>
             {group.count} {group.count === 1 ? 'node' : 'nodes'}
             {degradedCount > 0 && (
               <span style={{ color: '#f59e0b', marginLeft: 6 }}>· {degradedCount} degraded/failed</span>
@@ -218,11 +218,11 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
           onClick={onClose}
           style={{
             width: 28, height: 28, borderRadius: 7, border: 'none',
-            background: 'transparent', color: '#454545', cursor: 'pointer',
+            background: 'transparent', color: 'var(--ink4)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#161616'; e.currentTarget.style.color = '#A1A1A1' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#454545' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--ink2)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink4)' }}
         >
           <X size={14} />
         </button>
@@ -232,16 +232,16 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
       {bulkDeleteFn && (
         <div style={{
           padding: '8px 12px',
-          borderBottom: '1px solid #1E1E1E',
+          borderBottom: '1px solid var(--line)',
           flexShrink: 0,
-          background: selectedCount > 0 ? 'rgba(239,68,68,0.04)' : '#0A0A0A',
+          background: selectedCount > 0 ? 'rgba(239,68,68,0.04)' : 'var(--bg)',
         }}>
           {bulkStatus === 'done' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#22c55e' }}>
               <span>✓ Deleted {deletedCount} {group.type}s — refreshing…</span>
             </div>
           ) : bulkStatus === 'running' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#A1A1A1' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink2)' }}>
               <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
               <span>Deleting {deletedCount}/{selectedCount}…</span>
             </div>
@@ -268,8 +268,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                   onClick={() => setBulkStatus('idle')}
                   style={{
                     padding: '5px 14px', borderRadius: 6,
-                    border: '1px solid #1E1E1E', background: 'transparent',
-                    color: '#6E6E6E', fontSize: 12, cursor: 'pointer',
+                    border: '1px solid var(--line)', background: 'transparent',
+                    color: 'var(--ink3)', fontSize: 12, cursor: 'pointer',
                   }}
                 >
                   Cancel
@@ -299,9 +299,9 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
                     padding: '4px 10px', borderRadius: 6,
-                    border: '1px solid #1E1E1E',
+                    border: '1px solid var(--line)',
                     background: 'transparent',
-                    color: '#6E6E6E', fontSize: 11, cursor: 'pointer',
+                    color: 'var(--ink3)', fontSize: 11, cursor: 'pointer',
                   }}
                 >
                   <CheckSquare size={12} />
@@ -315,8 +315,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
                       padding: '4px 10px', borderRadius: 6,
-                      border: '1px solid #1E1E1E', background: 'transparent',
-                      color: '#6E6E6E', fontSize: 11, cursor: 'pointer',
+                      border: '1px solid var(--line)', background: 'transparent',
+                      color: 'var(--ink3)', fontSize: 11, cursor: 'pointer',
                     }}
                   >
                     <Square size={12} />
@@ -340,7 +340,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                 </>
               )}
               {selectedCount === 0 && degradedCount === 0 && (
-                <span style={{ fontSize: 11, color: '#454545' }}>Select items to perform bulk actions</span>
+                <span style={{ fontSize: 11, color: 'var(--ink4)' }}>Select items to perform bulk actions</span>
               )}
             </div>
           )}
@@ -348,7 +348,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
       )}
 
       {/* ── Health summary bar ── */}
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0 }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
         <div
           style={{
             display: 'flex', height: 6, borderRadius: 3,
@@ -361,7 +361,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
               title={`${c} ${h}`}
               style={{
                 width: `${(c / group.count) * 100}%`,
-                background: HEALTH_COLOR[h] ?? '#2A2A2A',
+                background: HEALTH_COLOR[h] ?? 'var(--line2)',
                 borderRadius: 2,
               }}
             />
@@ -373,9 +373,9 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
             style={{
               padding: '2px 9px', borderRadius: 20, border: '1px solid',
               fontSize: 11, cursor: 'pointer',
-              background: healthFilter === null ? '#FAFAFA' : 'transparent',
-              color: healthFilter === null ? '#0A0A0A' : '#6E6E6E',
-              borderColor: healthFilter === null ? '#FAFAFA' : '#1E1E1E',
+              background: healthFilter === null ? 'var(--ink)' : 'transparent',
+              color: healthFilter === null ? 'var(--bg)' : 'var(--ink3)',
+              borderColor: healthFilter === null ? 'var(--ink)' : 'var(--line)',
               fontWeight: healthFilter === null ? 600 : 400,
             }}
           >
@@ -389,8 +389,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                 padding: '2px 9px', borderRadius: 20, border: '1px solid',
                 fontSize: 11, cursor: 'pointer',
                 background: healthFilter === h ? HEALTH_BG[h] : 'transparent',
-                color: healthFilter === h ? HEALTH_COLOR[h] : '#6E6E6E',
-                borderColor: healthFilter === h ? `${HEALTH_COLOR[h]}40` : '#1E1E1E',
+                color: healthFilter === h ? HEALTH_COLOR[h] : 'var(--ink3)',
+                borderColor: healthFilter === h ? `${HEALTH_COLOR[h]}40` : 'var(--line)',
                 fontWeight: healthFilter === h ? 600 : 400,
               }}
             >
@@ -401,22 +401,22 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
       </div>
 
       {/* ── Search ── */}
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0 }}>
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: '#0A0A0A', border: '1px solid #1E1E1E',
+            background: 'var(--bg)', border: '1px solid var(--line)',
             borderRadius: 8, padding: '6px 10px',
           }}
         >
-          <Search size={12} color="#454545" />
+          <Search size={12} color="var(--ink4)" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter by name…"
             style={{
               flex: 1, background: 'transparent', border: 'none',
-              outline: 'none', fontSize: 12, color: '#FAFAFA', fontFamily: 'inherit',
+              outline: 'none', fontSize: 12, color: 'var(--ink)', fontFamily: 'inherit',
             }}
           />
         </div>
@@ -425,7 +425,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
       {/* ── Node list ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
         {filtered.length === 0 ? (
-          <p style={{ fontSize: 12, color: '#454545', padding: '16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'var(--ink4)', padding: '16px', textAlign: 'center' }}>
             No matches
           </p>
         ) : (
@@ -439,7 +439,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  borderBottom: '1px solid #111111',
+                  borderBottom: '1px solid var(--surface)',
                   background: isSelected ? 'rgba(239,68,68,0.06)' : 'transparent',
                 }}
               >
@@ -451,11 +451,11 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                       flexShrink: 0, width: 36, display: 'flex', alignItems: 'center',
                       justifyContent: 'center', background: 'transparent',
                       border: 'none', cursor: 'pointer',
-                      color: isSelected ? '#ef4444' : '#454545',
+                      color: isSelected ? '#ef4444' : 'var(--ink4)',
                       padding: '8px 0',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = isSelected ? '#fca5a5' : '#6E6E6E' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = isSelected ? '#ef4444' : '#454545' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = isSelected ? '#fca5a5' : 'var(--ink3)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = isSelected ? '#ef4444' : 'var(--ink4)' }}
                   >
                     {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                   </button>
@@ -469,7 +469,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                     background: 'transparent', border: 'none',
                     cursor: 'pointer', textAlign: 'left',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#161616' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
                   <span
@@ -481,7 +481,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p
                       style={{
-                        fontSize: 12, fontWeight: 500, color: '#A1A1A1',
+                        fontSize: 12, fontWeight: 500, color: 'var(--ink2)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}
                       title={node.label}
@@ -491,7 +491,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
                     {keyMeta && (
                       <p
                         style={{
-                          fontSize: 10, color: '#454545',
+                          fontSize: 10, color: 'var(--ink4)',
                           fontFamily: MONO,
                           overflow: 'hidden', textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap', marginTop: 1,
@@ -519,8 +519,8 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
       </div>
 
       {/* ── Footer ── */}
-      <div style={{ padding: '8px 16px', borderTop: '1px solid #1E1E1E', flexShrink: 0 }}>
-        <p style={{ fontSize: 11, color: '#454545', fontFamily: MONO }}>
+      <div style={{ padding: '8px 16px', borderTop: '1px solid var(--line)', flexShrink: 0 }}>
+        <p style={{ fontSize: 11, color: 'var(--ink4)', fontFamily: MONO }}>
           Showing {filtered.length} of {group.count}
           {selectedCount > 0 && (
             <span style={{ color: '#ef4444', marginLeft: 8 }}>· {selectedCount} selected</span>
