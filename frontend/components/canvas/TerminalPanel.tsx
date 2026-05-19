@@ -149,7 +149,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
 
   return (
     <div style={{
-      position: 'absolute', left: 0, right: 340, bottom: 0, height: 380,
+      position: 'absolute', left: 0, right: 0, bottom: 0, height: 380,
       background: '#0A0A0A', borderTop: '1px solid #1E1E1E',
       display: 'flex', flexDirection: 'column', zIndex: 25,
       boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
