@@ -17,7 +17,7 @@ const HEALTH_DOT: Record<NodeHealth, string> = {
   healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'#6b7280',
 }
 const HEALTH_BAR: Record<NodeHealth, string> = {
-  healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'#383838',
+  healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'var(--line3)',
 }
 
 function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
@@ -81,17 +81,17 @@ function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
 const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
   const { nodeType, label, health, metadata } = data
   const keyMeta = getKeyMeta(nodeType, metadata)
-  const dotColor = HEALTH_DOT[health] ?? '#454545'
-  const barColor = HEALTH_BAR[health] ?? '#383838'
+  const dotColor = HEALTH_DOT[health] ?? 'var(--ink4)'
+  const barColor = HEALTH_BAR[health] ?? 'var(--line3)'
   const isUnhealthy = health === 'unhealthy' || health === 'degraded'
 
   return (
     <div style={{
       width: 220,
-      background: '#111111',
-      border: `1px solid ${selected ? '#FAFAFA' : isUnhealthy ? '#383838' : '#1E1E1E'}`,
+      background: 'var(--surface)',
+      border: `1px solid ${selected ? 'var(--ink)' : isUnhealthy ? 'var(--line3)' : 'var(--line)'}`,
       borderRadius: 9,
-      boxShadow: selected ? '0 0 0 1px #FAFAFA' : '0 2px 8px rgba(0,0,0,0.5)',
+      boxShadow: selected ? '0 0 0 1px var(--ink)' : '0 2px 8px rgba(0,0,0,0.12)',
       transition: 'border-color 0.12s, box-shadow 0.12s',
       position: 'relative',
       overflow: 'hidden',
@@ -102,11 +102,11 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
       <div style={{ padding: '9px 10px 9px 12px' }}>
         {/* Row 1: icon + label + dot */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-          <div style={{ width: 24, height: 24, borderRadius: 6, background: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--surface-2)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <NodeSvgIcon type={nodeType} size={14} />
           </div>
           <span style={{
-            fontSize: 12, fontWeight: 500, color: '#FAFAFA', flex: 1,
+            fontSize: 12, fontWeight: 500, color: 'var(--ink)', flex: 1,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             letterSpacing: '-0.01em',
           }} title={label}>
@@ -119,7 +119,7 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
         <div style={{ marginBottom: keyMeta.length ? 5 : 0 }}>
           <span style={{
             fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
-            background: '#1E1E1E', color: '#6E6E6E', border: '1px solid #2A2A2A',
+            background: 'var(--line)', color: 'var(--ink3)', border: '1px solid var(--line2)',
             fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
             letterSpacing: '0.04em',
           }}>{nodeType}</span>
@@ -130,7 +130,7 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {keyMeta.map((line, i) => (
               <span key={i} style={{
-                fontSize: 10, color: '#6E6E6E',
+                fontSize: 10, color: 'var(--ink3)',
                 fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }} title={line}>{line}</span>
@@ -139,8 +139,8 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
         )}
       </div>
 
-      <Handle type="target" position={Position.Top}    style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
-      <Handle type="source" position={Position.Bottom} style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
+      <Handle type="target" position={Position.Top}    style={{ background: 'var(--line2)', width: 5, height: 5, border: '1px solid var(--surface)' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: 'var(--line2)', width: 5, height: 5, border: '1px solid var(--surface)' }} />
     </div>
   )
 })

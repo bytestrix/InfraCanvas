@@ -11,9 +11,9 @@ import TerminalPanel from '@/components/canvas/TerminalPanel'
 import { type GroupInfo } from '@/lib/graphPreprocess'
 
 const T = {
-  bg:'#0A0A0A', surface:'#111111', surface2:'#161616',
-  line:'#1E1E1E', line2:'#2A2A2A', line3:'#383838',
-  ink:'#FAFAFA', ink2:'#A1A1A1', ink3:'#6E6E6E', ink4:'#454545',
+  bg:'var(--bg)', surface:'var(--surface)', surface2:'var(--surface-2)',
+  line:'var(--line)', line2:'var(--line2)', line3:'var(--line3)',
+  ink:'var(--ink)', ink2:'var(--ink2)', ink3:'var(--ink3)', ink4:'var(--ink4)',
 }
 const H = { healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'#6b7280' }
 const MONO = "var(--font-geist-mono,'Geist Mono',ui-monospace,monospace)"
@@ -382,6 +382,6 @@ function DotSep() {
 const actionBtn: React.CSSProperties = {
   display:'inline-flex', alignItems:'center', gap:6,
   height:28, padding:'0 10px', borderRadius:6,
-  border:`1px solid #2A2A2A`, background:'#111111',
-  color:'#A1A1A1', fontSize:12, cursor:'pointer', fontFamily:"var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)",
+  border:`1px solid var(--line2)`, background:'var(--surface)',
+  color:'var(--ink2)', fontSize:12, cursor:'pointer', fontFamily:"var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)",
 }

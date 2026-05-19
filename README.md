@@ -1,12 +1,18 @@
-# InfraCanvas
+<p align="center">
+  <img src="docs/logo.png" alt="InfraCanvas" width="180" />
+</p>
 
-**A live, visual map of everything running on a server — installed with one command.**
+<h1 align="center">InfraCanvas</h1>
 
-[![CI](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg)](https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
+<p align="center"><strong>A live, visual map of everything running on a server — installed with one command.</strong></p>
 
-![InfraCanvas demo](docs/infracanvas.gif)
+<p align="center">
+  <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go 1.21+"></a>
+</p>
+
+---
 
 InfraCanvas is a single Go binary you run on any Linux machine. It discovers every container, pod, volume, network, and deployment on that host and serves a live visual dashboard you open in your browser. No Docker required, no extra services to host, no setup.
 

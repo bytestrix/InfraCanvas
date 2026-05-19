@@ -6,11 +6,24 @@ import { connectVM } from '@/lib/wsManager'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
+import { useTheme } from '@/hooks/useTheme'
 import { AlertCircle } from 'lucide-react'
 
 const LOCAL_KEY = 'local'
 
-const T = { bg:'#0A0A0A', surface:'#111111', surface2:'#161616', line:'#1E1E1E', line2:'#2A2A2A', line3:'#383838', ink:'#FAFAFA', ink2:'#A1A1A1', ink3:'#6E6E6E', ink4:'#454545' }
+// All values are CSS variables — update automatically when data-theme changes
+const T = {
+  bg:       'var(--bg)',
+  surface:  'var(--surface)',
+  surface2: 'var(--surface-2)',
+  line:     'var(--line)',
+  line2:    'var(--line2)',
+  line3:    'var(--line3)',
+  ink:      'var(--ink)',
+  ink2:     'var(--ink2)',
+  ink3:     'var(--ink3)',
+  ink4:     'var(--ink4)',
+}
 const H = { healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444' }
 const MONO = "var(--font-geist-mono,'Geist Mono','JetBrains Mono',ui-monospace,monospace)"
 const SANS = "var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)"
@@ -28,6 +41,17 @@ const IcCanvas = () => (
     <rect x="1" y="2" width="14" height="10" rx="1.5"/>
     <path d="M5 12v2M11 12v2M3 14h10"/>
     <path d="M5 7h6M8 5v4" strokeLinecap="round"/>
+  </svg>
+)
+const IcSun = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="8" cy="8" r="3"/>
+    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+  </svg>
+)
+const IcMoon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M13 9.5A6 6 0 0 1 6.5 3a6 6 0 1 0 6.5 6.5z"/>
   </svg>
 )
 
@@ -55,6 +79,7 @@ export default function App() {
 function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange: (v: View) => void }) {
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
+  const { theme, toggle } = useTheme()
 
   const navItems: { id: View; label: string; Icon: () => JSX.Element }[] = [
     { id: 'overview', label: 'Overview', Icon: IcOverview },
@@ -64,10 +89,10 @@ function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange
   return (
     <aside style={{ borderRight:`1px solid ${T.line}`, display:'flex', flexDirection:'column', padding:'16px 10px 12px', background:T.bg }}>
       {/* Brand */}
-      <div style={{ display:'flex', alignItems:'center', gap:9, padding:'0 6px 20px' }}>
-        <LogoMark size={20} color={T.ink} />
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0 6px 20px' }}>
+        <LogoMark size={40} />
         <div>
-          <div style={{ fontSize:13.5, fontWeight:600, letterSpacing:'-0.025em', color:T.ink }}>InfraCanvas</div>
+          <div style={{ fontSize:14, fontWeight:600, letterSpacing:'-0.025em', color:T.ink }}>InfraCanvas</div>
           <div style={{ fontSize:10, color:T.ink4, fontFamily:MONO }}>open source</div>
         </div>
       </div>
@@ -97,6 +122,22 @@ function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange
 
       {/* Spacer */}
       <div style={{ flex:1 }} />
+
+      {/* Theme toggle */}
+      <div style={{ padding:'0 2px 8px' }}>
+        <button onClick={toggle} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} style={{
+          display:'flex', alignItems:'center', gap:8, width:'100%',
+          height:30, padding:'0 8px', borderRadius:7,
+          fontSize:12, border:'none', cursor:'pointer',
+          color:T.ink3, background:'transparent', fontFamily:SANS, transition:'all 0.1s',
+        }}
+          onMouseEnter={e=>{ (e.currentTarget as any).style.color=T.ink; (e.currentTarget as any).style.background=T.surface }}
+          onMouseLeave={e=>{ (e.currentTarget as any).style.color=T.ink3; (e.currentTarget as any).style.background='transparent' }}
+        >
+          {theme === 'dark' ? <IcSun /> : <IcMoon />}
+          <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </button>
+      </div>
 
       {/* Connection status */}
       <div style={{ borderTop:`1px solid ${T.line}`, paddingTop:10 }}>
@@ -141,7 +182,6 @@ function MainContent({ vm, view, onSwitchToCanvas }: { vm: any; view: View; onSw
     )
   }
 
-  // overview — loading state while connecting, full overview once graph arrives
   if (isLoading || !vm?.graph) return <LoadingContent />
 
   return (
@@ -159,7 +199,7 @@ function LoadingContent() {
   return (
     <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', background:T.bg }}>
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-        <div className="animate-spin" style={{ width:38, height:38, borderRadius:'50%', border:'2.5px solid rgba(250,250,250,0.08)', borderTopColor:'#A1A1A1' }} />
+        <div className="animate-spin" style={{ width:38, height:38, borderRadius:'50%', border:'2.5px solid var(--spinner-track)', borderTopColor:'var(--spinner-tip)' }} />
         <p style={{ fontSize:13, color:T.ink3, fontFamily:MONO, margin:0 }}>Discovering infrastructure…</p>
       </div>
     </div>
@@ -191,4 +231,3 @@ function ErrorContent({ message }: { message: string }) {
     </div>
   )
 }
-

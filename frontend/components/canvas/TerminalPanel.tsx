@@ -62,12 +62,12 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
 
       const term = new Terminal({
         theme: {
-          background:          '#0A0A0A',
-          foreground:          '#FAFAFA',
-          cursor:              '#A1A1A1',
-          cursorAccent:        '#0A0A0A',
+          background:          'var(--bg)',
+          foreground:          'var(--ink)',
+          cursor:              'var(--ink2)',
+          cursorAccent:        'var(--bg)',
           selectionBackground: 'rgba(250,250,250,0.15)',
-          black:               '#1E1E1E',
+          black:               'var(--line)',
           red:                 '#f38ba8',
           green:               '#a6e3a1',
           yellow:              '#f9e2af',
@@ -150,7 +150,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
   return (
     <div style={{
       position: 'absolute', left: 0, right: 0, bottom: 0, height: 380,
-      background: '#0A0A0A', borderTop: '1px solid #1E1E1E',
+      background: 'var(--bg)', borderTop: '1px solid var(--line)',
       display: 'flex', flexDirection: 'column', zIndex: 25,
       boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
     }}>
@@ -159,23 +159,23 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
         .xterm-viewport { border-radius: 0; overflow-y: scroll !important; }
         .xterm-viewport::-webkit-scrollbar { width: 6px; }
         .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
-        .xterm-viewport::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
-        .xterm-viewport::-webkit-scrollbar-thumb:hover { background: #383838; }
+        .xterm-viewport::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 3px; }
+        .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--line3); }
       `}</style>
 
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px', borderBottom: '1px solid #1E1E1E', flexShrink: 0,
+        padding: '8px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#A1A1A1', letterSpacing: '0.06em', fontFamily: MONO }}>TERMINAL</span>
-          <span style={{ fontSize: 11, color: '#6E6E6E', fontFamily: MONO }}>{node.label}</span>
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#1E1E1E', color: '#A1A1A1', border: '1px solid #2A2A2A', fontFamily: MONO }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', fontFamily: MONO }}>TERMINAL</span>
+          <span style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: MONO }}>{node.label}</span>
+          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--line)', color: 'var(--ink2)', border: '1px solid var(--line2)', fontFamily: MONO }}>
             {layer === 'host' ? 'VM shell' : 'container exec'}
           </span>
           {status === 'connecting' && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6E6E6E', fontFamily: MONO }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--ink3)', fontFamily: MONO }}>
               <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> connecting
             </span>
           )}
@@ -185,9 +185,9 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
         </div>
         <button
           onClick={() => { cleanup(); onClose() }}
-          style={{ background: 'transparent', border: 'none', color: '#6E6E6E', cursor: 'pointer', padding: '3px 5px', borderRadius: 4 }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#A1A1A1'; (e.currentTarget as HTMLButtonElement).style.background = '#161616' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#6E6E6E'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+          style={{ background: 'transparent', border: 'none', color: 'var(--ink3)', cursor: 'pointer', padding: '3px 5px', borderRadius: 4 }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--ink2)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink3)'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
         >
           <X size={12} />
         </button>

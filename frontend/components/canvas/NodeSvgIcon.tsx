@@ -4,8 +4,8 @@
 
 const K8S  = '#326CE5'
 const DOCK = '#2496ED'
-const INK2 = '#A1A1A1'
-const INK3 = '#6E6E6E'
+const INK2 = 'var(--ink2)'
+const INK3 = 'var(--ink3)'
 
 interface Props { type: string; size?: number }
 

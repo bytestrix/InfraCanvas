@@ -21,10 +21,10 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
   return (
     <div style={{
       width: 260,
-      background: '#111111',
-      border: `1px solid ${selected ? '#FAFAFA' : hasBadHealth ? '#383838' : '#1E1E1E'}`,
+      background: 'var(--surface)',
+      border: `1px solid ${selected ? 'var(--ink)' : hasBadHealth ? 'var(--line3)' : 'var(--line)'}`,
       borderRadius: 10,
-      boxShadow: selected ? '0 0 0 1px #FAFAFA, 0 4px 20px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.5)',
+      boxShadow: selected ? '0 0 0 1px var(--ink), 0 4px 20px rgba(0,0,0,0.15)' : '0 2px 12px rgba(0,0,0,0.1)',
       position: 'relative',
       overflow: 'hidden',
       transition: 'border-color 0.12s, box-shadow 0.12s',
@@ -35,7 +35,7 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
         {pHealthy   > 0 && <div style={{ flex: pHealthy,   background: '#22c55e' }} title={`${healthCounts.healthy} healthy`} />}
         {pDegraded  > 0 && <div style={{ flex: pDegraded,  background: '#f59e0b' }} title={`${healthCounts.degraded} degraded`} />}
         {pUnhealthy > 0 && <div style={{ flex: pUnhealthy, background: '#ef4444' }} title={`${healthCounts.unhealthy} unhealthy`} />}
-        {(100 - pHealthy - pDegraded - pUnhealthy) > 0 && <div style={{ flex: (100 - pHealthy - pDegraded - pUnhealthy), background: '#1E1E1E' }} />}
+        {(100 - pHealthy - pDegraded - pUnhealthy) > 0 && <div style={{ flex: (100 - pHealthy - pDegraded - pUnhealthy), background: 'var(--line)' }} />}
       </div>
 
       {/* Critical pulse */}
@@ -43,7 +43,7 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
         <div style={{
           position: 'absolute', top: 6, right: 6,
           width: 6, height: 6, borderRadius: '50%',
-          background: '#FAFAFA', border: '1px solid #111111',
+          background: 'var(--ink)', border: '1px solid var(--surface)',
           animation: 'pulse 1.5s ease-in-out infinite',
           zIndex: 10,
         }} />
@@ -52,17 +52,17 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
       <div style={{ padding: '10px 12px 10px 12px' }}>
         {/* Row 1: icon + label + count */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, background: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--surface-2)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <NodeSvgIcon type={groupType} size={14} />
           </div>
           <span style={{
-            fontSize: 12, fontWeight: 600, color: '#FAFAFA', flex: 1,
+            fontSize: 12, fontWeight: 600, color: 'var(--ink)', flex: 1,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             letterSpacing: '-0.01em',
           }}>{label}</span>
           <span style={{
-            fontSize: 11, fontWeight: 700, color: '#A1A1A1',
-            background: '#1E1E1E', border: '1px solid #2A2A2A',
+            fontSize: 11, fontWeight: 700, color: 'var(--ink2)',
+            background: 'var(--line)', border: '1px solid var(--line2)',
             borderRadius: 20, padding: '1px 8px', flexShrink: 0,
             fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
           }}>×{count}</span>
@@ -88,8 +88,8 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
         </div>
       </div>
 
-      <Handle type="target" position={Position.Top} style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
-      <Handle type="source" position={Position.Bottom} style={{ background: '#2A2A2A', width: 5, height: 5, border: '1px solid #111111' }} />
+      <Handle type="target" position={Position.Top} style={{ background: 'var(--line2)', width: 5, height: 5, border: '1px solid var(--surface)' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: 'var(--line2)', width: 5, height: 5, border: '1px solid var(--surface)' }} />
     </div>
   )
 })
