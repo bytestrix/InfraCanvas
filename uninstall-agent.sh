@@ -5,22 +5,41 @@
 
 set -euo pipefail
 
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 
 run_priv() {
   if [[ $EUID -eq 0 ]]; then "$@"; else sudo "$@"; fi
 }
 
+# Returns true if a systemd unit file belongs to the InfraCanvas Cloud (SaaS)
+# agent — identified by the presence of INFRACANVAS_TOKEN or INFRACANVAS_BACKEND
+# env vars, which are only written by the cloud installer, not the OSS installer.
+is_saas_unit() {
+  local unit_file="$1"
+  [[ -f "$unit_file" ]] && grep -qE 'INFRACANVAS_TOKEN|INFRACANVAS_BACKEND' "$unit_file" 2>/dev/null
+}
+
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/infracanvas"
-SERVICES=("infracanvas" "infracanvas-agent")  # current + legacy
+# Only remove the OSS service name ("infracanvas").
+# "infracanvas-agent" was historically a legacy OSS name but is now also used
+# by InfraCanvas Cloud — we skip it here to avoid breaking cloud installs.
+# The cloud installer migrates that name to "ic-agent" going forward.
+SERVICES=("infracanvas")
 
 if command -v systemctl >/dev/null; then
   for svc in "${SERVICES[@]}"; do
     UNIT="/etc/systemd/system/${svc}.service"
     if [[ -f "$UNIT" ]] || systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
+      # Safety check: skip if this unit is actually an InfraCanvas Cloud agent.
+      if is_saas_unit "$UNIT"; then
+        warn "Skipping $svc — looks like an InfraCanvas Cloud agent (contains INFRACANVAS_TOKEN)."
+        warn "To uninstall the cloud agent, use the InfraCanvas Cloud dashboard instead."
+        continue
+      fi
       if systemctl is-active --quiet "$svc" 2>/dev/null; then
         info "Stopping $svc..."
         run_priv systemctl stop "$svc" || true
