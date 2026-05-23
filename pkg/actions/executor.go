@@ -219,3 +219,8 @@ func (e *ActionExecutor) StreamK8sPodLogs(ctx context.Context, namespace, podNam
 	}
 	return e.kubernetesExecutor.StreamPodLogs(ctx, namespace, podName, containerName, tailLines, w)
 }
+
+// KubernetesExecutor returns the underlying KubernetesExecutor (may be nil).
+func (e *ActionExecutor) KubernetesExecutor() *KubernetesExecutor {
+	return e.kubernetesExecutor
+}

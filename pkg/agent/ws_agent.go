@@ -85,6 +85,7 @@ type WSAgent struct {
 	lastGraph      *output.GraphOutput
 	lastGraphMu    sync.RWMutex
 	execSessions   sync.Map // sessionID → *execSession
+	pfSessions     sync.Map // key (ns/pod:local) → *actions.PortForwardSession
 }
 
 // NewWSAgent creates a new WebSocket agent.
@@ -586,6 +587,14 @@ func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage)
 		a.handleK8sPodLogs(ctx, req.ActionID, req.Target.Namespace, req.Target.EntityID, req.Parameters)
 		return
 	}
+	if req.Type == "k8s_port_forward" {
+		a.handlePortForward(ctx, req.ActionID, req.Target.Namespace, req.Target.EntityID, req.Parameters)
+		return
+	}
+	if req.Type == "k8s_stop_port_forward" {
+		a.handleStopPortForward(req.ActionID, req.Parameters)
+		return
+	}
 
 	if a.actionExecutor == nil {
 		a.sendActionResult(req.ActionID, false, "Action executor not available", "executor init failed", nil)
@@ -732,6 +741,57 @@ func (a *WSAgent) handleK8sPodLogs(ctx context.Context, requestID, namespace, ra
 		return
 	}
 	a.sendLogData(requestID, rawPodName, lines, "", true)
+}
+
+func (a *WSAgent) handlePortForward(ctx context.Context, requestID, namespace, rawPodName string, params map[string]string) {
+	if a.actionExecutor == nil {
+		a.sendActionResult(requestID, false, "Action executor not available", "executor init failed", nil)
+		return
+	}
+	ke := a.actionExecutor.KubernetesExecutor()
+	if ke == nil {
+		a.sendActionResult(requestID, false, "Kubernetes not available", "no k8s executor", nil)
+		return
+	}
+	podName := normalizeEntityID(rawPodName)
+	if namespace == "" {
+		namespace = "default"
+	}
+	localPort := atoi(params["local_port"])
+	remotePort := atoi(params["remote_port"])
+	if remotePort == 0 {
+		a.sendActionResult(requestID, false, "remote_port is required", "", nil)
+		return
+	}
+	sess, chosenPort, err := ke.StartPortForward(ctx, namespace, podName, localPort, remotePort)
+	if err != nil {
+		a.sendActionResult(requestID, false, fmt.Sprintf("Port-forward failed: %s", err), err.Error(), nil)
+		return
+	}
+	key := fmt.Sprintf("%s/%s:%d", namespace, podName, remotePort)
+	a.pfSessions.Store(key, sess)
+	a.sendActionResult(requestID, true, fmt.Sprintf("Port-forward active: localhost:%d → %s/%s:%d", chosenPort, namespace, podName, remotePort), "", map[string]interface{}{
+		"local_port":  chosenPort,
+		"remote_port": remotePort,
+		"pod":         podName,
+		"namespace":   namespace,
+		"key":         key,
+	})
+}
+
+func (a *WSAgent) handleStopPortForward(requestID string, params map[string]string) {
+	key := params["key"]
+	if key == "" {
+		a.sendActionResult(requestID, false, "key parameter is required", "", nil)
+		return
+	}
+	val, ok := a.pfSessions.LoadAndDelete(key)
+	if !ok {
+		a.sendActionResult(requestID, false, fmt.Sprintf("No active port-forward for key %s", key), "", nil)
+		return
+	}
+	actions.StopPortForward(val.(*actions.PortForwardSession))
+	a.sendActionResult(requestID, true, fmt.Sprintf("Port-forward %s stopped", key), "", nil)
 }
 
 func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, errMsg string, done bool) {
@@ -1081,6 +1141,25 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 		return actions.ActionK8sUnCordonNode, "kubernetes"
 	case "k8s_drain_node":
 		return actions.ActionK8sDrainNode, "kubernetes"
+	// K8s configmap / secret
+	case "k8s_get_configmap":
+		return actions.ActionK8sGetConfigMap, "kubernetes"
+	case "k8s_update_configmap":
+		return actions.ActionK8sUpdateConfigMap, "kubernetes"
+	case "k8s_get_secret":
+		return actions.ActionK8sGetSecret, "kubernetes"
+	case "k8s_update_secret":
+		return actions.ActionK8sUpdateSecret, "kubernetes"
+	// K8s apply / generic delete
+	case "k8s_apply_manifest":
+		return actions.ActionK8sApplyManifest, "kubernetes"
+	case "k8s_delete_resource":
+		return actions.ActionK8sDeleteResource, "kubernetes"
+	// K8s port-forward
+	case "k8s_port_forward":
+		return actions.ActionK8sPortForward, "kubernetes"
+	case "k8s_stop_port_forward":
+		return actions.ActionK8sStopPortForward, "kubernetes"
 	// Host
 	case "update_agent":
 		return actions.ActionUpdateAgent, "host"
