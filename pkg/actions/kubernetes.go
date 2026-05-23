@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,93 +75,43 @@ func getKubeConfig() (*rest.Config, error) {
 
 // ValidateAction validates a Kubernetes action
 func (k *KubernetesExecutor) ValidateAction(action *Action) error {
-	if action.Target.Namespace == "" {
-		return fmt.Errorf("namespace is required for Kubernetes actions")
+	if action.Target.EntityID == "" {
+		return fmt.Errorf("entity ID is required")
 	}
-
-	switch action.Type {
-	case ActionScaleDeployment:
-		if action.Target.EntityID == "" {
-			return fmt.Errorf("deployment name is required")
-		}
-		if _, ok := action.Parameters["replicas"]; !ok {
-			return fmt.Errorf("replicas parameter is required for scaling")
-		}
-		return k.validateDeploymentExists(action.Target.Namespace, action.Target.EntityID)
-
-	case ActionScaleStatefulSet:
-		if action.Target.EntityID == "" {
-			return fmt.Errorf("statefulset name is required")
-		}
-		if _, ok := action.Parameters["replicas"]; !ok {
-			return fmt.Errorf("replicas parameter is required for scaling")
-		}
-		return k.validateStatefulSetExists(action.Target.Namespace, action.Target.EntityID)
-
-	case ActionRestartPod:
-		if action.Target.EntityID == "" {
-			return fmt.Errorf("pod name is required")
-		}
-		return k.validatePodExists(action.Target.Namespace, action.Target.EntityID)
-
-	default:
-		return fmt.Errorf("unsupported kubernetes action type: %s", action.Type)
-	}
-}
-
-// validateDeploymentExists checks if a deployment exists
-func (k *KubernetesExecutor) validateDeploymentExists(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := k.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("deployment %s not found in namespace %s: %w", name, namespace, err)
-	}
-
 	return nil
 }
 
-// validateStatefulSetExists checks if a statefulset exists
-func (k *KubernetesExecutor) validateStatefulSetExists(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := k.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("statefulset %s not found in namespace %s: %w", name, namespace, err)
-	}
-
-	return nil
-}
-
-// validatePodExists checks if a pod exists
-func (k *KubernetesExecutor) validatePodExists(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := k.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("pod %s not found in namespace %s: %w", name, namespace, err)
-	}
-
-	return nil
-}
 
 // ExecuteAction executes a Kubernetes action
 func (k *KubernetesExecutor) ExecuteAction(ctx context.Context, action *Action) (*ActionResult, error) {
 	startTime := time.Now()
+	ns := action.Target.Namespace
+	if ns == "" {
+		ns = "default"
+	}
+	name := action.Target.EntityID
 
 	switch action.Type {
-	case ActionScaleDeployment:
-		return k.scaleDeployment(ctx, action.Target.Namespace, action.Target.EntityID, action.Parameters["replicas"], startTime)
-
-	case ActionScaleStatefulSet:
-		return k.scaleStatefulSet(ctx, action.Target.Namespace, action.Target.EntityID, action.Parameters["replicas"], startTime)
-
+	case ActionScaleDeployment, ActionK8sScaleDeployment:
+		return k.scaleDeployment(ctx, ns, name, action.Parameters["replicas"], startTime)
+	case ActionScaleStatefulSet, ActionK8sScaleStatefulSet:
+		return k.scaleStatefulSet(ctx, ns, name, action.Parameters["replicas"], startTime)
 	case ActionRestartPod:
-		return k.restartPod(ctx, action.Target.Namespace, action.Target.EntityID, startTime)
-
+		return k.deletePod(ctx, ns, name, startTime)
+	case ActionK8sDeletePod:
+		return k.deletePod(ctx, ns, name, startTime)
+	case ActionK8sDeleteJob:
+		return k.deleteJob(ctx, ns, name, startTime)
+	case ActionK8sDeleteDeployment:
+		return k.deleteDeployment(ctx, ns, name, startTime)
+	case ActionK8sDeleteService:
+		return k.deleteService(ctx, ns, name, startTime)
+	case ActionK8sCordonNode:
+		return k.cordonNode(ctx, name, true, startTime)
+	case ActionK8sUnCordonNode:
+		return k.cordonNode(ctx, name, false, startTime)
+	case ActionK8sDrainNode:
+		return k.drainNode(ctx, name, startTime)
 	default:
 		return &ActionResult{
 			Success:   false,
@@ -169,6 +121,110 @@ func (k *KubernetesExecutor) ExecuteAction(ctx context.Context, action *Action) 
 			EndTime:   time.Now(),
 		}, fmt.Errorf("unsupported kubernetes action type: %s", action.Type)
 	}
+}
+
+// deletePod deletes a pod (it will be recreated by its controller).
+func (k *KubernetesExecutor) deletePod(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
+	err := k.clientset.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete pod %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Pod %s deleted (will be recreated by controller)", name), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// deleteJob deletes a Kubernetes Job and its pods.
+func (k *KubernetesExecutor) deleteJob(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
+	propagation := metav1.DeletePropagationForeground
+	err := k.clientset.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete job %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Job %s deleted", name), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// deleteDeployment deletes a Kubernetes Deployment and its pods.
+func (k *KubernetesExecutor) deleteDeployment(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
+	propagation := metav1.DeletePropagationForeground
+	err := k.clientset.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete deployment %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Deployment %s deleted", name), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// deleteService deletes a Kubernetes Service.
+func (k *KubernetesExecutor) deleteService(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
+	err := k.clientset.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete service %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Service %s deleted", name), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// cordonNode marks a node schedulable (false) or unschedulable (true).
+func (k *KubernetesExecutor) cordonNode(ctx context.Context, name string, unschedulable bool, startTime time.Time) (*ActionResult, error) {
+	node, err := k.clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to get node %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	node.Spec.Unschedulable = unschedulable
+	_, err = k.clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to update node %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	action := "cordoned"
+	if !unschedulable {
+		action = "uncordoned"
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Node %s %s", name, action), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// drainNode cordons a node then evicts all non-DaemonSet pods.
+func (k *KubernetesExecutor) drainNode(ctx context.Context, name string, startTime time.Time) (*ActionResult, error) {
+	// Cordon first
+	if _, err := k.cordonNode(ctx, name, true, startTime); err != nil {
+		return &ActionResult{Success: false, Message: "Drain failed: could not cordon node", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	// List pods on this node
+	pods, err := k.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", name).String(),
+	})
+	if err != nil {
+		return &ActionResult{Success: false, Message: "Drain failed: could not list pods", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	evicted := 0
+	skipped := 0
+	for _, pod := range pods.Items {
+		// Skip DaemonSet pods (they can't be evicted meaningfully)
+		isDaemonSet := false
+		for _, ref := range pod.OwnerReferences {
+			if ref.Kind == "DaemonSet" {
+				isDaemonSet = true
+				break
+			}
+		}
+		if isDaemonSet {
+			skipped++
+			continue
+		}
+		eviction := &policyv1.Eviction{
+			ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace},
+		}
+		if err := k.clientset.CoreV1().Pods(pod.Namespace).EvictV1(ctx, eviction); err != nil {
+			// Best-effort: log but continue
+			skipped++
+			continue
+		}
+		evicted++
+	}
+
+	return &ActionResult{
+		Success: true,
+		Message: fmt.Sprintf("Node %s drained: %d pods evicted, %d skipped (DaemonSet or error)", name, evicted, skipped),
+		StartTime: startTime, EndTime: time.Now(),
+	}, nil
 }
 
 // scaleDeployment scales a Kubernetes deployment
@@ -265,24 +321,3 @@ func (k *KubernetesExecutor) scaleStatefulSet(ctx context.Context, namespace, na
 	}, nil
 }
 
-// restartPod restarts a Kubernetes pod by deleting it
-func (k *KubernetesExecutor) restartPod(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
-	// Delete the pod - it will be recreated by its controller
-	err := k.clientset.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
-		return &ActionResult{
-			Success:   false,
-			Message:   fmt.Sprintf("Failed to restart pod %s", name),
-			Error:     err.Error(),
-			StartTime: startTime,
-			EndTime:   time.Now(),
-		}, err
-	}
-
-	return &ActionResult{
-		Success:   true,
-		Message:   fmt.Sprintf("Successfully restarted pod %s (deleted for recreation)", name),
-		StartTime: startTime,
-		EndTime:   time.Now(),
-	}, nil
-}

@@ -22,11 +22,16 @@ const (
 	ActionDockerLogs       ActionType = "docker_logs"
 	ActionDockerExec       ActionType = "docker_exec"
 
+	// Docker extended actions
+	ActionDockerUpdateImage  ActionType = "docker_update_image"
+	ActionDockerPullImage    ActionType = "docker_pull_image"
+	ActionDockerRemoveImage  ActionType = "docker_remove_image"
+
 	// Kubernetes actions
 	ActionScaleDeployment    ActionType = "scale_deployment"
 	ActionScaleStatefulSet   ActionType = "scale_statefulset"
 	ActionRestartPod         ActionType = "restart_pod"
-	ActionK8sUpdateImage     ActionType = "k8s_update_image"      // ⭐ Main use case
+	ActionK8sUpdateImage     ActionType = "k8s_update_image"
 	ActionK8sRolloutRestart  ActionType = "k8s_rollout_restart"
 	ActionK8sRolloutUndo     ActionType = "k8s_rollout_undo"
 	ActionK8sRolloutStatus   ActionType = "k8s_rollout_status"
@@ -34,6 +39,15 @@ const (
 	ActionK8sExec            ActionType = "k8s_exec"
 	ActionK8sApplyManifest   ActionType = "k8s_apply_manifest"
 	ActionK8sDeleteResource  ActionType = "k8s_delete_resource"
+	ActionK8sDeletePod       ActionType = "k8s_delete_pod"
+	ActionK8sDeleteJob       ActionType = "k8s_delete_job"
+	ActionK8sDeleteDeployment ActionType = "k8s_delete_deployment"
+	ActionK8sDeleteService   ActionType = "k8s_delete_service"
+	ActionK8sCordonNode      ActionType = "k8s_cordon_node"
+	ActionK8sUnCordonNode    ActionType = "k8s_uncordon_node"
+	ActionK8sDrainNode       ActionType = "k8s_drain_node"
+	ActionK8sScaleDeployment ActionType = "k8s_scale_deployment"
+	ActionK8sScaleStatefulSet ActionType = "k8s_scale_statefulset"
 
 	// Batch operations
 	ActionBatchUpdateImage  ActionType = "batch_update_image"   // ⭐ Multi-VM image update
