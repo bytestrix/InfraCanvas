@@ -67,10 +67,11 @@ type GraphDiff struct {
 }
 
 // execSession holds state for an active interactive exec session.
-// Exactly one of dockerSess or ptmx will be non-nil.
+// Exactly one of dockerSess, ptmx, or k8sSess will be non-nil.
 type execSession struct {
-	dockerSess *actions.ExecSession // Docker exec (container terminal)
-	ptmx       *os.File             // host PTY (VM terminal)
+	dockerSess *actions.ExecSession   // Docker exec (container terminal)
+	ptmx       *os.File               // host PTY (VM terminal)
+	k8sSess    *actions.K8sExecSession // Kubernetes pod exec
 	cancel     context.CancelFunc
 }
 
@@ -576,9 +577,13 @@ func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage)
 	log.Printf("[action] %s on %s/%s (layer=%s)", req.Type, req.Target.Namespace, req.Target.EntityID, req.Target.Layer)
 	a.sendActionProgress(req.ActionID, "in_progress", 10, "Starting…")
 
-	// Special case: docker logs streaming
+	// Special case: streaming log handlers
 	if req.Type == "docker_logs" {
 		a.handleDockerLogs(ctx, req.ActionID, req.Target.EntityID, req.Parameters)
+		return
+	}
+	if req.Type == "k8s_logs" {
+		a.handleK8sPodLogs(ctx, req.ActionID, req.Target.Namespace, req.Target.EntityID, req.Parameters)
 		return
 	}
 
@@ -681,6 +686,54 @@ func (a *WSAgent) handleDockerLogs(ctx context.Context, requestID, rawEntityID s
 	a.sendLogData(requestID, rawEntityID, lines, "", true)
 }
 
+// handleK8sPodLogs fetches pod logs and streams them back as LOG_DATA.
+func (a *WSAgent) handleK8sPodLogs(ctx context.Context, requestID, namespace, rawPodName string, params map[string]string) {
+	if a.actionExecutor == nil {
+		a.sendLogData(requestID, rawPodName, nil, "action executor not available", true)
+		return
+	}
+
+	podName := normalizeEntityID(rawPodName)
+	if namespace == "" {
+		namespace = "default"
+	}
+	containerName := params["container"]
+	tail := int64(200)
+	if t, ok := params["tail"]; ok {
+		if n := atoi(t); n > 0 {
+			tail = int64(n)
+		}
+	}
+
+	logCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	pr, pw := io.Pipe()
+	go func() {
+		err := a.actionExecutor.StreamK8sPodLogs(logCtx, namespace, podName, containerName, tail, pw)
+		if err != nil {
+			pw.CloseWithError(err)
+		} else {
+			pw.Close()
+		}
+	}()
+
+	var lines []string
+	scanner := bufio.NewScanner(pr)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) >= 50 {
+			a.sendLogData(requestID, rawPodName, lines, "", false)
+			lines = lines[:0]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		a.sendLogData(requestID, rawPodName, lines, err.Error(), true)
+		return
+	}
+	a.sendLogData(requestID, rawPodName, lines, "", true)
+}
+
 func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, errMsg string, done bool) {
 	payload := map[string]interface{}{
 		"request_id":   requestID,
@@ -698,12 +751,16 @@ func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, err
 
 // handleExecStart creates an interactive terminal session.
 // For layer "host" it spawns a PTY shell on the VM itself.
+// For layer "kubernetes" it opens a pod exec via SPDY.
 // For layer "docker" (or empty) it runs docker exec inside the container.
 func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 	var req struct {
 		SessionID   string   `json:"session_id"`
-		ContainerID string   `json:"container_id"` // only for docker layer
-		Layer       string   `json:"layer"`         // "host" or "docker"
+		ContainerID string   `json:"container_id"` // docker layer
+		Namespace   string   `json:"namespace"`    // kubernetes layer
+		PodName     string   `json:"pod_name"`     // kubernetes layer
+		Container   string   `json:"container"`    // kubernetes layer (optional)
+		Layer       string   `json:"layer"`         // "host", "docker", or "kubernetes"
 		Cmd         []string `json:"cmd"`
 		Rows        uint     `json:"rows"`
 		Cols        uint     `json:"cols"`
@@ -724,9 +781,15 @@ func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 
 	execCtx, cancel := context.WithCancel(ctx)
 
-	if req.Layer == "host" {
+	switch req.Layer {
+	case "host":
 		a.startHostExec(execCtx, cancel, req.SessionID, req.Cmd, req.Rows, req.Cols)
-	} else {
+	case "kubernetes":
+		if req.Namespace == "" {
+			req.Namespace = "default"
+		}
+		a.startK8sExec(execCtx, cancel, req.SessionID, req.Namespace, req.PodName, req.Container, req.Cmd)
+	default:
 		a.startDockerExec(execCtx, cancel, req.SessionID, req.ContainerID, req.Cmd, req.Rows, req.Cols)
 	}
 }
@@ -836,6 +899,48 @@ func (a *WSAgent) startDockerExec(ctx context.Context, cancel context.CancelFunc
 	}()
 }
 
+// startK8sExec opens an exec session inside a Kubernetes pod.
+func (a *WSAgent) startK8sExec(ctx context.Context, cancel context.CancelFunc, sessionID, namespace, podName, containerName string, cmd []string) {
+	if a.actionExecutor == nil {
+		cancel()
+		a.sendExecData(sessionID, nil, "action executor not available")
+		return
+	}
+
+	// pipeWriter streams pod output back to the browser
+	pr, pw := io.Pipe()
+
+	sess, err := a.actionExecutor.KubernetesExec(ctx, namespace, normalizeEntityID(podName), containerName, cmd, pw)
+	if err != nil {
+		cancel()
+		pw.Close()
+		pr.Close()
+		a.sendExecData(sessionID, nil, fmt.Sprintf("pod exec failed: %v", err))
+		return
+	}
+
+	a.execSessions.Store(sessionID, &execSession{k8sSess: sess, cancel: cancel})
+
+	go func() {
+		defer func() {
+			pw.Close()
+			pr.Close()
+			a.execSessions.Delete(sessionID)
+			a.sendExecEnd(sessionID)
+		}()
+		buf := make([]byte, 4096)
+		for {
+			n, err := pr.Read(buf)
+			if n > 0 {
+				a.sendExecData(sessionID, buf[:n], "")
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+}
+
 func (a *WSAgent) handleExecInput(data json.RawMessage) {
 	var req struct {
 		SessionID string `json:"session_id"`
@@ -857,6 +962,8 @@ func (a *WSAgent) handleExecInput(data json.RawMessage) {
 		_, _ = es.ptmx.Write(decoded)
 	} else if es.dockerSess != nil {
 		_, _ = es.dockerSess.Attach.Conn.Write(decoded)
+	} else if es.k8sSess != nil {
+		_, _ = es.k8sSess.Write(decoded)
 	}
 }
 
@@ -900,6 +1007,8 @@ func (a *WSAgent) handleExecEnd(data json.RawMessage) {
 		es.ptmx.Close()
 	} else if es.dockerSess != nil {
 		es.dockerSess.Attach.Close()
+	} else if es.k8sSess != nil {
+		es.k8sSess.Close()
 	}
 	a.execSessions.Delete(req.SessionID)
 }

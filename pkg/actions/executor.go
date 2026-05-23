@@ -232,3 +232,19 @@ func (e *ActionExecutor) DockerExecResize(ctx context.Context, execID string, ro
 	}
 	return e.dockerExecutor.ExecResize(ctx, execID, rows, cols)
 }
+
+// KubernetesExec opens an interactive shell inside a pod.
+func (e *ActionExecutor) KubernetesExec(ctx context.Context, namespace, podName, containerName string, cmd []string, out io.Writer) (*K8sExecSession, error) {
+	if e.kubernetesExecutor == nil {
+		return nil, fmt.Errorf("kubernetes is not available")
+	}
+	return e.kubernetesExecutor.ExecInPod(ctx, namespace, podName, containerName, cmd, out)
+}
+
+// StreamK8sPodLogs streams pod logs into writer.
+func (e *ActionExecutor) StreamK8sPodLogs(ctx context.Context, namespace, podName, containerName string, tailLines int64, w io.Writer) error {
+	if e.kubernetesExecutor == nil {
+		return fmt.Errorf("kubernetes is not available")
+	}
+	return e.kubernetesExecutor.StreamPodLogs(ctx, namespace, podName, containerName, tailLines, w)
+}

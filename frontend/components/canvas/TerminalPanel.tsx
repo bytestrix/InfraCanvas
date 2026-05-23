@@ -15,7 +15,7 @@ import type { GraphNode } from '@/types'
 interface TerminalPanelProps {
   node: GraphNode
   vmCode: string
-  layer?: 'docker' | 'host'
+  layer?: 'docker' | 'host' | 'kubernetes'
   onClose: () => void
 }
 
@@ -124,7 +124,12 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       })
 
       const shellCmd = layer === 'host' ? ['/bin/bash'] : ['/bin/sh']
-      sendExecStart(vmCode, sid, containerID, shellCmd, term.rows, term.cols, layer)
+      const k8sParams = layer === 'kubernetes' ? {
+        namespace: (node.metadata?.namespace as string) || 'default',
+        pod_name: node.label,
+        container: '',
+      } : undefined
+      sendExecStart(vmCode, sid, containerID, shellCmd, term.rows, term.cols, layer, k8sParams)
       setStatus('connected')
 
       ro = new ResizeObserver(() => {
@@ -172,7 +177,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', fontFamily: MONO }}>TERMINAL</span>
           <span style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: MONO }}>{node.label}</span>
           <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--line)', color: 'var(--ink2)', border: '1px solid var(--line2)', fontFamily: MONO }}>
-            {layer === 'host' ? 'VM shell' : 'container exec'}
+            {layer === 'host' ? 'VM shell' : layer === 'kubernetes' ? 'pod exec' : 'container exec'}
           </span>
           {status === 'connecting' && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--ink3)', fontFamily: MONO }}>
