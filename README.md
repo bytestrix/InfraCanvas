@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/logo.png" alt="InfraCanvas" width="180" />
-</p>
-
 <h1 align="center">InfraCanvas</h1>
 
 <p align="center"><strong>A live, visual map of everything running on a server — installed with one command.</strong></p>
@@ -10,6 +6,10 @@
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go 1.21+"></a>
+</p>
+
+<p align="center">
+  <img src="docs/demo.gif" alt="InfraCanvas demo" width="960" />
 </p>
 
 ---
