@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import {
-  X, RotateCw, Square, Play, Tag, Layers, Trash2,
+  X, RotateCw, Square, Play, Tag, Layers, Trash2, Undo2,
   CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight,
-  AlertTriangle, FileText, Terminal, Eye, EyeOff,
+  AlertTriangle, FileText, Terminal, Eye, EyeOff, Download,
+  ShieldOff, Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { type GraphNode } from '@/types'
@@ -40,76 +41,104 @@ interface ActionDef {
 
 // ─── Action registry ─────────────────────────────────────────────────────────
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function k8sTarget(entityType: string, n: any, namespace?: string) {
+  return { layer: 'kubernetes', entity_type: entityType, entity_id: n.metadata?.name ?? n.id, namespace: namespace ?? n.metadata?.namespace ?? 'default' }
+}
+function dockerTarget(n: any) {
+  return { layer: 'docker', entity_type: 'container', entity_id: n.id }
+}
+function nodeTarget(n: any) {
+  return { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata?.name ?? n.id }
+}
+
 const ACTIONS: Record<string, ActionDef[]> = {
   container: [
-    {
-      id: 'restart', label: 'Restart', Icon: RotateCw, confirm: true,
-      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'docker_restart_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
-    },
-    {
-      id: 'stop', label: 'Stop', Icon: Square, confirm: true,
-      buildPayload: (n) => ({ action_id: `stop-${Date.now()}`, type: 'docker_stop_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
-    },
-    {
-      id: 'start', label: 'Start', Icon: Play, confirm: true,
-      buildPayload: (n) => ({ action_id: `start-${Date.now()}`, type: 'docker_start_container', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: {} }),
-    },
-    {
-      id: 'update_image', label: 'Update Image', Icon: Tag,
-      form: [
-        { key: 'image', label: 'New Image:Tag', placeholder: 'nginx:1.25', defaultValue: (n) => n.metadata.image ?? '' },
-      ],
-      buildPayload: (n, v) => ({ action_id: `update-img-${Date.now()}`, type: 'docker_update_container_image', target: { layer: 'docker', entity_type: 'container', entity_id: n.id }, parameters: { image: v.image } }),
-    },
+    { id: 'restart', label: 'Restart', Icon: RotateCw, confirm: true,
+      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'docker_restart_container', target: dockerTarget(n), parameters: {} }) },
+    { id: 'stop', label: 'Stop', Icon: Square, confirm: true,
+      buildPayload: (n) => ({ action_id: `stop-${Date.now()}`, type: 'docker_stop_container', target: dockerTarget(n), parameters: {} }) },
+    { id: 'start', label: 'Start', Icon: Play,
+      buildPayload: (n) => ({ action_id: `start-${Date.now()}`, type: 'docker_start_container', target: dockerTarget(n), parameters: {} }) },
+    { id: 'update_image', label: 'Update Image', Icon: Tag,
+      form: [{ key: 'image', label: 'New Image:Tag', placeholder: 'nginx:1.25', defaultValue: (n) => n.metadata?.image ?? '' }],
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'docker_update_container_image', target: dockerTarget(n), parameters: { image: v.image } }) },
   ],
   image: [
-    {
-      id: 'change_tag', label: 'Change Tag', Icon: Tag,
-      form: [
-        { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:newtag', defaultValue: (n) => n.metadata.repository && n.metadata.tag ? `${n.metadata.repository}:${n.metadata.tag}` : n.label },
-      ],
-      buildPayload: (n, v) => ({ action_id: `pull-${Date.now()}`, type: 'docker_pull_image', target: { layer: 'docker', entity_type: 'image', entity_id: n.id }, parameters: { image: v.image } }),
-    },
+    { id: 'pull', label: 'Pull / Re-pull', Icon: Download,
+      form: [{ key: 'image', label: 'Image:Tag', placeholder: 'nginx:latest', defaultValue: (n) => n.label }],
+      buildPayload: (n, v) => ({ action_id: `pull-${Date.now()}`, type: 'docker_pull_image', target: { layer: 'docker', entity_type: 'image', entity_id: n.id }, parameters: { image: v.image } }) },
+    { id: 'remove', label: 'Remove Image', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `rmimg-${Date.now()}`, type: 'docker_remove_image', target: { layer: 'docker', entity_type: 'image', entity_id: n.id }, parameters: {} }) },
   ],
   deployment: [
-    { id: 'scale', label: 'Scale', Icon: Layers, form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
-    {
-      id: 'update_image', label: 'Update Image', Icon: Tag,
+    { id: 'scale', label: 'Scale', Icon: Layers,
+      form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata?.replicas ?? '1') }],
+      buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_deployment', target: k8sTarget('deployment', n), parameters: { replicas: v.replicas } }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true,
+      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: k8sTarget('deployment', n), parameters: {} }) },
+    { id: 'rollback', label: 'Rollback', Icon: Undo2, confirm: true,
+      buildPayload: (n) => ({ action_id: `undo-${Date.now()}`, type: 'k8s_rollout_undo', target: k8sTarget('deployment', n), parameters: {} }) },
+    { id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [
-        {
-          key: 'container', label: 'Container', type: 'select',
-          defaultValue: (n) => (n.metadata.containers?.[0]?.name ?? ''),
-          options: (n) => (n.metadata.containers ?? []).map((c: any) => ({
-            value: c.name,
-            label: `${c.name}  —  ${c.image}`,
-            prefill: { image: c.image },
-          })),
-        },
-        {
-          key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0',
-          defaultValue: (n) => (n.metadata.containers?.[0]?.image ?? ''),
-        },
+        { key: 'container', label: 'Container', type: 'select',
+          defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+        { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
       ],
-      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: { layer: 'kubernetes', entity_type: 'deployment', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { image: v.image, container: v.container } }),
-    },
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('deployment', n), parameters: { image: v.image, container: v.container } }) },
+    { id: 'delete', label: 'Delete Deployment', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_deployment', target: k8sTarget('deployment', n), parameters: {} }) },
   ],
   statefulset: [
-    { id: 'scale', label: 'Scale', Icon: Layers, form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata.replicas ?? '1') }], buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: { replicas: parseInt(v.replicas, 10) } }) },
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_statefulset', target: { layer: 'kubernetes', entity_type: 'statefulset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'scale', label: 'Scale', Icon: Layers,
+      form: [{ key: 'replicas', label: 'Replicas', placeholder: '3', type: 'number', defaultValue: (n) => String(n.metadata?.replicas ?? '1') }],
+      buildPayload: (n, v) => ({ action_id: `scale-${Date.now()}`, type: 'k8s_scale_statefulset', target: k8sTarget('statefulset', n), parameters: { replicas: v.replicas } }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true,
+      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_statefulset', target: k8sTarget('statefulset', n), parameters: {} }) },
+    { id: 'rollback', label: 'Rollback', Icon: Undo2, confirm: true,
+      buildPayload: (n) => ({ action_id: `undo-${Date.now()}`, type: 'k8s_rollout_undo', target: k8sTarget('statefulset', n), parameters: {} }) },
+    { id: 'update_image', label: 'Update Image', Icon: Tag,
+      form: [
+        { key: 'container', label: 'Container', type: 'select',
+          defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+        { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('statefulset', n), parameters: { image: v.image, container: v.container } }) },
   ],
   daemonset: [
-    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true, buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_daemonset', target: { layer: 'kubernetes', entity_type: 'daemonset', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true,
+      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_daemonset', target: k8sTarget('daemonset', n), parameters: {} }) },
+    { id: 'update_image', label: 'Update Image', Icon: Tag,
+      form: [
+        { key: 'container', label: 'Container', type: 'select',
+          defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+        { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('daemonset', n), parameters: { image: v.image, container: v.container } }) },
   ],
   pod: [
-    { id: 'delete', label: 'Delete / Restart', Icon: Trash2, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_pod', target: { layer: 'kubernetes', entity_type: 'pod', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'delete', label: 'Delete / Restart', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_pod', target: k8sTarget('pod', n), parameters: {} }) },
   ],
   node: [
-    { id: 'cordon', label: 'Cordon', Icon: Square, confirm: true, buildPayload: (n) => ({ action_id: `cordon-${Date.now()}`, type: 'k8s_cordon_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: {} }) },
-    { id: 'drain', label: 'Drain', Icon: Layers, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `drain-${Date.now()}`, type: 'k8s_drain_node', target: { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata.name ?? n.id }, parameters: { ignore_daemonsets: 'true', delete_emptydir_data: 'true' } }) },
+    { id: 'cordon', label: 'Cordon', Icon: ShieldOff, confirm: true,
+      buildPayload: (n) => ({ action_id: `cordon-${Date.now()}`, type: 'k8s_cordon_node', target: nodeTarget(n), parameters: {} }) },
+    { id: 'uncordon', label: 'Uncordon', Icon: Shield,
+      buildPayload: (n) => ({ action_id: `uncordon-${Date.now()}`, type: 'k8s_uncordon_node', target: nodeTarget(n), parameters: {} }) },
+    { id: 'drain', label: 'Drain', Icon: Layers, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `drain-${Date.now()}`, type: 'k8s_drain_node', target: nodeTarget(n), parameters: {} }) },
   ],
   job: [
-    { id: 'delete', label: 'Delete Job', Icon: Trash2, danger: true, confirm: true, buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_job', target: { layer: 'kubernetes', entity_type: 'job', entity_id: n.metadata.name ?? n.id, namespace: n.metadata.namespace ?? 'default' }, parameters: {} }) },
+    { id: 'delete', label: 'Delete Job', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_job', target: k8sTarget('job', n), parameters: {} }) },
+  ],
+  k8s_service: [
+    { id: 'delete', label: 'Delete Service', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_service', target: k8sTarget('service', n), parameters: {} }) },
   ],
 }
 

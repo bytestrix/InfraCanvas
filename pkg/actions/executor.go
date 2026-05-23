@@ -105,60 +105,31 @@ func (e *ActionExecutor) ExecuteAction(ctx context.Context, action *Action) (*Ac
 
 	// Handle Kubernetes advanced actions first (before validation)
 	if action.Target.Layer == "kubernetes" && e.kubernetesExecutor != nil {
+		ns := action.Target.Namespace
+		if ns == "" {
+			ns = "default"
+		}
+		name := action.Target.EntityID
+
 		switch action.Type {
 		case ActionK8sUpdateImage:
-			namespace := action.Target.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-			deploymentName := action.Target.EntityID
-			containerName := action.Parameters["container"]
 			newImage := action.Parameters["image"]
-			
 			if newImage == "" {
-				return &ActionResult{
-					Success:   false,
-					Message:   "Image parameter is required",
-					StartTime: startTime,
-					EndTime:   time.Now(),
-				}, fmt.Errorf("image parameter is required")
+				return &ActionResult{Success: false, Message: "Image parameter is required", StartTime: startTime, EndTime: time.Now()}, fmt.Errorf("image parameter is required")
 			}
-			
-			return e.kubernetesExecutor.UpdateDeploymentImage(ctx, namespace, deploymentName, containerName, newImage)
-			
+			return e.kubernetesExecutor.UpdateDeploymentImage(ctx, ns, name, action.Parameters["container"], newImage)
+
 		case ActionK8sRolloutRestart:
-			namespace := action.Target.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-			deploymentName := action.Target.EntityID
-			return e.kubernetesExecutor.RolloutRestart(ctx, namespace, deploymentName)
-			
+			return e.kubernetesExecutor.RolloutRestart(ctx, ns, name)
+
 		case ActionK8sRolloutUndo:
-			namespace := action.Target.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-			deploymentName := action.Target.EntityID
-			return e.kubernetesExecutor.RolloutUndo(ctx, namespace, deploymentName, 0)
-			
+			return e.kubernetesExecutor.RolloutUndo(ctx, ns, name, 0)
+
 		case ActionK8sRolloutStatus:
-			namespace := action.Target.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-			deploymentName := action.Target.EntityID
-			return e.kubernetesExecutor.GetRolloutStatus(ctx, namespace, deploymentName)
-			
+			return e.kubernetesExecutor.GetRolloutStatus(ctx, ns, name)
+
 		case ActionK8sGetLogs:
-			namespace := action.Target.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-			podName := action.Target.EntityID
-			containerName := action.Parameters["container"]
-			tailLines := int64(100) // default
-			return e.kubernetesExecutor.GetPodLogs(ctx, namespace, podName, containerName, tailLines)
+			return e.kubernetesExecutor.GetPodLogs(ctx, ns, name, action.Parameters["container"], 100)
 		}
 	}
 

@@ -9,6 +9,9 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
 
@@ -34,46 +37,30 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 
 // ValidateAction validates a Docker action
 func (d *DockerExecutor) ValidateAction(action *Action) error {
-	switch action.Type {
-	case ActionRestartContainer, ActionStopContainer, ActionStartContainer:
-		if action.Target.EntityID == "" {
-			return fmt.Errorf("container ID or name is required")
-		}
-		// Check if container exists
-		return d.validateContainerExists(action.Target.EntityID)
-
-	default:
-		return fmt.Errorf("unsupported docker action type: %s", action.Type)
+	if action.Target.EntityID == "" {
+		return fmt.Errorf("entity ID is required")
 	}
-}
-
-// validateContainerExists checks if a container exists
-func (d *DockerExecutor) validateContainerExists(containerID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := d.client.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return fmt.Errorf("container %s not found: %w", containerID, err)
-	}
-
 	return nil
 }
 
 // ExecuteAction executes a Docker action
 func (d *DockerExecutor) ExecuteAction(ctx context.Context, action *Action) (*ActionResult, error) {
 	startTime := time.Now()
+	id := action.Target.EntityID
 
 	switch action.Type {
 	case ActionRestartContainer:
-		return d.restartContainer(ctx, action.Target.EntityID, startTime)
-
+		return d.restartContainer(ctx, id, startTime)
 	case ActionStopContainer:
-		return d.stopContainer(ctx, action.Target.EntityID, startTime)
-
+		return d.stopContainer(ctx, id, startTime)
 	case ActionStartContainer:
-		return d.startContainer(ctx, action.Target.EntityID, startTime)
-
+		return d.startContainer(ctx, id, startTime)
+	case ActionDockerUpdateImage:
+		return d.updateContainerImage(ctx, id, action.Parameters["image"], startTime)
+	case ActionDockerPullImage:
+		return d.pullImage(ctx, action.Parameters["image"], startTime)
+	case ActionDockerRemoveImage:
+		return d.removeImage(ctx, id, startTime)
 	default:
 		return &ActionResult{
 			Success:   false,
@@ -200,4 +187,106 @@ func (d *DockerExecutor) ExecResize(ctx context.Context, execID string, rows, co
 		Height: rows,
 		Width:  cols,
 	})
+}
+
+// pullImage pulls a Docker image by reference (e.g. "nginx:1.25").
+func (d *DockerExecutor) pullImage(ctx context.Context, imageRef string, startTime time.Time) (*ActionResult, error) {
+	if imageRef == "" {
+		return &ActionResult{Success: false, Message: "image reference is required", StartTime: startTime, EndTime: time.Now()}, fmt.Errorf("image reference required")
+	}
+	pullCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	reader, err := d.client.ImagePull(pullCtx, imageRef, image.PullOptions{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to pull %s", imageRef), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	defer reader.Close()
+	// Drain the response so the pull completes
+	_, _ = io.Copy(io.Discard, reader)
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Pulled %s", imageRef), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// removeImage removes a Docker image by ID or reference.
+func (d *DockerExecutor) removeImage(ctx context.Context, imageID string, startTime time.Time) (*ActionResult, error) {
+	_, err := d.client.ImageRemove(ctx, imageID, image.RemoveOptions{Force: false, PruneChildren: false})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to remove image %s", imageID), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("Removed image %s", imageID), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// updateContainerImage pulls a new image then recreates the container with the same config.
+func (d *DockerExecutor) updateContainerImage(ctx context.Context, containerID, newImage string, startTime time.Time) (*ActionResult, error) {
+	if newImage == "" {
+		return &ActionResult{Success: false, Message: "new image is required", StartTime: startTime, EndTime: time.Now()}, fmt.Errorf("new image required")
+	}
+
+	// Inspect existing container to clone its config
+	info, err := d.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return &ActionResult{Success: false, Message: "Failed to inspect container", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	// Pull new image
+	if _, err := d.pullImage(ctx, newImage, startTime); err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to pull %s", newImage), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	// Stop old container
+	timeout := 10
+	_ = d.client.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+
+	// Rename old container out of the way
+	oldName := info.Name
+	tmpName := oldName + "_old"
+	_ = d.client.ContainerRename(ctx, containerID, tmpName)
+
+	// Build new config with updated image
+	cfg := info.Config
+	cfg.Image = newImage
+	hostCfg := info.HostConfig
+	networkCfg := &network.NetworkingConfig{EndpointsConfig: info.NetworkSettings.Networks}
+
+	name := oldName
+	if len(name) > 0 && name[0] == '/' {
+		name = name[1:]
+	}
+	resp, err := d.client.ContainerCreate(ctx, cfg, hostCfg, networkCfg, nil, name)
+	if err != nil {
+		// Roll back: rename old container back
+		_ = d.client.ContainerRename(ctx, containerID, oldName)
+		_ = d.client.ContainerStart(ctx, containerID, container.StartOptions{})
+		return &ActionResult{Success: false, Message: "Failed to create updated container (rolled back)", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	if err := d.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		_ = d.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		_ = d.client.ContainerRename(ctx, containerID, oldName)
+		_ = d.client.ContainerStart(ctx, containerID, container.StartOptions{})
+		return &ActionResult{Success: false, Message: "Failed to start updated container (rolled back)", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+
+	// Remove old container
+	_ = d.client.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
+
+	return &ActionResult{
+		Success: true,
+		Message: fmt.Sprintf("Container updated to %s", newImage),
+		Details: map[string]interface{}{"old_image": info.Config.Image, "new_image": newImage, "new_container_id": resp.ID[:12]},
+		StartTime: startTime, EndTime: time.Now(),
+	}, nil
+}
+
+// PruneImages removes unused images.
+func (d *DockerExecutor) PruneImages(ctx context.Context) (*ActionResult, error) {
+	startTime := time.Now()
+	report, err := d.client.ImagesPrune(ctx, filters.Args{})
+	if err != nil {
+		return &ActionResult{Success: false, Message: "Failed to prune images", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{
+		Success: true,
+		Message: fmt.Sprintf("Pruned %d images, reclaimed %d bytes", len(report.ImagesDeleted), report.SpaceReclaimed),
+		StartTime: startTime, EndTime: time.Now(),
+	}, nil
 }

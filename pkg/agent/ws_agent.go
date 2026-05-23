@@ -1039,20 +1039,49 @@ func (a *WSAgent) sendExecEnd(sessionID string) {
 // Returns the ActionType and an optional layer override (empty = keep original).
 func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 	switch frontendType {
+	// Docker container
 	case "docker_restart_container":
 		return actions.ActionRestartContainer, "docker"
 	case "docker_stop_container":
 		return actions.ActionStopContainer, "docker"
 	case "docker_start_container":
 		return actions.ActionStartContainer, "docker"
-	case "k8s_restart_deployment", "k8s_restart_statefulset", "k8s_restart_daemonset":
+	case "docker_update_container_image":
+		return actions.ActionDockerUpdateImage, "docker"
+	case "docker_pull_image":
+		return actions.ActionDockerPullImage, "docker"
+	case "docker_remove_image":
+		return actions.ActionDockerRemoveImage, "docker"
+	// K8s workloads
+	case "k8s_restart_deployment", "k8s_restart_statefulset", "k8s_restart_daemonset", "k8s_rollout_restart":
 		return actions.ActionK8sRolloutRestart, "kubernetes"
+	case "k8s_rollout_undo":
+		return actions.ActionK8sRolloutUndo, "kubernetes"
 	case "k8s_update_image":
 		return actions.ActionK8sUpdateImage, "kubernetes"
+	case "k8s_scale_deployment":
+		return actions.ActionK8sScaleDeployment, "kubernetes"
+	case "k8s_scale_statefulset":
+		return actions.ActionK8sScaleStatefulSet, "kubernetes"
 	case "k8s_get_logs":
 		return actions.ActionK8sGetLogs, "kubernetes"
-	case "k8s_rollout_restart":
-		return actions.ActionK8sRolloutRestart, "kubernetes"
+	// K8s delete
+	case "k8s_delete_pod":
+		return actions.ActionK8sDeletePod, "kubernetes"
+	case "k8s_delete_job":
+		return actions.ActionK8sDeleteJob, "kubernetes"
+	case "k8s_delete_deployment":
+		return actions.ActionK8sDeleteDeployment, "kubernetes"
+	case "k8s_delete_service":
+		return actions.ActionK8sDeleteService, "kubernetes"
+	// K8s node
+	case "k8s_cordon_node":
+		return actions.ActionK8sCordonNode, "kubernetes"
+	case "k8s_uncordon_node":
+		return actions.ActionK8sUnCordonNode, "kubernetes"
+	case "k8s_drain_node":
+		return actions.ActionK8sDrainNode, "kubernetes"
+	// Host
 	case "update_agent":
 		return actions.ActionUpdateAgent, "host"
 	case "restart_service":
