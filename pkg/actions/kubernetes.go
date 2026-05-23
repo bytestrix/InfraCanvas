@@ -10,6 +10,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -17,8 +18,9 @@ import (
 
 // KubernetesExecutor handles actions on Kubernetes resources
 type KubernetesExecutor struct {
-	clientset *kubernetes.Clientset
-	config    *rest.Config
+	clientset     *kubernetes.Clientset
+	dynamicClient dynamic.Interface
+	config        *rest.Config
 }
 
 // NewKubernetesExecutor creates a new Kubernetes executor
@@ -35,9 +37,15 @@ func NewKubernetesExecutor() (*KubernetesExecutor, error) {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
+	dynClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+	}
+
 	return &KubernetesExecutor{
-		clientset: clientset,
-		config:    config,
+		clientset:     clientset,
+		dynamicClient: dynClient,
+		config:        config,
 	}, nil
 }
 
@@ -112,6 +120,18 @@ func (k *KubernetesExecutor) ExecuteAction(ctx context.Context, action *Action) 
 		return k.cordonNode(ctx, name, false, startTime)
 	case ActionK8sDrainNode:
 		return k.drainNode(ctx, name, startTime)
+	case ActionK8sGetConfigMap:
+		return k.getConfigMap(ctx, ns, name, startTime)
+	case ActionK8sUpdateConfigMap:
+		return k.updateConfigMap(ctx, ns, name, action.Parameters, startTime)
+	case ActionK8sGetSecret:
+		return k.getSecret(ctx, ns, name, startTime)
+	case ActionK8sUpdateSecret:
+		return k.updateSecret(ctx, ns, name, action.Parameters, startTime)
+	case ActionK8sApplyManifest:
+		return k.applyManifest(ctx, action.Parameters["manifest"], startTime)
+	case ActionK8sDeleteResource:
+		return k.deleteResource(ctx, ns, action.Parameters["resource_type"], name, startTime)
 	default:
 		return &ActionResult{
 			Success:   false,

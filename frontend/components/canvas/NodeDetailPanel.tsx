@@ -5,7 +5,7 @@ import {
   X, RotateCw, Square, Play, Tag, Layers, Trash2, Undo2,
   CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight,
   AlertTriangle, FileText, Terminal, Eye, EyeOff, Download,
-  ShieldOff, Shield,
+  ShieldOff, Shield, ArrowRightLeft, KeyRound, Search, Pencil,
   type LucideIcon,
 } from 'lucide-react'
 import { type GraphNode } from '@/types'
@@ -24,7 +24,7 @@ interface FormField {
   key: string
   label: string
   placeholder?: string
-  type?: 'text' | 'number' | 'select'
+  type?: 'text' | 'number' | 'select' | 'textarea'
   defaultValue?: (node: GraphNode) => string
   options?: (node: GraphNode) => FormFieldOption[]
 }
@@ -123,6 +123,12 @@ const ACTIONS: Record<string, ActionDef[]> = {
   pod: [
     { id: 'delete', label: 'Delete / Restart', Icon: Trash2, danger: true, confirm: true,
       buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_pod', target: k8sTarget('pod', n), parameters: {} }) },
+    { id: 'port_forward', label: 'Port Forward', Icon: ArrowRightLeft,
+      form: [
+        { key: 'remote_port', label: 'Pod Port', placeholder: '8080', type: 'number' },
+        { key: 'local_port', label: 'Local Port (0=auto)', placeholder: '0', type: 'number', defaultValue: () => '0' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `pf-${Date.now()}`, type: 'k8s_port_forward', target: k8sTarget('pod', n), parameters: { remote_port: v.remote_port, local_port: v.local_port || '0' } }) },
   ],
   node: [
     { id: 'cordon', label: 'Cordon', Icon: ShieldOff, confirm: true,
@@ -139,6 +145,31 @@ const ACTIONS: Record<string, ActionDef[]> = {
   k8s_service: [
     { id: 'delete', label: 'Delete Service', Icon: Trash2, danger: true, confirm: true,
       buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_service', target: k8sTarget('service', n), parameters: {} }) },
+  ],
+  configmap: [
+    { id: 'get', label: 'View Data', Icon: Search,
+      buildPayload: (n) => ({ action_id: `get-cm-${Date.now()}`, type: 'k8s_get_configmap', target: k8sTarget('configmap', n), parameters: {} }) },
+    { id: 'update', label: 'Set Key', Icon: Pencil,
+      form: [
+        { key: 'key', label: 'Key', placeholder: 'MY_CONFIG_KEY' },
+        { key: 'value', label: 'Value', placeholder: 'new-value' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `upd-cm-${Date.now()}`, type: 'k8s_update_configmap', target: k8sTarget('configmap', n), parameters: { [v.key]: v.value } }) },
+  ],
+  secret: [
+    { id: 'get', label: 'View Keys', Icon: KeyRound,
+      buildPayload: (n) => ({ action_id: `get-sec-${Date.now()}`, type: 'k8s_get_secret', target: k8sTarget('secret', n), parameters: {} }) },
+    { id: 'update', label: 'Set Key', Icon: Pencil,
+      form: [
+        { key: 'key', label: 'Key', placeholder: 'MY_SECRET_KEY' },
+        { key: 'value', label: 'Value', placeholder: 'new-secret-value' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `upd-sec-${Date.now()}`, type: 'k8s_update_secret', target: k8sTarget('secret', n), parameters: { [v.key]: v.value } }) },
+  ],
+  cluster: [
+    { id: 'apply_manifest', label: 'Apply Manifest', Icon: FileText,
+      form: [{ key: 'manifest', label: 'YAML Manifest', type: 'textarea', placeholder: 'apiVersion: apps/v1\nkind: Deployment\n...' }],
+      buildPayload: (n, v) => ({ action_id: `apply-${Date.now()}`, type: 'k8s_apply_manifest', target: { layer: 'kubernetes', entity_type: 'cluster', entity_id: n.metadata?.name ?? n.id, namespace: 'default' }, parameters: { manifest: v.manifest } }) },
   ],
 }
 
@@ -159,6 +190,8 @@ const KEY_META_FIELDS: Record<string, string[]> = {
   cluster:     ['version', 'node_count'],
   job:         ['namespace', 'completions', 'active', 'succeeded'],
   cronjob:     ['namespace', 'schedule', 'last_run'],
+  configmap:   ['namespace', 'keys'],
+  secret:      ['namespace', 'type', 'keys'],
 }
 
 const HEALTH_COLOR: Record<string, string> = {
@@ -598,6 +631,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                         const baseStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box' as const, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: MONO, color: 'var(--ink)', outline: 'none' }
                         const opts = field.type === 'select' ? (field.options?.(node) ?? []) : []
                         const useSelect = field.type === 'select' && opts.length > 0
+                        const useTextarea = field.type === 'textarea'
                         return (
                           <div key={field.key}>
                             <label style={{ fontSize: 10, color: 'var(--ink4)', display: 'block', marginBottom: 4 }}>{field.label}</label>
@@ -612,6 +646,16 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                               >
                                 {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                               </select>
+                            ) : useTextarea ? (
+                              <textarea
+                                value={formValues[field.key] ?? ''}
+                                onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                placeholder={field.placeholder}
+                                rows={8}
+                                style={{ ...baseStyle, resize: 'vertical' as const }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--line2)' }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--line)' }}
+                              />
                             ) : (
                               <input
                                 type={field.type === 'number' ? 'number' : 'text'}
