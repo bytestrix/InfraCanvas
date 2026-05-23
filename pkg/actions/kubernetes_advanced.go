@@ -3,12 +3,15 @@ package actions
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8sscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 // UpdateDeploymentImage updates the container image in a deployment
@@ -332,4 +335,77 @@ func (k *KubernetesExecutor) GetPodLogs(ctx context.Context, namespace, podName,
 		StartTime: startTime,
 		EndTime:   time.Now(),
 	}, nil
+}
+
+// StreamPodLogs streams logs from a pod into the provided writer, closing it when done.
+func (k *KubernetesExecutor) StreamPodLogs(ctx context.Context, namespace, podName, containerName string, tailLines int64, w io.Writer) error {
+	opts := &corev1.PodLogOptions{
+		Container: containerName,
+		Follow:    false,
+	}
+	if tailLines > 0 {
+		opts.TailLines = &tailLines
+	}
+
+	req := k.clientset.CoreV1().Pods(namespace).GetLogs(podName, opts)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+	_, err = io.Copy(w, stream)
+	return err
+}
+
+// K8sExecSession holds state for an interactive pod exec session.
+type K8sExecSession struct {
+	stdin  *io.PipeWriter
+	done   chan struct{}
+}
+
+func (s *K8sExecSession) Write(p []byte) (int, error) { return s.stdin.Write(p) }
+func (s *K8sExecSession) Close() error                { return s.stdin.Close() }
+func (s *K8sExecSession) Done() <-chan struct{}        { return s.done }
+
+// ExecInPod opens an interactive shell inside a pod container.
+// stdout/stderr are written to out; stdin is written to via the returned K8sExecSession.
+func (k *KubernetesExecutor) ExecInPod(ctx context.Context, namespace, podName, containerName string, cmd []string, out io.Writer) (*K8sExecSession, error) {
+	if len(cmd) == 0 {
+		cmd = []string{"/bin/sh"}
+	}
+
+	req := k.clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: containerName,
+			Command:   cmd,
+			Stdin:     true,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       true,
+		}, k8sscheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(k.config, "POST", req.URL())
+	if err != nil {
+		return nil, fmt.Errorf("spdy executor: %w", err)
+	}
+
+	stdinR, stdinW := io.Pipe()
+	sess := &K8sExecSession{stdin: stdinW, done: make(chan struct{})}
+
+	go func() {
+		defer close(sess.done)
+		_ = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+			Stdin:             stdinR,
+			Stdout:            out,
+			Stderr:            out,
+			Tty:               true,
+		})
+		stdinR.Close()
+	}()
+
+	return sess, nil
 }

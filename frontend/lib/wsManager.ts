@@ -261,13 +261,14 @@ export function sendExecStart(
   cmd: string[],
   rows: number,
   cols: number,
-  layer: 'docker' | 'host' = 'docker',
+  layer: 'docker' | 'host' | 'kubernetes' = 'docker',
+  extraParams?: { namespace?: string; pod_name?: string; container?: string },
 ): void {
   const entry = sockets.get(code)
   if (!entry || entry.ws.readyState !== WebSocket.OPEN) return
   entry.ws.send(JSON.stringify({
     type: 'EXEC_START',
-    data: { session_id: sessionID, container_id: containerID, layer, cmd, rows, cols },
+    data: { session_id: sessionID, container_id: containerID, layer, cmd, rows, cols, ...extraParams },
   }))
 }
 

@@ -16,6 +16,7 @@ import (
 // KubernetesExecutor handles actions on Kubernetes resources
 type KubernetesExecutor struct {
 	clientset *kubernetes.Clientset
+	config    *rest.Config
 }
 
 // NewKubernetesExecutor creates a new Kubernetes executor
@@ -34,6 +35,7 @@ func NewKubernetesExecutor() (*KubernetesExecutor, error) {
 
 	return &KubernetesExecutor{
 		clientset: clientset,
+		config:    config,
 	}, nil
 }
 

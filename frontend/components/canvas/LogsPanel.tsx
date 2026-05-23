@@ -43,13 +43,15 @@ export default function LogsPanel({ node, vmCode, onClose }: LogsPanelProps) {
       }
     })
 
+    const isK8sPod = node.type === 'pod'
     sendAction(vmCode, {
       action_id: requestID,
-      type: 'docker_logs',
+      type: isK8sPod ? 'k8s_logs' : 'docker_logs',
       target: {
-        layer: 'docker',
-        entity_type: 'container',
+        layer: isK8sPod ? 'kubernetes' : 'docker',
+        entity_type: isK8sPod ? 'pod' : 'container',
         entity_id: node.id,
+        namespace: isK8sPod ? ((node.metadata?.namespace as string) || 'default') : undefined,
       },
       parameters: { tail: '200' },
     })
