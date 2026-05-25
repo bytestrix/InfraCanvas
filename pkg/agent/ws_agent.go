@@ -755,36 +755,42 @@ func (a *WSAgent) handleHostLogs(ctx context.Context, requestID string, params m
 		lines = t
 	}
 
+	logCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	args := []string{"-n", lines, "--no-pager", "--output=short-iso"}
 	if unit != "" {
 		args = append(args, "-u", unit)
 	}
 
-	logCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(logCtx, "journalctl", args...)
-	out, err := cmd.Output()
-	if err != nil {
-		// journalctl may not exist — fall back to /var/log/syslog
-		cmd2 := exec.CommandContext(logCtx, "tail", "-n", lines, "/var/log/syslog")
-		out, err = cmd2.Output()
+	streamCmd := func(cmd *exec.Cmd) error {
+		pipe, err := cmd.StdoutPipe()
 		if err != nil {
-			a.sendLogData(requestID, "host", nil, "journalctl not available and /var/log/syslog unreadable: "+err.Error(), true)
-			return
+			return err
 		}
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		var batch []string
+		scanner := bufio.NewScanner(pipe)
+		for scanner.Scan() {
+			batch = append(batch, scanner.Text())
+			if len(batch) >= 25 {
+				a.sendLogData(requestID, "host", batch, "", false)
+				batch = batch[:0]
+			}
+		}
+		a.sendLogData(requestID, "host", batch, "", true)
+		_ = cmd.Wait()
+		return nil
 	}
 
-	var logLines []string
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	for scanner.Scan() {
-		logLines = append(logLines, scanner.Text())
-		if len(logLines) >= 50 {
-			a.sendLogData(requestID, "host", logLines, "", false)
-			logLines = logLines[:0]
+	if err := streamCmd(exec.CommandContext(logCtx, "journalctl", args...)); err != nil {
+		// journalctl not available — fall back to syslog
+		if err2 := streamCmd(exec.CommandContext(logCtx, "tail", "-n", lines, "/var/log/syslog")); err2 != nil {
+			a.sendLogData(requestID, "host", nil, "journalctl not available and /var/log/syslog unreadable: "+err2.Error(), true)
 		}
 	}
-	a.sendLogData(requestID, "host", logLines, "", true)
 }
 
 func (a *WSAgent) handlePortForward(ctx context.Context, requestID, namespace, rawPodName string, params map[string]string) {

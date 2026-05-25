@@ -60,14 +60,21 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
     ]).then(([{ Terminal }, { FitAddon }]) => {
       if (!active || !termDivRef.current) return
 
+      // xterm.js theme must use resolved hex colors — CSS variables are not valid here
+      const root = document.documentElement
+      const cssVar = (v: string) => getComputedStyle(root).getPropertyValue(v).trim() || undefined
+      const bg  = cssVar('--bg')  || '#0d0d0d'
+      const fg  = cssVar('--ink') || '#e4e4e7'
+      const cur = cssVar('--ink2') || '#a1a1aa'
+
       const term = new Terminal({
         theme: {
-          background:          'var(--bg)',
-          foreground:          'var(--ink)',
-          cursor:              'var(--ink2)',
-          cursorAccent:        'var(--bg)',
-          selectionBackground: 'rgba(250,250,250,0.15)',
-          black:               'var(--line)',
+          background:          bg,
+          foreground:          fg,
+          cursor:              cur,
+          cursorAccent:        bg,
+          selectionBackground: 'rgba(250,250,250,0.2)',
+          black:               '#3f3f46',
           red:                 '#f38ba8',
           green:               '#a6e3a1',
           yellow:              '#f9e2af',
@@ -75,7 +82,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
           magenta:             '#cba6f7',
           cyan:                '#89dceb',
           white:               '#cdd6f4',
-          brightBlack:         '#585b70',
+          brightBlack:         '#71717a',
           brightRed:           '#f38ba8',
           brightGreen:         '#a6e3a1',
           brightYellow:        '#f9e2af',
@@ -199,7 +206,14 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       </div>
 
       {/* Terminal area */}
-      <div ref={termDivRef} style={{ flex: 1, overflow: 'hidden', padding: '6px 8px' }} />
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {status === 'connecting' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 1 }}>
+            <span style={{ fontSize: 11, color: 'var(--ink4)', fontFamily: MONO }}>starting shell…</span>
+          </div>
+        )}
+        <div ref={termDivRef} style={{ position: 'absolute', inset: 0, padding: '6px 8px' }} />
+      </div>
     </div>
   )
 }

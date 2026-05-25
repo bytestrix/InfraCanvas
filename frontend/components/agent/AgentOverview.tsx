@@ -211,7 +211,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
     setShowHostTerminal(false)
   }
 
-  const anyPanelOpen = !!(selectedId || selectedNode || showLogs || showTerminal || showHostTerminal)
+  const anyPanelOpen = !!(selectedId || selectedNode || showLogs || showTerminal)
 
   return (
     <div style={{ display:'flex', height:'100%', fontFamily:SANS, fontSize:13, overflow:'hidden', position:'relative' }}>
@@ -321,7 +321,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       )}
 
       {/* ── Host terminal (top-level button) ── */}
-      {showHostTerminal && d.host && !anyPanelOpen && (
+      {showHostTerminal && d.host && (
         <TerminalPanel node={d.host} vmCode={vmCode} layer="host" onClose={() => setShowHostTerminal(false)} />
       )}
 
