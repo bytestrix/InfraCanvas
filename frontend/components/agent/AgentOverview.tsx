@@ -187,6 +187,15 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
   }, [detailTile, detailNodes])
 
   function handleTileClick(id: string) {
+    // Host tile has exactly 1 node — skip the drawer, open detail directly
+    if (id === 'host-vm' && d.host) {
+      setSelectedNode(d.host)
+      setSelectedId(null)
+      setShowLogs(false)
+      setShowTerminal(false)
+      setShowHostTerminal(false)
+      return
+    }
     setSelectedId(id)
     setSelectedNode(null)
     setShowLogs(false)
@@ -292,7 +301,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
           node={selectedNode}
           vmCode={vmCode}
           onClose={() => setSelectedNode(null)}
-          onShowLogs={['container','pod'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
+          onShowLogs={['container','pod','host'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
           onShowTerminal={['container','host','pod'].includes(selectedNode.type) ? () => {
             setTerminalLayer(selectedNode.type === 'host' ? 'host' : selectedNode.type === 'pod' ? 'kubernetes' : 'docker')
             setShowTerminal(true)
