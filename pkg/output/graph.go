@@ -175,11 +175,18 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 		node.Label = host.Hostname
 		node.Metadata["os"] = host.OS
 		node.Metadata["osVersion"] = host.OSVersion
-		node.Metadata["cpu"] = host.CPUUsagePercent
-		node.Metadata["memory"] = host.MemoryUsagePercent
+		node.Metadata["cpu_percent"] = host.CPUUsagePercent
+		node.Metadata["memory_percent"] = host.MemoryUsagePercent
 		node.Metadata["architecture"] = host.Architecture
 		node.Metadata["cloudProvider"] = host.CloudProvider
 		node.Metadata["instanceType"] = host.InstanceType
+		// Pick the root filesystem disk usage for the overview tile
+		for _, fs := range host.Filesystems {
+			if fs.MountPoint == "/" {
+				node.Metadata["disk_percent"] = fs.UsagePercent
+				break
+			}
+		}
 		if len(host.Filesystems) > 0 {
 			type fsMeta struct {
 				MountPoint   string  `json:"mount_point"`
