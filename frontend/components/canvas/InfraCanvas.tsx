@@ -663,7 +663,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             node={selectedNode}
             vmCode={vm.code}
             onClose={() => { setSelectedNodeId(null); setShowLogs(false); setShowTerminal(false) }}
-            onShowLogs={['container', 'pod'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
+            onShowLogs={['container', 'pod', 'host'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
             onShowTerminal={['container', 'host', 'pod'].includes(selectedNode.type) ? () => {
               setTerminalLayer(selectedNode.type === 'host' ? 'host' : selectedNode.type === 'pod' ? 'kubernetes' : 'docker')
               setShowTerminal(true)

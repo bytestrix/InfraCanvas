@@ -171,6 +171,21 @@ const ACTIONS: Record<string, ActionDef[]> = {
       form: [{ key: 'manifest', label: 'YAML Manifest', type: 'textarea', placeholder: 'apiVersion: apps/v1\nkind: Deployment\n...' }],
       buildPayload: (n, v) => ({ action_id: `apply-${Date.now()}`, type: 'k8s_apply_manifest', target: { layer: 'kubernetes', entity_type: 'cluster', entity_id: n.metadata?.name ?? n.id, namespace: 'default' }, parameters: { manifest: v.manifest } }) },
   ],
+  host: [
+    { id: 'disk_usage', label: 'Disk Usage', Icon: Layers,
+      buildPayload: (n) => ({ action_id: `disk-${Date.now()}`, type: 'host_disk_usage', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
+    { id: 'top_processes', label: 'Top Processes', Icon: Layers,
+      buildPayload: (n) => ({ action_id: `proc-${Date.now()}`, type: 'host_top_processes', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
+    { id: 'svc_status', label: 'Service Status', Icon: Search,
+      form: [{ key: 'service', label: 'Service name (blank = all running)', placeholder: 'nginx' }],
+      buildPayload: (n, v) => ({ action_id: `svc-${Date.now()}`, type: 'host_service_status', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { service: v.service } }) },
+    { id: 'restart_service', label: 'Restart Service', Icon: RotateCw, confirm: true,
+      form: [{ key: 'service', label: 'Service name', placeholder: 'nginx' }],
+      buildPayload: (n, v) => ({ action_id: `rsvc-${Date.now()}`, type: 'restart_service', target: { layer: 'host', entity_type: 'service', entity_id: v.service }, parameters: {} }) },
+    { id: 'run_command', label: 'Run Command', Icon: Terminal,
+      form: [{ key: 'command', label: 'Shell command', placeholder: 'uname -a', type: 'text' }],
+      buildPayload: (n, v) => ({ action_id: `cmd-${Date.now()}`, type: 'host_run_command', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { command: v.command } }) },
+  ],
 }
 
 const KEY_META_FIELDS: Record<string, string[]> = {
@@ -426,6 +441,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [actionStatus, setActionStatus] = useState<ActionStatus>('idle')
   const [actionMsg, setActionMsg] = useState('')
+  const [actionOutput, setActionOutput] = useState('')
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [openEnv,        setOpenEnv]        = useState(true)
@@ -439,12 +455,14 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
     setActiveActionId(null)
     setActionStatus('idle')
     setActionMsg('')
+    setActionOutput('')
     setFormValues({})
   }, [node.id])
 
   useEffect(() => {
     const unsubResult = subscribeActionResult((data) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      setActionOutput(data.details?.output ?? '')
       if (data.success === false || data.status === 'failed') {
         setActionStatus('error')
         setActionMsg(data.message ?? data.error ?? 'Action failed')
@@ -463,13 +481,14 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   }, [vmCode])
 
   function openAction(action: ActionDef) {
-    if (activeActionId === action.id) { setActiveActionId(null); setActionStatus('idle'); setActionMsg(''); return }
+    if (activeActionId === action.id) { setActiveActionId(null); setActionStatus('idle'); setActionMsg(''); setActionOutput(''); return }
     const defaults: Record<string, string> = {}
     for (const f of action.form ?? []) defaults[f.key] = f.defaultValue ? f.defaultValue(node) : ''
     setFormValues(defaults)
     setActiveActionId(action.id)
     setActionStatus(action.confirm ? 'confirming' : 'idle')
     setActionMsg('')
+    setActionOutput('')
   }
 
   function handleSubmit(action: ActionDef) {
@@ -536,8 +555,30 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
           </div>
         )}
 
+        {/* Host quick-access banner */}
+        {node.type === 'host' && onShowTerminal && (
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'var(--bg)' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={onShowTerminal}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--ink2)', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--ink2)' }}>
+                <Terminal size={13} /> Open Terminal
+              </button>
+              {onShowLogs && (
+                <button onClick={onShowLogs}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--ink2)', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--ink2)' }}>
+                  <FileText size={13} /> System Logs
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Tools */}
-        {TOOLS_NODES.has(node.type) && (onShowLogs || onShowTerminal) && (
+        {node.type !== 'host' && TOOLS_NODES.has(node.type) && (onShowLogs || onShowTerminal) && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Tools</p>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -681,8 +722,18 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                     </div>
                   )}
                   {actionStatus === 'running' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><Loader2 size={13} color="var(--ink2)" style={{ animation: 'spin 1s linear infinite' }} /><span style={{ fontSize: 11, color: 'var(--ink3)' }}>{actionMsg}</span></div>}
-                  {actionStatus === 'success' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><CheckCircle2 size={13} color="#22c55e" /><span style={{ fontSize: 11, color: '#22c55e' }}>{actionMsg}</span></div>}
-                  {actionStatus === 'error' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}><XCircle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} /><span style={{ fontSize: 11, color: '#fca5a5', wordBreak: 'break-word' }}>{actionMsg}</span></div>}
+                  {actionStatus === 'success' && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: actionOutput ? 8 : 0 }}><CheckCircle2 size={13} color="#22c55e" /><span style={{ fontSize: 11, color: '#22c55e' }}>{actionMsg}</span></div>
+                      {actionOutput && <pre style={{ margin: 0, fontSize: 10, fontFamily: MONO, color: 'var(--ink3)', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 5, padding: '6px 8px', overflowX: 'auto', whiteSpace: 'pre', maxHeight: 260, overflowY: 'auto' }}>{actionOutput}</pre>}
+                    </div>
+                  )}
+                  {actionStatus === 'error' && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: actionOutput ? 8 : 0 }}><XCircle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} /><span style={{ fontSize: 11, color: '#fca5a5', wordBreak: 'break-word' }}>{actionMsg}</span></div>
+                      {actionOutput && <pre style={{ margin: 0, fontSize: 10, fontFamily: MONO, color: '#fca5a5', background: 'var(--bg)', border: '1px solid #ef444440', borderRadius: 5, padding: '6px 8px', overflowX: 'auto', whiteSpace: 'pre', maxHeight: 200, overflowY: 'auto' }}>{actionOutput}</pre>}
+                    </div>
+                  )}
                   {(actionStatus === 'idle' || actionStatus === 'confirming') && (
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => handleSubmit(action)} style={{ flex: 1, padding: '6px 10px', borderRadius: 6, background: `${ac}20`, color: ac, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${ac}40` } as React.CSSProperties} onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8' }} onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}>
@@ -692,7 +743,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                     </div>
                   )}
                   {(actionStatus === 'success' || actionStatus === 'error') && (
-                    <button onClick={() => { setActiveActionId(null); setActionStatus('idle'); setActionMsg('') }} style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', marginTop: 4 }}>Dismiss</button>
+                    <button onClick={() => { setActiveActionId(null); setActionStatus('idle'); setActionMsg(''); setActionOutput('') }} style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', marginTop: 4 }}>Dismiss</button>
                   )}
                 </div>
               )

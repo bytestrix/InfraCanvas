@@ -44,12 +44,13 @@ export default function LogsPanel({ node, vmCode, onClose }: LogsPanelProps) {
     })
 
     const isK8sPod = node.type === 'pod'
+    const isHost = node.type === 'host'
     sendAction(vmCode, {
       action_id: requestID,
-      type: isK8sPod ? 'k8s_logs' : 'docker_logs',
+      type: isHost ? 'host_logs' : isK8sPod ? 'k8s_logs' : 'docker_logs',
       target: {
-        layer: isK8sPod ? 'kubernetes' : 'docker',
-        entity_type: isK8sPod ? 'pod' : 'container',
+        layer: isHost ? 'host' : isK8sPod ? 'kubernetes' : 'docker',
+        entity_type: isHost ? 'host' : isK8sPod ? 'pod' : 'container',
         entity_id: node.id,
         namespace: isK8sPod ? ((node.metadata?.namespace as string) || 'default') : undefined,
       },
