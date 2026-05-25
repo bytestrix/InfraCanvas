@@ -126,7 +126,10 @@ func (f *GraphFormatter) Format(snapshot *models.InfraSnapshot) ([]byte, error) 
 
 	// Remove orphaned nodes — nodes with no edges in either direction.
 	// Floating disconnected nodes make the canvas unusable.
+	// Exception: host and cluster nodes are always kept — they are valid
+	// roots even on bare machines with no Docker/Kubernetes.
 	if f.FilterNoise {
+		alwaysKeep := map[string]bool{"host": true, "cluster": true, "container_runtime": true}
 		connected := make(map[string]bool, len(graph.Edges)*2)
 		for _, e := range graph.Edges {
 			connected[e.Source] = true
@@ -134,7 +137,7 @@ func (f *GraphFormatter) Format(snapshot *models.InfraSnapshot) ([]byte, error) 
 		}
 		kept := graph.Nodes[:0]
 		for _, n := range graph.Nodes {
-			if connected[n.ID] {
+			if connected[n.ID] || alwaysKeep[n.Type] {
 				kept = append(kept, n)
 			} else {
 				filteredStats.OrphanedNodes++
