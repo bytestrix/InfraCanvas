@@ -103,8 +103,12 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       const fit = new FitAddon()
       term.loadAddon(fit)
       term.open(termDivRef.current)
-      // Delay fit to let fonts render
-      requestAnimationFrame(() => { if (active) fit.fit() })
+      // Delay fit to let fonts render, then focus so keyboard works immediately
+      requestAnimationFrame(() => {
+        if (!active) return
+        fit.fit()
+        term.focus()
+      })
 
       termRef.current = term
       fitRef.current  = fit
@@ -159,13 +163,21 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
     }
   }, [containerID, vmCode, cleanup, layer])
 
+  const focusTerm = () => { termRef.current?.focus() }
+
   return (
-    <div style={{
-      position: 'absolute', left: 0, right: 0, bottom: 0, height: 380,
-      background: 'var(--bg)', borderTop: '1px solid var(--line)',
-      display: 'flex', flexDirection: 'column', zIndex: 25,
-      boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
-    }}>
+    <div
+      style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0, height: 380,
+        background: 'var(--bg)', borderTop: '1px solid var(--line)',
+        display: 'flex', flexDirection: 'column', zIndex: 25,
+        boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
+      }}
+      // Stop key events from leaking to ReactFlow / canvas underneath
+      onKeyDown={(e) => e.stopPropagation()}
+      onKeyUp={(e) => e.stopPropagation()}
+      onKeyPress={(e) => e.stopPropagation()}
+    >
       <style>{`
         .xterm { height: 100%; }
         .xterm-viewport { border-radius: 0; overflow-y: scroll !important; }
@@ -175,11 +187,11 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
         .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--line3); }
       `}</style>
 
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0,
-      }}>
+      {/* Header — mouseDown preventDefault so clicking header doesn't steal focus from xterm */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}
+        onMouseDown={(e) => { e.preventDefault(); focusTerm() }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', fontFamily: MONO }}>TERMINAL</span>
           <span style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: MONO }}>{node.label}</span>
@@ -196,6 +208,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
           )}
         </div>
         <button
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={() => { cleanup(); onClose() }}
           style={{ background: 'transparent', border: 'none', color: 'var(--ink3)', cursor: 'pointer', padding: '3px 5px', borderRadius: 4 }}
           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--ink2)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)' }}
@@ -212,7 +225,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
             <span style={{ fontSize: 11, color: 'var(--ink4)', fontFamily: MONO }}>starting shell…</span>
           </div>
         )}
-        <div ref={termDivRef} style={{ position: 'absolute', inset: 0, padding: '6px 8px' }} />
+        <div ref={termDivRef} style={{ position: 'absolute', inset: 0, padding: '6px 8px' }} onClick={focusTerm} />
       </div>
     </div>
   )
