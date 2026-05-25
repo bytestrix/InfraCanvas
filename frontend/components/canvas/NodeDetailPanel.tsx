@@ -176,15 +176,6 @@ const ACTIONS: Record<string, ActionDef[]> = {
       buildPayload: (n) => ({ action_id: `disk-${Date.now()}`, type: 'host_disk_usage', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
     { id: 'top_processes', label: 'Top Processes', Icon: Layers,
       buildPayload: (n) => ({ action_id: `proc-${Date.now()}`, type: 'host_top_processes', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
-    { id: 'svc_status', label: 'Service Status', Icon: Search,
-      form: [{ key: 'service', label: 'Service name (blank = all running)', placeholder: 'nginx' }],
-      buildPayload: (n, v) => ({ action_id: `svc-${Date.now()}`, type: 'host_service_status', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { service: v.service } }) },
-    { id: 'restart_service', label: 'Restart Service', Icon: RotateCw, confirm: true,
-      form: [{ key: 'service', label: 'Service name', placeholder: 'nginx' }],
-      buildPayload: (n, v) => ({ action_id: `rsvc-${Date.now()}`, type: 'restart_service', target: { layer: 'host', entity_type: 'service', entity_id: v.service }, parameters: {} }) },
-    { id: 'run_command', label: 'Run Command', Icon: Terminal,
-      form: [{ key: 'command', label: 'Shell command', placeholder: 'uname -a', type: 'text' }],
-      buildPayload: (n, v) => ({ action_id: `cmd-${Date.now()}`, type: 'host_run_command', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { command: v.command } }) },
   ],
 }
 
@@ -486,9 +477,20 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
     for (const f of action.form ?? []) defaults[f.key] = f.defaultValue ? f.defaultValue(node) : ''
     setFormValues(defaults)
     setActiveActionId(action.id)
-    setActionStatus(action.confirm ? 'confirming' : 'idle')
     setActionMsg('')
     setActionOutput('')
+    if (!action.form?.length && !action.confirm) {
+      // No form, no confirm — fire immediately on first click
+      setActionStatus('running')
+      setActionMsg('Sending…')
+      sendAction(vmCode, action.buildPayload(node, defaults))
+      timeoutRef.current = setTimeout(() => {
+        setActionStatus('error')
+        setActionMsg('No response from agent — check agent logs')
+      }, 20_000)
+    } else {
+      setActionStatus(action.confirm ? 'confirming' : 'idle')
+    }
   }
 
   function handleSubmit(action: ActionDef) {
