@@ -278,7 +278,7 @@ EnvironmentFile=${CONFIG_DIR}/config.env
 StateDirectory=infracanvas
 StateDirectoryMode=0755
 ExecStart=${INSTALL_DIR}/infracanvas serve --port \${INFRACANVAS_PORT}${SERVE_FLAGS}
-Restart=on-failure
+Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
@@ -360,18 +360,24 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
   else
     # cloudflared only prints the trycloudflare.com URL on stderr *after* it
     # has registered with the Cloudflare edge, so seeing the URL in the journal
-    # is itself proof the tunnel is live. We deliberately do not HTTP-probe
-    # the URL from this VM: many cloud VPC resolvers (EC2 in particular) won't
-    # resolve a freshly-published trycloudflare.com hostname for 60+ seconds,
-    # so probes were producing false-negative warnings even when the tunnel
-    # was healthy from the public internet.
-    TUNNEL_REACHABLE="true"
-    if [[ "$TUNNEL_REACHABLE" != "true" ]]; then
-      warn "Tunnel URL not reachable yet (last HTTP code: ${code:-none})."
-      warn "  This usually clears in a few seconds, but if it sticks (Cloudflare 1033),"
-      warn "  cloudflared lost its edge connection. The watchdog will respawn it —"
-      warn "  run \`infracanvas url\` to fetch the current URL."
+    # is itself proof the tunnel is live.
+    #
+    # However, Cloudflare free quick-tunnels can drop within seconds of
+    # connecting. The watchdog respawns cloudflared and writes a NEW URL to
+    # state.json. We wait 8 seconds here so the state file settles, then
+    # re-read it. This way we print the *current* URL, not a URL that was
+    # already replaced before the user even opened the browser.
+    info "Stabilising tunnel (8s)..."
+    sleep 8
+    STABLE_URL=""
+    if [[ -r "$STATE_FILE" ]]; then
+      STABLE_URL=$(run_priv grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$STATE_FILE" 2>/dev/null | tail -1 || true)
     fi
+    if [[ -n "$STABLE_URL" && "$STABLE_URL" != "$TUNNEL_URL" ]]; then
+      info "Tunnel cycled once during stabilisation — updated URL captured."
+      TUNNEL_URL="$STABLE_URL"
+    fi
+    TUNNEL_REACHABLE="true"
   fi
 fi
 
@@ -392,20 +398,17 @@ if [[ -n "$TUNNEL_URL" ]]; then
   echo -e "  ${BOLD}Open in your browser:${NC}"
   echo -e "    ${CYAN}${TUNNEL_URL}/?token=${TOKEN}${NC}"
   echo ""
-  if [[ "$TUNNEL_REACHABLE" == "true" ]]; then
-    echo -e "  ${GREEN}✓${NC} Verified reachable from the public internet."
-  else
-    echo -e "  ${YELLOW}!${NC} Tunnel URL didn't respond in time. It may come up in a few"
-    echo -e "    seconds, or cloudflared may need to respawn. The watchdog handles"
-    echo -e "    that automatically; just re-fetch the live URL with:"
-    echo -e "      ${CYAN}sudo infracanvas url${NC}"
-  fi
+  echo -e "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "  ${YELLOW}  URL not loading? The tunnel may have cycled. Run:${NC}"
+  echo -e "  ${YELLOW}    ${BOLD}sudo infracanvas url${NC}"
+  echo -e "  ${YELLOW}  to get the current live URL at any time.${NC}"
+  echo -e "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
-  echo -e "  Cloudflare's free quick-tunnel needs no firewall rule, but each"
-  echo -e "  cloudflared restart yields a new random hostname. Whenever the URL"
-  echo -e "  goes stale, run ${BOLD}sudo infracanvas url${NC} to print the current one."
-  echo -e "  For a stable URL, reinstall with ${BOLD}--no-tunnel${NC} and open the port in"
-  echo -e "  your cloud security group."
+  echo -e "  Cloudflare free quick-tunnels need no firewall change, but each"
+  echo -e "  cloudflared restart yields a new random hostname. The service"
+  echo -e "  watchdog handles restarts automatically — ${BOLD}sudo infracanvas url${NC}"
+  echo -e "  always prints the current URL."
+  echo -e "  For a stable URL, reinstall with ${BOLD}--no-tunnel${NC} and open the port."
 elif [[ "$BIND_PRIVATE" == "true" ]]; then
   echo -e "  Bound to ${BOLD}127.0.0.1:${PORT}${NC} — only this machine can reach it."
   echo ""
