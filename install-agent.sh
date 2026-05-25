@@ -69,6 +69,17 @@ for cmd in curl tar; do
   command -v "$cmd" >/dev/null || error "Required command not found: $cmd"
 done
 
+# ── stop any previous install FIRST (so port check sees real availability) ────
+if command -v systemctl >/dev/null; then
+  for svc in "$SERVICE_NAME" "$LEGACY_SERVICE_NAME"; do
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
+      info "Stopping existing service: $svc"
+      run_priv systemctl stop "$svc" 2>/dev/null || true
+      sleep 1  # give the port a moment to free
+    fi
+  done
+fi
+
 # ── pick a free port (only if user didn't set one explicitly) ─────────────────
 port_in_use() {
   local p="$1"
@@ -93,16 +104,6 @@ if port_in_use "$PORT"; then
   if [[ "$PORT" == "$ORIG_PORT" ]]; then
     error "Ports $ORIG_PORT..$((ORIG_PORT+15)) are all in use — pass --port <free-port>"
   fi
-fi
-
-# ── stop any previous install (current name + legacy name) ────────────────────
-if command -v systemctl >/dev/null; then
-  for svc in "$SERVICE_NAME" "$LEGACY_SERVICE_NAME"; do
-    if systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
-      info "Stopping existing service: $svc"
-      run_priv systemctl stop "$svc" 2>/dev/null || true
-    fi
-  done
 fi
 
 # ── download binary ───────────────────────────────────────────────────────────
