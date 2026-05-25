@@ -181,6 +181,7 @@ func (t *Tunnel) supervise(ctx context.Context, bin, localURL string, firstURL c
 		}
 
 		if first {
+			log.Printf("[tunnel] tunnel established: %s", got)
 			firstURL <- got
 			first = false
 		} else {
