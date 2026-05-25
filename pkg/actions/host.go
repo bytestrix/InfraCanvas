@@ -31,7 +31,19 @@ func (h *HostExecutor) ValidateAction(action *Action) error {
 		return h.validateServiceExists(action.Target.EntityID)
 
 	case ActionUpdateAgent:
-		return nil // no pre-validation needed
+		return nil
+
+	case ActionHostRunCommand:
+		if action.Parameters["command"] == "" {
+			return fmt.Errorf("command is required")
+		}
+		return nil
+
+	case ActionHostDiskUsage, ActionHostTopProcesses, ActionHostJournalctl:
+		return nil
+
+	case ActionHostSvcStatus:
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported host action type: %s", action.Type)
@@ -69,6 +81,33 @@ func (h *HostExecutor) ExecuteAction(ctx context.Context, action *Action) (*Acti
 
 	case ActionUpdateAgent:
 		return h.updateAgent(ctx, action.Parameters, startTime)
+
+	case ActionHostRunCommand:
+		return h.runCommand(ctx, action.Parameters["command"], startTime)
+
+	case ActionHostDiskUsage:
+		return h.runCommand(ctx, "df -h", startTime)
+
+	case ActionHostTopProcesses:
+		return h.runCommand(ctx, "ps aux --sort=-%cpu | head -20", startTime)
+
+	case ActionHostSvcStatus:
+		svc := action.Parameters["service"]
+		if svc == "" {
+			return h.runCommand(ctx, "systemctl list-units --type=service --state=running --no-pager --no-legend", startTime)
+		}
+		return h.runCommand(ctx, "systemctl status "+svc+" --no-pager", startTime)
+
+	case ActionHostJournalctl:
+		unit := action.Parameters["unit"]
+		lines := action.Parameters["lines"]
+		if lines == "" {
+			lines = "200"
+		}
+		if unit != "" {
+			return h.runCommand(ctx, fmt.Sprintf("journalctl -u %s -n %s --no-pager", unit, lines), startTime)
+		}
+		return h.runCommand(ctx, fmt.Sprintf("journalctl -n %s --no-pager", lines), startTime)
 
 	default:
 		return &ActionResult{
@@ -201,6 +240,29 @@ func (h *HostExecutor) updateAgent(ctx context.Context, params map[string]string
 		Success:   true,
 		Message:   fmt.Sprintf("Binary updated, restarting %s", svcName),
 		Output:    fmt.Sprintf("Downloaded from %s, replaced %s", binaryURL, exe),
+		StartTime: startTime,
+		EndTime:   time.Now(),
+	}, nil
+}
+
+// runCommand runs a shell command and returns its combined output.
+func (h *HostExecutor) runCommand(ctx context.Context, command string, startTime time.Time) (*ActionResult, error) {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &ActionResult{
+			Success:   false,
+			Message:   "Command failed",
+			Output:    string(output),
+			Error:     err.Error(),
+			StartTime: startTime,
+			EndTime:   time.Now(),
+		}, nil
+	}
+	return &ActionResult{
+		Success:   true,
+		Message:   "OK",
+		Output:    string(output),
 		StartTime: startTime,
 		EndTime:   time.Now(),
 	}, nil

@@ -7,8 +7,13 @@ type ActionType string
 
 const (
 	// Host actions
-	ActionRestartService ActionType = "restart_service"
-	ActionUpdateAgent    ActionType = "update_agent"
+	ActionRestartService   ActionType = "restart_service"
+	ActionUpdateAgent      ActionType = "update_agent"
+	ActionHostRunCommand   ActionType = "host_run_command"
+	ActionHostDiskUsage    ActionType = "host_disk_usage"
+	ActionHostTopProcesses ActionType = "host_top_processes"
+	ActionHostSvcStatus    ActionType = "host_service_status"
+	ActionHostJournalctl   ActionType = "host_journalctl"
 
 	// Docker actions
 	ActionRestartContainer ActionType = "restart_container"

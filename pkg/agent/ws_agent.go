@@ -587,6 +587,10 @@ func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage)
 		a.handleK8sPodLogs(ctx, req.ActionID, req.Target.Namespace, req.Target.EntityID, req.Parameters)
 		return
 	}
+	if req.Type == "host_logs" {
+		a.handleHostLogs(ctx, req.ActionID, req.Parameters)
+		return
+	}
 	if req.Type == "k8s_port_forward" {
 		a.handlePortForward(ctx, req.ActionID, req.Target.Namespace, req.Target.EntityID, req.Parameters)
 		return
@@ -741,6 +745,46 @@ func (a *WSAgent) handleK8sPodLogs(ctx context.Context, requestID, namespace, ra
 		return
 	}
 	a.sendLogData(requestID, rawPodName, lines, "", true)
+}
+
+// handleHostLogs streams journalctl output back as LOG_DATA.
+func (a *WSAgent) handleHostLogs(ctx context.Context, requestID string, params map[string]string) {
+	unit := params["unit"]
+	lines := "200"
+	if t := params["tail"]; t != "" {
+		lines = t
+	}
+
+	args := []string{"-n", lines, "--no-pager", "--output=short-iso"}
+	if unit != "" {
+		args = append(args, "-u", unit)
+	}
+
+	logCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(logCtx, "journalctl", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		// journalctl may not exist — fall back to /var/log/syslog
+		cmd2 := exec.CommandContext(logCtx, "tail", "-n", lines, "/var/log/syslog")
+		out, err = cmd2.Output()
+		if err != nil {
+			a.sendLogData(requestID, "host", nil, "journalctl not available and /var/log/syslog unreadable: "+err.Error(), true)
+			return
+		}
+	}
+
+	var logLines []string
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		logLines = append(logLines, scanner.Text())
+		if len(logLines) >= 50 {
+			a.sendLogData(requestID, "host", logLines, "", false)
+			logLines = logLines[:0]
+		}
+	}
+	a.sendLogData(requestID, "host", logLines, "", true)
 }
 
 func (a *WSAgent) handlePortForward(ctx context.Context, requestID, namespace, rawPodName string, params map[string]string) {
