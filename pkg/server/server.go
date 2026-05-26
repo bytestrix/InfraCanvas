@@ -269,11 +269,18 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 					SameSite: http.SameSiteStrictMode,
 					MaxAge:   60 * 60 * 24 * 30,
 				})
-				u := *r.URL
-				qq := u.Query()
+				// Build redirect from known-safe components to prevent
+				// open-redirect via paths like "//evil.com".
+				redirectPath := r.URL.Path
+				if !strings.HasPrefix(redirectPath, "/") {
+					redirectPath = "/"
+				}
+				qq := r.URL.Query()
 				qq.Del("token")
-				u.RawQuery = qq.Encode()
-				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther)
+				if enc := qq.Encode(); enc != "" {
+					redirectPath += "?" + enc
+				}
+				http.Redirect(w, r, redirectPath, http.StatusSeeOther)
 				return
 			}
 			s.writeUnauthorizedHTML(w, "Invalid token.")
