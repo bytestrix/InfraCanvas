@@ -1,160 +1,136 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#07060E"/>
-      <stop offset="100%" style="stop-color:#0D0B1A"/>
+      <stop offset="100%" style="stop-color:#0E0B1C"/>
     </linearGradient>
-    <radialGradient id="glow-left" cx="25%" cy="50%" r="45%">
-      <stop offset="0%" style="stop-color:#7F1D1D;stop-opacity:0.18"/>
+    <radialGradient id="glow1" cx="20%" cy="30%" r="50%">
+      <stop offset="0%" style="stop-color:#4C1D95;stop-opacity:0.2"/>
       <stop offset="100%" style="stop-color:#07060E;stop-opacity:0"/>
     </radialGradient>
-    <radialGradient id="glow-right" cx="75%" cy="50%" r="45%">
-      <stop offset="0%" style="stop-color:#3B0764;stop-opacity:0.22"/>
+    <radialGradient id="glow2" cx="80%" cy="70%" r="45%">
+      <stop offset="0%" style="stop-color:#0E4F5C;stop-opacity:0.15"/>
       <stop offset="100%" style="stop-color:#07060E;stop-opacity:0"/>
     </radialGradient>
-    <radialGradient id="glow-center" cx="50%" cy="50%" r="30%">
-      <stop offset="0%" style="stop-color:#1E1040;stop-opacity:0.4"/>
+    <radialGradient id="glow3" cx="50%" cy="50%" r="35%">
+      <stop offset="0%" style="stop-color:#1E1040;stop-opacity:0.25"/>
       <stop offset="100%" style="stop-color:#07060E;stop-opacity:0"/>
     </radialGradient>
-    <linearGradient id="divider" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#2A2040;stop-opacity:0"/>
-      <stop offset="30%" style="stop-color:#4B3A7A;stop-opacity:0.8"/>
-      <stop offset="70%" style="stop-color:#4B3A7A;stop-opacity:0.8"/>
-      <stop offset="100%" style="stop-color:#2A2040;stop-opacity:0"/>
+    <linearGradient id="headline-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#EEE8FF"/>
+      <stop offset="60%" style="stop-color:#C4BFDF"/>
+      <stop offset="100%" style="stop-color:#A78BFA"/>
     </linearGradient>
-    <linearGradient id="arrow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#EF4444;stop-opacity:0.6"/>
-      <stop offset="100%" style="stop-color:#A855F7;stop-opacity:0.9"/>
+    <linearGradient id="cmd-border" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4C1D95;stop-opacity:0.6"/>
+      <stop offset="50%" style="stop-color:#7C3AED;stop-opacity:0.8"/>
+      <stop offset="100%" style="stop-color:#4C1D95;stop-opacity:0.6"/>
     </linearGradient>
-    <filter id="text-glow">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-    <filter id="subtle-glow">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
   </defs>
 
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <rect width="1200" height="630" fill="url(#glow-left)"/>
-  <rect width="1200" height="630" fill="url(#glow-right)"/>
-  <rect width="1200" height="630" fill="url(#glow-center)"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+  <rect width="1200" height="630" fill="url(#glow3)"/>
 
-  <!-- Subtle dot grid -->
-  <g opacity="0.07">
-    <pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-      <circle cx="20" cy="20" r="1" fill="#8B5CF6"/>
-    </pattern>
-    <rect width="1200" height="630" fill="url(#dots)"/>
-  </g>
+  <!-- Dot grid -->
+  <pattern id="dots" x="0" y="0" width="36" height="36" patternUnits="userSpaceOnUse">
+    <circle cx="18" cy="18" r="0.8" fill="#7C3AED" opacity="0.12"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#dots)"/>
 
-  <!-- ══════════════════════════════════════ -->
-  <!-- TOP: Brand -->
-  <!-- ══════════════════════════════════════ -->
-  <circle cx="600" cy="54" r="6" fill="#7C3AED" filter="url(#subtle-glow)"/>
-  <circle cx="600" cy="54" r="4" fill="#A855F7"/>
-  <text x="600" y="100" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="800" fill="#EEE8FF" text-anchor="middle" letter-spacing="-1.5">InfraCanvas</text>
-  <text x="600" y="130" font-family="system-ui,-apple-system,sans-serif" font-size="16" fill="#6B6380" text-anchor="middle" letter-spacing="0.5">Live visibility and control for your Linux server</text>
+  <!-- ── TOP: Logo + Brand ── -->
+  <image href="data:image/png;base64,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" x="548" y="28" width="52" height="52"/>
+  <text x="608" y="62" font-family="system-ui,-apple-system,sans-serif" font-size="32" font-weight="800" fill="url(#headline-grad)" letter-spacing="-1">InfraCanvas</text>
 
-  <!-- ══════════════════════════════════════ -->
-  <!-- CENTER DIVIDER -->
-  <!-- ══════════════════════════════════════ -->
-  <line x1="600" y1="155" x2="600" y2="490" stroke="url(#divider)" stroke-width="1"/>
+  <!-- ── HEADLINE ── -->
+  <text x="600" y="125" font-family="system-ui,-apple-system,sans-serif" font-size="36" font-weight="800" fill="#EEE8FF" text-anchor="middle" letter-spacing="-0.5">Your server is a black box.</text>
+  <text x="600" y="168" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="400" fill="#6B6380" text-anchor="middle">You SSH in to check. You grep logs to debug. You find out about crashes</text>
+  <text x="600" y="196" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="400" fill="#6B6380" text-anchor="middle">from your users. <tspan font-weight="700" fill="#A78BFA">InfraCanvas fixes that.</tspan></text>
 
-  <!-- Arrow in center -->
-  <g transform="translate(600, 320)">
-    <!-- Arrow shaft -->
-    <rect x="-28" y="-1" width="56" height="2" fill="url(#arrow-grad)" rx="1"/>
-    <!-- Arrowhead -->
-    <polygon points="28,-6 40,0 28,6" fill="#A855F7" opacity="0.9"/>
-  </g>
+  <!-- Divider line -->
+  <line x1="200" y1="222" x2="1000" y2="222" stroke="#1E1B35" stroke-width="1"/>
 
-  <!-- ══════════════════════════════════════ -->
-  <!-- LEFT: The problems (BEFORE) -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- ── FEATURE GRID (2×3) ── -->
 
-  <!-- Section label -->
-  <text x="280" y="175" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" fill="#EF4444" text-anchor="middle" letter-spacing="2" opacity="0.8">BEFORE</text>
+  <!-- Row 1 -->
 
-  <!-- Pain point 1 -->
-  <g transform="translate(100, 218)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#130608" stroke="#3F1010" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#FCA5A5">SSH every time just to check.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">Is nginx running? Did postgres restart? What's using port 8080?</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">You have to SSH in and grep around to find out.</text>
-  </g>
+  <!-- Feature 1: Live map -->
+  <rect x="80" y="238" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="80" y="238" width="4" height="82" rx="2" fill="#7C3AED"/>
+  <text x="100" y="268" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Live visual map</text>
+  <text x="100" y="289" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Every container, pod, volume and network</text>
+  <text x="100" y="307" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">on a single canvas. Updates in real time.</text>
 
-  <!-- Pain point 2 -->
-  <g transform="translate(100, 306)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#130608" stroke="#3F1010" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#FCA5A5">Crashes found hours later.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">A container died at 2am. Traffic failed silently. You discovered</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">it at 10am when a user complained.</text>
-  </g>
+  <!-- Feature 2: Instant crash alerts -->
+  <rect x="440" y="238" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="440" y="238" width="4" height="82" rx="2" fill="#EF4444"/>
+  <text x="460" y="268" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Crashes go red instantly</text>
+  <text x="460" y="289" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Status changes push over WebSocket the</text>
+  <text x="460" y="307" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">second they happen. Not when you check.</text>
 
-  <!-- Pain point 3 -->
-  <g transform="translate(100, 394)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#130608" stroke="#3F1010" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#FCA5A5">No picture of what's connected.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">Containers, pods, networks, volumes — scattered across</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#7A4545">docker ps, kubectl get, df -h, ss -tlnp.</text>
-  </g>
+  <!-- Feature 3: Control -->
+  <rect x="800" y="238" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="800" y="238" width="4" height="82" rx="2" fill="#10B981"/>
+  <text x="820" y="268" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Full control from the browser</text>
+  <text x="820" y="289" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Start, stop, restart containers and pods.</text>
+  <text x="820" y="307" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">No SSH. No terminal. Click and done.</text>
 
-  <!-- ══════════════════════════════════════ -->
-  <!-- RIGHT: The solution (AFTER) -->
-  <!-- ══════════════════════════════════════ -->
+  <!-- Row 2 -->
 
-  <!-- Section label -->
-  <text x="920" y="175" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" fill="#10B981" text-anchor="middle" letter-spacing="2" opacity="0.8">AFTER</text>
+  <!-- Feature 4: Logs -->
+  <rect x="80" y="336" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="80" y="336" width="4" height="82" rx="2" fill="#0891B2"/>
+  <text x="100" y="366" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Live log streaming</text>
+  <text x="100" y="387" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Tail any container's logs directly in the</text>
+  <text x="100" y="405" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">dashboard. No more journalctl juggling.</text>
 
-  <!-- Solution 1 -->
-  <g transform="translate(740, 218)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#04130B" stroke="#0D3B22" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#6EE7B7">Open a browser tab instead.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">Every container, pod, volume, network — visible on a live</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">canvas. Updates in real time. No refresh needed.</text>
-  </g>
+  <!-- Feature 5: Terminal -->
+  <rect x="440" y="336" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="440" y="336" width="4" height="82" rx="2" fill="#D97706"/>
+  <text x="460" y="366" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Built-in terminal</text>
+  <text x="460" y="387" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Full interactive shell inside any container</text>
+  <text x="460" y="405" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">or on the host. Right in the browser tab.</text>
 
-  <!-- Solution 2 -->
-  <g transform="translate(740, 306)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#04130B" stroke="#0D3B22" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#6EE7B7">See it the moment it happens.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">Status changes push instantly over WebSocket. A crash</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">turns red on your screen the second it occurs.</text>
-  </g>
+  <!-- Feature 6: Zero setup -->
+  <rect x="800" y="336" width="320" height="82" rx="10" fill="#0D0B1C" stroke="#1E1B35" stroke-width="1.5"/>
+  <rect x="800" y="336" width="4" height="82" rx="2" fill="#A855F7"/>
+  <text x="820" y="366" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#C4BFDF">Zero setup. Public URL in 30s.</text>
+  <text x="820" y="387" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">One binary. Free Cloudflare tunnel. No</text>
+  <text x="820" y="405" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#4B4560">Docker, no signup, no firewall change.</text>
 
-  <!-- Solution 3 -->
-  <g transform="translate(740, 394)">
-    <rect x="0" y="0" width="360" height="72" rx="10" fill="#04130B" stroke="#0D3B22" stroke-width="1.5"/>
-    <text x="20" y="26" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#6EE7B7">Start, stop, restart — from the UI.</text>
-    <text x="20" y="48" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">Click any container or pod to act on it directly.</text>
-    <text x="20" y="63" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#2E7A55">Full control, no terminal required.</text>
-  </g>
+  <!-- Works with chips -->
+  <text x="600" y="450" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#3A3558" text-anchor="middle" font-weight="600" letter-spacing="1">WORKS WITH</text>
+  <rect x="390" y="458" width="80" height="22" rx="6" fill="#0F0E1C" stroke="#2A2640" stroke-width="1"/>
+  <text x="430" y="473" font-family="ui-monospace,monospace" font-size="10" fill="#7DB8CC" text-anchor="middle">Docker</text>
+  <rect x="480" y="458" width="80" height="22" rx="6" fill="#0F0E1C" stroke="#2A2640" stroke-width="1"/>
+  <text x="520" y="473" font-family="ui-monospace,monospace" font-size="10" fill="#7DB8CC" text-anchor="middle">Kubernetes</text>
+  <rect x="570" y="458" width="76" height="22" rx="6" fill="#0F0E1C" stroke="#2A2640" stroke-width="1"/>
+  <text x="608" y="473" font-family="ui-monospace,monospace" font-size="10" fill="#7DB8CC" text-anchor="middle">Compose</text>
+  <rect x="656" y="458" width="76" height="22" rx="6" fill="#0F0E1C" stroke="#2A2640" stroke-width="1"/>
+  <text x="694" y="473" font-family="ui-monospace,monospace" font-size="10" fill="#7DB8CC" text-anchor="middle">Systemd</text>
+  <rect x="742" y="458" width="68" height="22" rx="6" fill="#0F0E1C" stroke="#2A2640" stroke-width="1"/>
+  <text x="776" y="473" font-family="ui-monospace,monospace" font-size="10" fill="#7DB8CC" text-anchor="middle">Linux</text>
 
-  <!-- ══════════════════════════════════════ -->
-  <!-- BOTTOM: Install command -->
-  <!-- ══════════════════════════════════════ -->
-  <rect x="0" y="505" width="1200" height="125" fill="#050410" opacity="0.97"/>
-  <line x1="0" y1="505" x2="1200" y2="505" stroke="#1A1730" stroke-width="1"/>
+  <!-- ── INSTALL COMMAND ── -->
+  <rect x="0" y="500" width="1200" height="130" fill="#050410"/>
+  <line x1="0" y1="500" x2="1200" y2="500" stroke="#1A1730" stroke-width="1"/>
 
-  <!-- Label -->
-  <text x="600" y="533" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" fill="#4B4560" text-anchor="middle" letter-spacing="2">ONE COMMAND. THAT'S IT.</text>
+  <text x="600" y="526" font-family="system-ui,-apple-system,sans-serif" font-size="12" font-weight="700" fill="#3A3558" text-anchor="middle" letter-spacing="2">INSTALL IN ONE COMMAND</text>
 
   <!-- Command box -->
-  <rect x="200" y="545" width="800" height="50" rx="10" fill="#0C0B1C" stroke="#2A2640" stroke-width="1.5"/>
+  <rect x="140" y="537" width="920" height="52" rx="10" fill="#0C0B1C" stroke="#2A2248" stroke-width="1.5"/>
   <!-- green dot -->
-  <circle cx="228" cy="570" r="5" fill="#10B981"/>
-  <!-- command text -->
-  <text x="244" y="566" font-family="ui-monospace,monospace" font-size="13" fill="#6B6380">$</text>
-  <text x="260" y="566" font-family="ui-monospace,monospace" font-size="13" fill="#9B91C0">curl -fsSL </text>
-  <text x="347" y="566" font-family="ui-monospace,monospace" font-size="13" fill="#C084FC">https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh</text>
-  <text x="260" y="584" font-family="ui-monospace,monospace" font-size="13" fill="#9B91C0">  | bash</text>
-  <!-- cursor blink -->
-  <rect x="316" y="575" width="8" height="13" rx="1" fill="#4B4560" opacity="0.7"/>
+  <circle cx="168" cy="563" r="5" fill="#10B981"/>
+  <!-- prompt -->
+  <text x="184" y="559" font-family="ui-monospace,monospace" font-size="13" fill="#4B4560">$</text>
+  <text x="200" y="559" font-family="ui-monospace,monospace" font-size="13" fill="#8B82B0">curl -fsSL </text>
+  <text x="286" y="559" font-family="ui-monospace,monospace" font-size="13" fill="#C084FC">https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh</text>
+  <text x="200" y="578" font-family="ui-monospace,monospace" font-size="13" fill="#8B82B0">  | bash</text>
+  <rect x="254" y="569" width="8" height="13" rx="1" fill="#4B4560" opacity="0.6"/>
 
-  <!-- Subtext -->
-  <text x="600" y="614" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#3A3558" text-anchor="middle">No Docker. No signup. No firewall change. Opens a public HTTPS URL in 30 seconds.</text>
+  <!-- Sub-caption -->
+  <text x="600" y="610" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#3A3558" text-anchor="middle">Prints a public HTTPS URL. Paste it in any browser. That's your dashboard.</text>
 
 </svg>

@@ -327,3 +327,9 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 - ❌ If you run this as a paid cloud service for customers, your modifications must be open source too
 
 This protects against large companies repackaging the project without contributing back. Individual developers and internal company use are unaffected.
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=bytestrix/InfraCanvas&type=Date)](https://star-history.com/#bytestrix/InfraCanvas&Date)
