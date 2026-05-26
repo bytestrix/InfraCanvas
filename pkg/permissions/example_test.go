@@ -19,7 +19,7 @@ func ExampleChecker_ValidatePermissions() {
 			status = "✗"
 		}
 		fmt.Printf("%s [%s] %s: %s\n", status, check.Layer, check.Operation, check.Message)
-		
+
 		if !check.Available && check.Suggestion != "" {
 			fmt.Printf("  → %s\n", check.Suggestion)
 		}
@@ -53,11 +53,11 @@ func ExampleChecker_GetSummary() {
 	checker.ValidatePermissions([]string{"host", "docker", "kubernetes"})
 
 	available, unavailable, partial := checker.GetSummary()
-	
+
 	fmt.Printf("Available operations: %d\n", available)
 	fmt.Printf("Unavailable operations: %d\n", unavailable)
 	fmt.Printf("Partially available operations: %d\n", partial)
-	
+
 	// Calculate percentage
 	total := available + unavailable + partial
 	if total > 0 {

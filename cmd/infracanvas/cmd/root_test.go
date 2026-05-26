@@ -8,14 +8,14 @@ import (
 func TestRootCommand(t *testing.T) {
 	// Test that root command executes without error
 	rootCmd.SetArgs([]string{"--help"})
-	
+
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
-	
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("root command failed: %v", err)
 	}
-	
+
 	output := out.String()
 	if output == "" {
 		t.Error("expected help output, got empty string")
@@ -24,9 +24,9 @@ func TestRootCommand(t *testing.T) {
 
 func TestGlobalFlags(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		wantErr  bool
+		name    string
+		args    []string
+		wantErr bool
 	}{
 		{
 			name:    "output format flag",
@@ -49,7 +49,7 @@ func TestGlobalFlags(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rootCmd.SetArgs(tt.args)

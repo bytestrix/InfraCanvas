@@ -78,11 +78,11 @@ func (k *KubernetesExecutor) UpdateDeploymentImage(ctx context.Context, namespac
 			Message: "Deployment updated but rollout did not complete",
 			Error:   err.Error(),
 			Details: map[string]interface{}{
-				"old_image":    oldImage,
-				"new_image":    newImage,
-				"deployment":   deploymentName,
-				"namespace":    namespace,
-				"container":    containerName,
+				"old_image":  oldImage,
+				"new_image":  newImage,
+				"deployment": deploymentName,
+				"namespace":  namespace,
+				"container":  containerName,
 			},
 			StartTime: startTime,
 			EndTime:   time.Now(),
@@ -93,11 +93,11 @@ func (k *KubernetesExecutor) UpdateDeploymentImage(ctx context.Context, namespac
 		Success: true,
 		Message: fmt.Sprintf("Successfully updated deployment %s to image %s", deploymentName, newImage),
 		Details: map[string]interface{}{
-			"old_image":    oldImage,
-			"new_image":    newImage,
-			"deployment":   deploymentName,
-			"namespace":    namespace,
-			"container":    containerName,
+			"old_image":  oldImage,
+			"new_image":  newImage,
+			"deployment": deploymentName,
+			"namespace":  namespace,
+			"container":  containerName,
 		},
 		StartTime: startTime,
 		EndTime:   time.Now(),
@@ -359,13 +359,13 @@ func (k *KubernetesExecutor) StreamPodLogs(ctx context.Context, namespace, podNa
 
 // K8sExecSession holds state for an interactive pod exec session.
 type K8sExecSession struct {
-	stdin  *io.PipeWriter
-	done   chan struct{}
+	stdin *io.PipeWriter
+	done  chan struct{}
 }
 
 func (s *K8sExecSession) Write(p []byte) (int, error) { return s.stdin.Write(p) }
 func (s *K8sExecSession) Close() error                { return s.stdin.Close() }
-func (s *K8sExecSession) Done() <-chan struct{}        { return s.done }
+func (s *K8sExecSession) Done() <-chan struct{}       { return s.done }
 
 // ExecInPod opens an interactive shell inside a pod container.
 // stdout/stderr are written to out; stdin is written to via the returned K8sExecSession.
@@ -399,10 +399,10 @@ func (k *KubernetesExecutor) ExecInPod(ctx context.Context, namespace, podName, 
 	go func() {
 		defer close(sess.done)
 		_ = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:             stdinR,
-			Stdout:            out,
-			Stderr:            out,
-			Tty:               true,
+			Stdin:  stdinR,
+			Stdout: out,
+			Stderr: out,
+			Tty:    true,
 		})
 		stdinR.Close()
 	}()

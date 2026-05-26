@@ -89,7 +89,6 @@ func (k *KubernetesExecutor) ValidateAction(action *Action) error {
 	return nil
 }
 
-
 // ExecuteAction executes a Kubernetes action
 func (k *KubernetesExecutor) ExecuteAction(ctx context.Context, action *Action) (*ActionResult, error) {
 	startTime := time.Now()
@@ -112,6 +111,8 @@ func (k *KubernetesExecutor) ExecuteAction(ctx context.Context, action *Action) 
 		return k.deleteJob(ctx, ns, name, startTime)
 	case ActionK8sDeleteDeployment:
 		return k.deleteDeployment(ctx, ns, name, startTime)
+	case ActionK8sDeleteStatefulSet:
+		return k.deleteStatefulSet(ctx, ns, name, startTime)
 	case ActionK8sDeleteService:
 		return k.deleteService(ctx, ns, name, startTime)
 	case ActionK8sCordonNode:
@@ -170,6 +171,16 @@ func (k *KubernetesExecutor) deleteDeployment(ctx context.Context, namespace, na
 		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete deployment %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
 	}
 	return &ActionResult{Success: true, Message: fmt.Sprintf("Deployment %s deleted", name), StartTime: startTime, EndTime: time.Now()}, nil
+}
+
+// deleteStatefulSet deletes a Kubernetes StatefulSet and its pods.
+func (k *KubernetesExecutor) deleteStatefulSet(ctx context.Context, namespace, name string, startTime time.Time) (*ActionResult, error) {
+	propagation := metav1.DeletePropagationForeground
+	err := k.clientset.AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+	if err != nil {
+		return &ActionResult{Success: false, Message: fmt.Sprintf("Failed to delete statefulset %s", name), Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
+	}
+	return &ActionResult{Success: true, Message: fmt.Sprintf("StatefulSet %s deleted", name), StartTime: startTime, EndTime: time.Now()}, nil
 }
 
 // deleteService deletes a Kubernetes Service.
@@ -241,8 +252,8 @@ func (k *KubernetesExecutor) drainNode(ctx context.Context, name string, startTi
 	}
 
 	return &ActionResult{
-		Success: true,
-		Message: fmt.Sprintf("Node %s drained: %d pods evicted, %d skipped (DaemonSet or error)", name, evicted, skipped),
+		Success:   true,
+		Message:   fmt.Sprintf("Node %s drained: %d pods evicted, %d skipped (DaemonSet or error)", name, evicted, skipped),
 		StartTime: startTime, EndTime: time.Now(),
 	}, nil
 }
@@ -340,4 +351,3 @@ func (k *KubernetesExecutor) scaleStatefulSet(ctx context.Context, namespace, na
 		EndTime:   time.Now(),
 	}, nil
 }
-

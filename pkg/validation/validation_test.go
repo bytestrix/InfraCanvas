@@ -20,7 +20,7 @@ func TestSafeParseInt_EmptyValue(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for empty value")
 	}
-	
+
 	parseErr, ok := err.(*ParseError)
 	if !ok {
 		t.Error("expected ParseError type")
@@ -35,7 +35,7 @@ func TestSafeParseInt_InvalidFormat(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for invalid format")
 	}
-	
+
 	parseErr, ok := err.(*ParseError)
 	if !ok {
 		t.Error("expected ParseError type")
@@ -108,12 +108,12 @@ func TestValidateJSON_Invalid(t *testing.T) {
 func TestSafeUnmarshalJSON_Success(t *testing.T) {
 	data := []byte(`{"name": "test", "value": 42}`)
 	var result map[string]interface{}
-	
+
 	err := SafeUnmarshalJSON(data, &result, "test_context")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	
+
 	if result["name"] != "test" {
 		t.Errorf("expected name='test', got %v", result["name"])
 	}
@@ -156,11 +156,11 @@ func TestSafeSplitLines_Success(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	
+
 	if len(lines) != 3 {
 		t.Errorf("expected 3 lines, got %d", len(lines))
 	}
-	
+
 	if lines[0] != "line1" || lines[1] != "line2" || lines[2] != "line3" {
 		t.Errorf("unexpected line values: %v", lines)
 	}
@@ -171,7 +171,7 @@ func TestSafeSplitLines_Empty(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	
+
 	if len(lines) != 0 {
 		t.Errorf("expected 0 lines, got %d", len(lines))
 	}
@@ -183,7 +183,7 @@ func TestSafeSplitFields_Success(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	
+
 	if len(fields) != 4 {
 		t.Errorf("expected 4 fields, got %d", len(fields))
 	}
@@ -195,7 +195,7 @@ func TestSafeSplitFields_InsufficientFields(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for insufficient fields")
 	}
-	
+
 	parseErr, ok := err.(*ParseError)
 	if !ok {
 		t.Error("expected ParseError type")

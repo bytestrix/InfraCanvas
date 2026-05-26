@@ -25,10 +25,10 @@ const (
 type Detector struct {
 	// Patterns for hostname matching
 	hostnamePatterns map[Environment]*regexp.Regexp
-	
+
 	// Patterns for namespace matching
 	namespacePatterns map[Environment]*regexp.Regexp
-	
+
 	// Label keys to check for environment information
 	envLabelKeys []string
 }
@@ -37,18 +37,18 @@ type Detector struct {
 func NewDetector() *Detector {
 	return &Detector{
 		hostnamePatterns: map[Environment]*regexp.Regexp{
-			EnvProduction:  regexp.MustCompile(`(?i)(prod|production|prd)`),
-			EnvStaging:     regexp.MustCompile(`(?i)(stag|staging|stage|stg)`),
-			EnvQA:          regexp.MustCompile(`(?i)(qa|qas|quality)`),
-			EnvDev:         regexp.MustCompile(`(?i)(dev|devel|development)`),
-			EnvTest:        regexp.MustCompile(`(?i)(test|tst)`),
+			EnvProduction: regexp.MustCompile(`(?i)(prod|production|prd)`),
+			EnvStaging:    regexp.MustCompile(`(?i)(stag|staging|stage|stg)`),
+			EnvQA:         regexp.MustCompile(`(?i)(qa|qas|quality)`),
+			EnvDev:        regexp.MustCompile(`(?i)(dev|devel|development)`),
+			EnvTest:       regexp.MustCompile(`(?i)(test|tst)`),
 		},
 		namespacePatterns: map[Environment]*regexp.Regexp{
-			EnvProduction:  regexp.MustCompile(`(?i)(prod|production|prd)`),
-			EnvStaging:     regexp.MustCompile(`(?i)(stag|staging|stage|stg)`),
-			EnvQA:          regexp.MustCompile(`(?i)(qa|qas|quality)`),
-			EnvDev:         regexp.MustCompile(`(?i)(dev|devel|development)`),
-			EnvTest:        regexp.MustCompile(`(?i)(test|tst)`),
+			EnvProduction: regexp.MustCompile(`(?i)(prod|production|prd)`),
+			EnvStaging:    regexp.MustCompile(`(?i)(stag|staging|stage|stg)`),
+			EnvQA:         regexp.MustCompile(`(?i)(qa|qas|quality)`),
+			EnvDev:        regexp.MustCompile(`(?i)(dev|devel|development)`),
+			EnvTest:       regexp.MustCompile(`(?i)(test|tst)`),
 		},
 		envLabelKeys: []string{
 			"environment",
@@ -64,24 +64,24 @@ func (d *Detector) DetectFromHost(host *models.Host) Environment {
 	if host == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check hostname
 	if env := d.matchHostname(host.Hostname); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check FQDN
 	if env := d.matchHostname(host.FQDN); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check cloud provider tags
 	if host.CloudTags != nil {
 		if env := d.detectFromLabels(host.CloudTags); env != EnvUnknown {
 			return env
 		}
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -90,17 +90,17 @@ func (d *Detector) DetectFromContainer(container *models.Container) Environment 
 	if container == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check container labels
 	if env := d.detectFromLabels(container.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check container name
 	if env := d.matchHostname(container.Name); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -109,17 +109,17 @@ func (d *Detector) DetectFromNamespace(namespace *models.Namespace) Environment 
 	if namespace == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check namespace name
 	if env := d.matchNamespace(namespace.Name); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check namespace labels
 	if env := d.detectFromLabels(namespace.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -128,17 +128,17 @@ func (d *Detector) DetectFromPod(pod *models.Pod) Environment {
 	if pod == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check pod namespace
 	if env := d.matchNamespace(pod.Namespace); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check pod labels
 	if env := d.detectFromLabels(pod.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -147,17 +147,17 @@ func (d *Detector) DetectFromDeployment(deployment *models.Deployment) Environme
 	if deployment == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check deployment namespace
 	if env := d.matchNamespace(deployment.Namespace); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check deployment labels
 	if env := d.detectFromLabels(deployment.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -166,17 +166,17 @@ func (d *Detector) DetectFromStatefulSet(statefulset *models.StatefulSet) Enviro
 	if statefulset == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check statefulset namespace
 	if env := d.matchNamespace(statefulset.Namespace); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check statefulset labels
 	if env := d.detectFromLabels(statefulset.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -185,17 +185,17 @@ func (d *Detector) DetectFromDaemonSet(daemonset *models.DaemonSet) Environment 
 	if daemonset == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check daemonset namespace
 	if env := d.matchNamespace(daemonset.Namespace); env != EnvUnknown {
 		return env
 	}
-	
+
 	// Check daemonset labels
 	if env := d.detectFromLabels(daemonset.Labels); env != EnvUnknown {
 		return env
 	}
-	
+
 	return EnvUnknown
 }
 
@@ -244,7 +244,7 @@ func (d *Detector) detectFromLabels(labels map[string]string) Environment {
 	if labels == nil {
 		return EnvUnknown
 	}
-	
+
 	// Check each known environment label key
 	for _, key := range d.envLabelKeys {
 		if value, exists := labels[key]; exists {
@@ -253,14 +253,14 @@ func (d *Detector) detectFromLabels(labels map[string]string) Environment {
 			}
 		}
 	}
-	
+
 	return EnvUnknown
 }
 
 // normalizeEnvironment normalizes environment string to standard Environment type
 func (d *Detector) normalizeEnvironment(value string) Environment {
 	normalized := strings.ToLower(strings.TrimSpace(value))
-	
+
 	switch normalized {
 	case "prod", "production", "prd":
 		return EnvProduction
@@ -281,14 +281,14 @@ func (d *Detector) normalizeEnvironment(value string) Environment {
 // for each entity. This is useful for batch processing.
 func (d *Detector) DetectFromSnapshot(snapshot *models.InfraSnapshot) map[string]Environment {
 	envMap := make(map[string]Environment)
-	
+
 	if snapshot == nil {
 		return envMap
 	}
-	
+
 	for id, entity := range snapshot.Entities {
 		var env Environment = EnvUnknown
-		
+
 		switch e := entity.(type) {
 		case *models.Host:
 			env = d.DetectFromHost(e)
@@ -305,11 +305,11 @@ func (d *Detector) DetectFromSnapshot(snapshot *models.InfraSnapshot) map[string
 		case *models.DaemonSet:
 			env = d.DetectFromDaemonSet(e)
 		}
-		
+
 		if env != EnvUnknown {
 			envMap[id] = env
 		}
 	}
-	
+
 	return envMap
 }

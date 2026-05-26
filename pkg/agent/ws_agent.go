@@ -58,19 +58,19 @@ type wsEnvelope struct {
 
 // GraphDiff is the incremental update payload sent to the browser.
 type GraphDiff struct {
-	Timestamp      string              `json:"timestamp"`
-	AddedNodes     []output.GraphNode  `json:"addedNodes"`
-	ModifiedNodes  []output.GraphNode  `json:"modifiedNodes"`
-	RemovedNodeIds []string            `json:"removedNodeIds"`
-	AddedEdges     []output.GraphEdge  `json:"addedEdges"`
-	RemovedEdgeIds []string            `json:"removedEdgeIds"`
+	Timestamp      string             `json:"timestamp"`
+	AddedNodes     []output.GraphNode `json:"addedNodes"`
+	ModifiedNodes  []output.GraphNode `json:"modifiedNodes"`
+	RemovedNodeIds []string           `json:"removedNodeIds"`
+	AddedEdges     []output.GraphEdge `json:"addedEdges"`
+	RemovedEdgeIds []string           `json:"removedEdgeIds"`
 }
 
 // execSession holds state for an active interactive exec session.
 // Exactly one of dockerSess, ptmx, or k8sSess will be non-nil.
 type execSession struct {
-	dockerSess *actions.ExecSession   // Docker exec (container terminal)
-	ptmx       *os.File               // host PTY (VM terminal)
+	dockerSess *actions.ExecSession    // Docker exec (container terminal)
+	ptmx       *os.File                // host PTY (VM terminal)
 	k8sSess    *actions.K8sExecSession // Kubernetes pod exec
 	cancel     context.CancelFunc
 }
@@ -332,7 +332,9 @@ func (a *WSAgent) waitForPairCode(ctx context.Context, ch <-chan wsEnvelope) (st
 			return "", fmt.Errorf("timed out waiting for pair code from server")
 		case env := <-ch:
 			if env.Type == "PAIR_CODE" {
-				var d struct{ Code string `json:"code"` }
+				var d struct {
+					Code string `json:"code"`
+				}
 				if err := json.Unmarshal(env.Data, &d); err == nil && d.Code != "" {
 					return d.Code, nil
 				}
@@ -344,7 +346,9 @@ func (a *WSAgent) waitForPairCode(ctx context.Context, ch <-chan wsEnvelope) (st
 func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 	switch env.Type {
 	case "PAIRED":
-		var d struct{ BrowserCount int `json:"browserCount"` }
+		var d struct {
+			BrowserCount int `json:"browserCount"`
+		}
 		_ = json.Unmarshal(env.Data, &d)
 		log.Printf("Browser connected (%d total)", d.BrowserCount)
 
@@ -362,7 +366,9 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 		}
 
 	case "COMMAND":
-		var d struct{ Action string `json:"action"` }
+		var d struct {
+			Action string `json:"action"`
+		}
 		_ = json.Unmarshal(env.Data, &d)
 		log.Printf("Command from backend: %s", d.Action)
 		if d.Action == "refresh" {
@@ -553,14 +559,12 @@ func printPairBanner(code string) {
 	log.Printf("Pair code: %s", code)
 }
 
-
-
 // handleActionRequest processes action execution requests from the browser.
 func (a *WSAgent) handleActionRequest(ctx context.Context, data json.RawMessage) {
 	var req struct {
-		ActionID   string            `json:"action_id"`
-		Type       string            `json:"type"`
-		Target     struct {
+		ActionID string `json:"action_id"`
+		Type     string `json:"type"`
+		Target   struct {
 			Layer      string `json:"layer"`
 			EntityType string `json:"entity_type"`
 			EntityID   string `json:"entity_id"`
@@ -870,7 +874,7 @@ func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 		Namespace   string   `json:"namespace"`    // kubernetes layer
 		PodName     string   `json:"pod_name"`     // kubernetes layer
 		Container   string   `json:"container"`    // kubernetes layer (optional)
-		Layer       string   `json:"layer"`         // "host", "docker", or "kubernetes"
+		Layer       string   `json:"layer"`        // "host", "docker", or "kubernetes"
 		Cmd         []string `json:"cmd"`
 		Rows        uint     `json:"rows"`
 		Cols        uint     `json:"cols"`

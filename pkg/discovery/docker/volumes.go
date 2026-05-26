@@ -15,14 +15,14 @@ func (d *Discovery) GetVolumes(ctx context.Context) ([]models.Volume, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list volumes: %w", err)
 	}
-	
+
 	volumes := make([]models.Volume, 0, len(volumeList.Volumes))
-	
+
 	for _, vol := range volumeList.Volumes {
 		volume := d.parseVolume(vol)
 		volumes = append(volumes, volume)
 	}
-	
+
 	return volumes, nil
 }
 
@@ -30,7 +30,7 @@ func (d *Discovery) GetVolumes(ctx context.Context) ([]models.Volume, error) {
 func (d *Discovery) parseVolume(vol *volume.Volume) models.Volume {
 	// Parse created time
 	created, _ := time.Parse(time.RFC3339, vol.CreatedAt)
-	
+
 	return models.Volume{
 		BaseEntity: models.BaseEntity{
 			ID:          fmt.Sprintf("volume:%s", vol.Name),
@@ -55,7 +55,7 @@ func TrackVolumeUsage(volumes []models.Volume, containers []models.Container) []
 	for i := range volumes {
 		volumeMap[volumes[i].Name] = &volumes[i]
 	}
-	
+
 	// Track which containers use each volume
 	for _, container := range containers {
 		for _, mount := range container.Mounts {
@@ -68,12 +68,12 @@ func TrackVolumeUsage(volumes []models.Volume, containers []models.Container) []
 			}
 		}
 	}
-	
+
 	// Convert map back to slice
 	result := make([]models.Volume, 0, len(volumeMap))
 	for _, vol := range volumeMap {
 		result = append(result, *vol)
 	}
-	
+
 	return result
 }

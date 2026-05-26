@@ -19,7 +19,7 @@ func TestNewTracker(t *testing.T) {
 
 func TestTrackDockerImages(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			BaseEntity: models.BaseEntity{
@@ -42,9 +42,9 @@ func TestTrackDockerImages(t *testing.T) {
 			Tag:        "latest",
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	images := tracker.GetAllImages()
 	if len(images) != 2 {
 		t.Errorf("Expected 2 images, got %d", len(images))
@@ -53,7 +53,7 @@ func TestTrackDockerImages(t *testing.T) {
 
 func TestTrackDockerContainers(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	// Add initial images
 	dockerImages := []models.Image{
 		{
@@ -69,7 +69,7 @@ func TestTrackDockerContainers(t *testing.T) {
 		},
 	}
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	// Track containers
 	containers := []models.Container{
 		{
@@ -83,18 +83,18 @@ func TestTrackDockerContainers(t *testing.T) {
 			Image:       "nginx:1.21",
 		},
 	}
-	
+
 	tracker.TrackDockerContainers(containers)
-	
+
 	img := tracker.images["sha256:abc123"]
 	if img == nil {
 		t.Fatal("Image not found")
 	}
-	
+
 	if len(img.UsedByContainers) != 2 {
 		t.Errorf("Expected 2 containers, got %d", len(img.UsedByContainers))
 	}
-	
+
 	// Verify container IDs
 	expectedContainers := map[string]bool{"container1": true, "container2": true}
 	for _, cid := range img.UsedByContainers {
@@ -106,7 +106,7 @@ func TestTrackDockerContainers(t *testing.T) {
 
 func TestTrackDockerContainers_NewImage(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	// Track container with image not in tracker
 	containers := []models.Container{
 		{
@@ -115,14 +115,14 @@ func TestTrackDockerContainers_NewImage(t *testing.T) {
 			Image:       "postgres:13",
 		},
 	}
-	
+
 	tracker.TrackDockerContainers(containers)
-	
+
 	images := tracker.GetAllImages()
 	if len(images) != 1 {
 		t.Errorf("Expected 1 image, got %d", len(images))
 	}
-	
+
 	img := images[0]
 	if img.Registry != "docker.io" {
 		t.Errorf("Expected registry docker.io, got %s", img.Registry)
@@ -137,7 +137,7 @@ func TestTrackDockerContainers_NewImage(t *testing.T) {
 
 func TestTrackKubernetesPods(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	pods := []models.Pod{
 		{
 			BaseEntity: models.BaseEntity{
@@ -170,14 +170,14 @@ func TestTrackKubernetesPods(t *testing.T) {
 			},
 		},
 	}
-	
+
 	tracker.TrackKubernetesPods(pods)
-	
+
 	images := tracker.GetAllImages()
 	if len(images) != 2 {
 		t.Errorf("Expected 2 images, got %d", len(images))
 	}
-	
+
 	// Check that pods are tracked
 	for _, img := range images {
 		if len(img.UsedByPods) != 1 {
@@ -188,7 +188,7 @@ func TestTrackKubernetesPods(t *testing.T) {
 
 func TestTrackKubernetesWorkloads(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	deployments := []models.Deployment{
 		{
 			BaseEntity: models.BaseEntity{
@@ -204,7 +204,7 @@ func TestTrackKubernetesWorkloads(t *testing.T) {
 			},
 		},
 	}
-	
+
 	statefulSets := []models.StatefulSet{
 		{
 			BaseEntity: models.BaseEntity{
@@ -220,7 +220,7 @@ func TestTrackKubernetesWorkloads(t *testing.T) {
 			},
 		},
 	}
-	
+
 	daemonSets := []models.DaemonSet{
 		{
 			BaseEntity: models.BaseEntity{
@@ -236,9 +236,9 @@ func TestTrackKubernetesWorkloads(t *testing.T) {
 			},
 		},
 	}
-	
+
 	tracker.TrackKubernetesWorkloads(deployments, statefulSets, daemonSets)
-	
+
 	images := tracker.GetAllImages()
 	if len(images) != 3 {
 		t.Errorf("Expected 3 images, got %d", len(images))
@@ -247,7 +247,7 @@ func TestTrackKubernetesWorkloads(t *testing.T) {
 
 func TestGroupByRepository(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:    "sha256:abc123",
@@ -268,20 +268,20 @@ func TestGroupByRepository(t *testing.T) {
 			Tag:        "latest",
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	groups := tracker.GroupByRepository()
-	
+
 	if len(groups) != 2 {
 		t.Errorf("Expected 2 repository groups, got %d", len(groups))
 	}
-	
+
 	nginxKey := "docker.io/library/nginx"
 	if len(groups[nginxKey]) != 2 {
 		t.Errorf("Expected 2 nginx images, got %d", len(groups[nginxKey]))
 	}
-	
+
 	redisKey := "docker.io/library/redis"
 	if len(groups[redisKey]) != 1 {
 		t.Errorf("Expected 1 redis image, got %d", len(groups[redisKey]))
@@ -290,7 +290,7 @@ func TestGroupByRepository(t *testing.T) {
 
 func TestGetImagesWithLatestTag(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:    "sha256:abc123",
@@ -311,15 +311,15 @@ func TestGetImagesWithLatestTag(t *testing.T) {
 			Tag:        "latest",
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	latestImages := tracker.GetImagesWithLatestTag()
-	
+
 	if len(latestImages) != 2 {
 		t.Errorf("Expected 2 images with latest tag, got %d", len(latestImages))
 	}
-	
+
 	for _, img := range latestImages {
 		if img.Tag != "latest" {
 			t.Errorf("Expected tag 'latest', got '%s'", img.Tag)
@@ -329,7 +329,7 @@ func TestGetImagesWithLatestTag(t *testing.T) {
 
 func TestGetImagesWithoutExplicitTag(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:    "sha256:abc123",
@@ -356,11 +356,11 @@ func TestGetImagesWithoutExplicitTag(t *testing.T) {
 			Tag:        "<none>",
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	noTagImages := tracker.GetImagesWithoutExplicitTag()
-	
+
 	if len(noTagImages) != 3 {
 		t.Errorf("Expected 3 images without explicit tag, got %d", len(noTagImages))
 	}
@@ -368,7 +368,7 @@ func TestGetImagesWithoutExplicitTag(t *testing.T) {
 
 func TestGetImagesByContainer(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:          "sha256:abc123",
@@ -378,18 +378,18 @@ func TestGetImagesByContainer(t *testing.T) {
 			UsedByContainers: []string{"container1", "container2"},
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	img := tracker.GetImagesByContainer("container1")
 	if img == nil {
 		t.Fatal("Image not found for container1")
 	}
-	
+
 	if img.ImageID != "sha256:abc123" {
 		t.Errorf("Expected image sha256:abc123, got %s", img.ImageID)
 	}
-	
+
 	img2 := tracker.GetImagesByContainer("container999")
 	if img2 != nil {
 		t.Error("Expected nil for non-existent container")
@@ -398,7 +398,7 @@ func TestGetImagesByContainer(t *testing.T) {
 
 func TestGetImagesByPod(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:    "sha256:abc123",
@@ -415,14 +415,14 @@ func TestGetImagesByPod(t *testing.T) {
 			UsedByPods: []string{"pod/default/nginx-pod"},
 		},
 	}
-	
+
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	images := tracker.GetImagesByPod("pod/default/nginx-pod")
 	if len(images) != 2 {
 		t.Errorf("Expected 2 images for pod, got %d", len(images))
 	}
-	
+
 	images2 := tracker.GetImagesByPod("pod/default/nonexistent")
 	if len(images2) != 0 {
 		t.Errorf("Expected 0 images for non-existent pod, got %d", len(images2))
@@ -431,11 +431,11 @@ func TestGetImagesByPod(t *testing.T) {
 
 func TestParseImageReference(t *testing.T) {
 	tests := []struct {
-		name       string
-		imageName  string
-		wantReg    string
-		wantRepo   string
-		wantTag    string
+		name      string
+		imageName string
+		wantReg   string
+		wantRepo  string
+		wantTag   string
 	}{
 		{
 			name:      "simple library image",
@@ -494,11 +494,11 @@ func TestParseImageReference(t *testing.T) {
 			wantTag:   "v2.1",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotReg, gotRepo, gotTag := ParseImageReference(tt.imageName)
-			
+
 			if gotReg != tt.wantReg {
 				t.Errorf("ParseImageReference() registry = %v, want %v", gotReg, tt.wantReg)
 			}
@@ -514,7 +514,7 @@ func TestParseImageReference(t *testing.T) {
 
 func TestTrackDockerContainers_DuplicatePrevention(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	dockerImages := []models.Image{
 		{
 			ImageID:          "sha256:abc123",
@@ -525,7 +525,7 @@ func TestTrackDockerContainers_DuplicatePrevention(t *testing.T) {
 		},
 	}
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	containers := []models.Container{
 		{
 			ContainerID: "container1",
@@ -533,11 +533,11 @@ func TestTrackDockerContainers_DuplicatePrevention(t *testing.T) {
 			Image:       "nginx:1.21",
 		},
 	}
-	
+
 	// Track the same container twice
 	tracker.TrackDockerContainers(containers)
 	tracker.TrackDockerContainers(containers)
-	
+
 	img := tracker.images["sha256:abc123"]
 	if len(img.UsedByContainers) != 1 {
 		t.Errorf("Expected 1 container (no duplicates), got %d", len(img.UsedByContainers))
@@ -546,7 +546,7 @@ func TestTrackDockerContainers_DuplicatePrevention(t *testing.T) {
 
 func TestTrackKubernetesPods_DuplicatePrevention(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	pods := []models.Pod{
 		{
 			BaseEntity: models.BaseEntity{
@@ -564,16 +564,16 @@ func TestTrackKubernetesPods_DuplicatePrevention(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Track the same pod twice
 	tracker.TrackKubernetesPods(pods)
 	tracker.TrackKubernetesPods(pods)
-	
+
 	images := tracker.GetAllImages()
 	if len(images) != 1 {
 		t.Errorf("Expected 1 image, got %d", len(images))
 	}
-	
+
 	img := images[0]
 	if len(img.UsedByPods) != 1 {
 		t.Errorf("Expected 1 pod (no duplicates), got %d", len(img.UsedByPods))
@@ -582,7 +582,7 @@ func TestTrackKubernetesPods_DuplicatePrevention(t *testing.T) {
 
 func TestIntegration_DockerAndKubernetes(t *testing.T) {
 	tracker := NewTracker()
-	
+
 	// Track Docker images
 	dockerImages := []models.Image{
 		{
@@ -594,7 +594,7 @@ func TestIntegration_DockerAndKubernetes(t *testing.T) {
 		},
 	}
 	tracker.TrackDockerImages(dockerImages)
-	
+
 	// Track Docker containers
 	containers := []models.Container{
 		{
@@ -604,7 +604,7 @@ func TestIntegration_DockerAndKubernetes(t *testing.T) {
 		},
 	}
 	tracker.TrackDockerContainers(containers)
-	
+
 	// Track Kubernetes pods using the same image
 	pods := []models.Pod{
 		{
@@ -621,13 +621,13 @@ func TestIntegration_DockerAndKubernetes(t *testing.T) {
 		},
 	}
 	tracker.TrackKubernetesPods(pods)
-	
+
 	// Verify the image is tracked across both layers
 	images := tracker.GetAllImages()
 	if len(images) != 1 {
 		t.Fatalf("Expected 1 image, got %d", len(images))
 	}
-	
+
 	img := images[0]
 	if len(img.UsedByContainers) != 1 {
 		t.Errorf("Expected 1 container, got %d", len(img.UsedByContainers))

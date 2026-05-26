@@ -18,14 +18,14 @@ func (d *Discovery) GetImages(ctx context.Context) ([]models.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list images: %w", err)
 	}
-	
+
 	images := make([]models.Image, 0, len(imageList))
-	
+
 	for _, img := range imageList {
 		image := d.parseImage(img)
 		images = append(images, image)
 	}
-	
+
 	return images, nil
 }
 
@@ -33,7 +33,7 @@ func (d *Discovery) GetImages(ctx context.Context) ([]models.Image, error) {
 func (d *Discovery) parseImage(img image.Summary) models.Image {
 	// Parse repository and tag from RepoTags
 	var registry, repository, tag string
-	
+
 	if len(img.RepoTags) > 0 {
 		repoTag := img.RepoTags[0]
 		registry, repository, tag = parseImageName(repoTag)
@@ -47,10 +47,10 @@ func (d *Discovery) parseImage(img image.Summary) models.Image {
 		repository = "<none>"
 		tag = "<none>"
 	}
-	
+
 	// Parse created time
 	created := time.Unix(img.Created, 0)
-	
+
 	// Extract digest from RepoDigests
 	var digest string
 	if len(img.RepoDigests) > 0 {
@@ -59,13 +59,13 @@ func (d *Discovery) parseImage(img image.Summary) models.Image {
 			digest = parts[1]
 		}
 	}
-	
+
 	// Truncate image ID for display
 	imageIDShort := img.ID
 	if strings.HasPrefix(imageIDShort, "sha256:") {
 		imageIDShort = imageIDShort[7:19]
 	}
-	
+
 	return models.Image{
 		BaseEntity: models.BaseEntity{
 			ID:          fmt.Sprintf("image:%s", imageIDShort),
@@ -93,16 +93,16 @@ func parseImageName(imageName string) (registry, repository, tag string) {
 	if strings.Contains(imageName, "@") {
 		imageName = strings.Split(imageName, "@")[0]
 	}
-	
+
 	// Default tag
 	tag = "latest"
-	
+
 	// Find the last colon to check if it's a tag
 	lastColon := strings.LastIndex(imageName, ":")
 	lastSlash := strings.LastIndex(imageName, "/")
-	
+
 	var nameWithoutTag string
-	
+
 	// If there's a colon after the last slash, it's a tag
 	if lastColon > lastSlash && lastColon != -1 {
 		nameWithoutTag = imageName[:lastColon]
@@ -110,10 +110,10 @@ func parseImageName(imageName string) (registry, repository, tag string) {
 	} else {
 		nameWithoutTag = imageName
 	}
-	
+
 	// Parse registry and repository
 	parts := strings.Split(nameWithoutTag, "/")
-	
+
 	switch len(parts) {
 	case 1:
 		// No registry, library image (e.g., "nginx")
@@ -139,7 +139,7 @@ func parseImageName(imageName string) (registry, repository, tag string) {
 		registry = parts[0]
 		repository = strings.Join(parts[1:], "/")
 	}
-	
+
 	return registry, repository, tag
 }
 
@@ -150,19 +150,19 @@ func TrackImageUsage(images []models.Image, containers []models.Container) []mod
 	for i := range images {
 		imageMap[images[i].ImageID] = &images[i]
 	}
-	
+
 	// Track which containers use each image
 	for _, container := range containers {
 		if img, exists := imageMap[container.ImageID]; exists {
 			img.UsedByContainers = append(img.UsedByContainers, container.ContainerID)
 		}
 	}
-	
+
 	// Convert map back to slice
 	result := make([]models.Image, 0, len(imageMap))
 	for _, img := range imageMap {
 		result = append(result, *img)
 	}
-	
+
 	return result
 }

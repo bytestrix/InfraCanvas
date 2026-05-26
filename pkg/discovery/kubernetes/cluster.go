@@ -6,21 +6,21 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"infracanvas/internal/models"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GetClusterInfo collects cluster-level information
 func (d *Discovery) GetClusterInfo(ctx context.Context) (*models.Cluster, error) {
 	cacheKey := "cluster"
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if cluster, ok := cached.(*models.Cluster); ok {
 			return cluster, nil
 		}
 	}
-	
+
 	// Get server version
 	version, err := d.clientset.Discovery().ServerVersion()
 	if err != nil {

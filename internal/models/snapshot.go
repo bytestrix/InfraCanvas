@@ -14,20 +14,20 @@ type Relation struct {
 type RelationType string
 
 const (
-	RelationRunsOn     RelationType = "RUNS_ON"      // Container -> Host, Pod -> Node
-	RelationOwns       RelationType = "OWNS"         // Deployment -> ReplicaSet, ReplicaSet -> Pod
-	RelationUses       RelationType = "USES"         // Container -> Image, Pod -> Image
-	RelationMounts     RelationType = "MOUNTS"       // Container -> Volume, Pod -> PVC
-	RelationExposes    RelationType = "EXPOSES"      // Service -> Pod
-	RelationRoutesTo   RelationType = "ROUTES_TO"    // Ingress -> Service
-	RelationTargets    RelationType = "TARGETS"      // Service -> Pod (via selector)
-	RelationConnectsTo RelationType = "CONNECTS_TO"  // Container -> Network
-	RelationReferences RelationType = "REFERENCES"   // Pod -> ConfigMap, Pod -> Secret
-	RelationBindsTo    RelationType = "BINDS_TO"     // PVC -> PV
-	RelationProvisions RelationType = "PROVISIONS"   // StorageClass -> PV
-	RelationDependsOn  RelationType = "DEPENDS_ON"   // Service -> Service
-	RelationContains   RelationType = "CONTAINS"     // Namespace -> Pod/Service/Deployment/etc.
-	RelationRelatesTo  RelationType = "RELATES_TO"   // Event -> Pod/Deployment/etc.
+	RelationRunsOn     RelationType = "RUNS_ON"     // Container -> Host, Pod -> Node
+	RelationOwns       RelationType = "OWNS"        // Deployment -> ReplicaSet, ReplicaSet -> Pod
+	RelationUses       RelationType = "USES"        // Container -> Image, Pod -> Image
+	RelationMounts     RelationType = "MOUNTS"      // Container -> Volume, Pod -> PVC
+	RelationExposes    RelationType = "EXPOSES"     // Service -> Pod
+	RelationRoutesTo   RelationType = "ROUTES_TO"   // Ingress -> Service
+	RelationTargets    RelationType = "TARGETS"     // Service -> Pod (via selector)
+	RelationConnectsTo RelationType = "CONNECTS_TO" // Container -> Network
+	RelationReferences RelationType = "REFERENCES"  // Pod -> ConfigMap, Pod -> Secret
+	RelationBindsTo    RelationType = "BINDS_TO"    // PVC -> PV
+	RelationProvisions RelationType = "PROVISIONS"  // StorageClass -> PV
+	RelationDependsOn  RelationType = "DEPENDS_ON"  // Service -> Service
+	RelationContains   RelationType = "CONTAINS"    // Namespace -> Pod/Service/Deployment/etc.
+	RelationRelatesTo  RelationType = "RELATES_TO"  // Event -> Pod/Deployment/etc.
 )
 
 // InfraSnapshot represents a complete snapshot of infrastructure at a point in time
@@ -41,10 +41,10 @@ type InfraSnapshot struct {
 
 // SnapshotMetadata contains metadata about the snapshot collection
 type SnapshotMetadata struct {
-	CollectionDuration time.Duration      `json:"collection_duration"`
-	Scope              []string           `json:"scope"`
-	Errors             []CollectionError  `json:"errors,omitempty"`
-	PermissionIssues   []string           `json:"permission_issues,omitempty"`
+	CollectionDuration time.Duration     `json:"collection_duration"`
+	Scope              []string          `json:"scope"`
+	Errors             []CollectionError `json:"errors,omitempty"`
+	PermissionIssues   []string          `json:"permission_issues,omitempty"`
 }
 
 // CollectionError represents an error that occurred during collection

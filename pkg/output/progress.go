@@ -92,12 +92,12 @@ func clearLine() string {
 
 // ProgressTracker tracks progress across multiple stages
 type ProgressTracker struct {
-	writer     io.Writer
-	stages     []string
-	current    int
-	indicator  *ProgressIndicator
-	mu         sync.Mutex
-	startTime  time.Time
+	writer    io.Writer
+	stages    []string
+	current   int
+	indicator *ProgressIndicator
+	mu        sync.Mutex
+	startTime time.Time
 }
 
 // NewProgressTracker creates a new progress tracker

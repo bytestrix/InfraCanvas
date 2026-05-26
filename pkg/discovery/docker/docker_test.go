@@ -12,11 +12,11 @@ func TestNewDiscovery(t *testing.T) {
 		t.Skipf("Docker not available: %v", err)
 	}
 	defer discovery.Close()
-	
+
 	if discovery == nil {
 		t.Fatal("Expected discovery instance, got nil")
 	}
-	
+
 	if discovery.redactor == nil {
 		t.Fatal("Expected redactor to be initialized")
 	}
@@ -28,7 +28,7 @@ func TestIsAvailable(t *testing.T) {
 		t.Skipf("Docker not available: %v", err)
 	}
 	defer discovery.Close()
-	
+
 	// IsAvailable should return true if Docker is running
 	available := discovery.IsAvailable()
 	if !available {
@@ -38,11 +38,11 @@ func TestIsAvailable(t *testing.T) {
 
 func TestParseImageName(t *testing.T) {
 	tests := []struct {
-		name       string
-		imageName  string
-		wantReg    string
-		wantRepo   string
-		wantTag    string
+		name      string
+		imageName string
+		wantReg   string
+		wantRepo  string
+		wantTag   string
 	}{
 		{
 			name:      "simple image",
@@ -80,11 +80,11 @@ func TestParseImageName(t *testing.T) {
 			wantTag:   "dev",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotReg, gotRepo, gotTag := parseImageName(tt.imageName)
-			
+
 			if gotReg != tt.wantReg {
 				t.Errorf("parseImageName() registry = %v, want %v", gotReg, tt.wantReg)
 			}
@@ -100,13 +100,13 @@ func TestParseImageName(t *testing.T) {
 
 func TestCalculateCPUPercent(t *testing.T) {
 	tests := []struct {
-		name           string
-		cpuUsage       uint64
-		prevCPUUsage   uint64
-		systemUsage    uint64
+		name            string
+		cpuUsage        uint64
+		prevCPUUsage    uint64
+		systemUsage     uint64
 		prevSystemUsage uint64
-		numCPUs        uint64
-		want           float64
+		numCPUs         uint64
+		want            float64
 	}{
 		{
 			name:            "zero delta",
@@ -127,7 +127,7 @@ func TestCalculateCPUPercent(t *testing.T) {
 			want:            100.0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := calculateCPUPercent(tt.cpuUsage, tt.prevCPUUsage, tt.systemUsage, tt.prevSystemUsage, tt.numCPUs)

@@ -67,7 +67,7 @@ func (f *GraphFormatter) Format(snapshot *models.InfraSnapshot) ([]byte, error) 
 		Nodes: []GraphNode{},
 		Edges: []GraphEdge{},
 		Stats: GraphStats{
-			NodesByType: make(map[string]int),
+			NodesByType:     make(map[string]int),
 			CollectionScope: snapshot.Metadata.Scope,
 		},
 	}

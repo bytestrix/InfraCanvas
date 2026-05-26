@@ -155,8 +155,8 @@ func (d *DockerExecutor) GetContainerLogs(ctx context.Context, containerID strin
 
 // ExecSession holds state for an active exec session.
 type ExecSession struct {
-	ExecID  string
-	Attach  dockertypes.HijackedResponse
+	ExecID string
+	Attach dockertypes.HijackedResponse
 }
 
 // ExecCreate creates an exec instance and attaches to it, returning an ExecSession.
@@ -270,9 +270,9 @@ func (d *DockerExecutor) updateContainerImage(ctx context.Context, containerID, 
 	_ = d.client.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
 
 	return &ActionResult{
-		Success: true,
-		Message: fmt.Sprintf("Container updated to %s", newImage),
-		Details: map[string]interface{}{"old_image": info.Config.Image, "new_image": newImage, "new_container_id": resp.ID[:12]},
+		Success:   true,
+		Message:   fmt.Sprintf("Container updated to %s", newImage),
+		Details:   map[string]interface{}{"old_image": info.Config.Image, "new_image": newImage, "new_container_id": resp.ID[:12]},
 		StartTime: startTime, EndTime: time.Now(),
 	}, nil
 }
@@ -285,8 +285,8 @@ func (d *DockerExecutor) PruneImages(ctx context.Context) (*ActionResult, error)
 		return &ActionResult{Success: false, Message: "Failed to prune images", Error: err.Error(), StartTime: startTime, EndTime: time.Now()}, err
 	}
 	return &ActionResult{
-		Success: true,
-		Message: fmt.Sprintf("Pruned %d images, reclaimed %d bytes", len(report.ImagesDeleted), report.SpaceReclaimed),
+		Success:   true,
+		Message:   fmt.Sprintf("Pruned %d images, reclaimed %d bytes", len(report.ImagesDeleted), report.SpaceReclaimed),
 		StartTime: startTime, EndTime: time.Now(),
 	}, nil
 }

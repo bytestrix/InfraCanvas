@@ -199,7 +199,7 @@ func SafeSplitLines(output string, context string) ([]string, error) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	
+
 	// Filter out empty lines
 	validLines := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -214,7 +214,7 @@ func SafeSplitLines(output string, context string) ([]string, error) {
 // SafeSplitFields splits a line into fields and validates minimum field count
 func SafeSplitFields(line string, minFields int, context string) ([]string, error) {
 	fields := strings.Fields(line)
-	
+
 	if len(fields) < minFields {
 		return nil, &ParseError{
 			Field:   "fields",

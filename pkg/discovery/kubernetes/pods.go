@@ -5,22 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	"infracanvas/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetPods collects all pods in the specified namespace (empty string for all namespaces)
 func (d *Discovery) GetPods(ctx context.Context, namespace string) ([]models.Pod, error) {
 	cacheKey := fmt.Sprintf("pods:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if pods, ok := cached.([]models.Pod); ok {
 			return pods, nil
 		}
 	}
-	
+
 	podList, err := d.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %w", err)

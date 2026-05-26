@@ -17,11 +17,11 @@ import (
 
 // WatcherManager manages all event watchers
 type WatcherManager struct {
-	config        *Config
-	backendClient *BackendClient
-	dockerClient  *client.Client
-	k8sClient     *kubernetes.Clientset
-	watchers      map[string]context.CancelFunc
+	config           *Config
+	backendClient    *BackendClient
+	dockerClient     *client.Client
+	k8sClient        *kubernetes.Clientset
+	watchers         map[string]context.CancelFunc
 	cacheInvalidator CacheInvalidator
 }
 
@@ -202,7 +202,7 @@ func (wm *WatcherManager) handleKubernetesPodEvent(event watch.Event) {
 	if wm.cacheInvalidator != nil {
 		wm.cacheInvalidator.InvalidateCacheForResource("pods:")
 	}
-	
+
 	backendEvent := &Event{
 		Timestamp: time.Now(),
 		Type:      "kubernetes.pod." + string(event.Type),
@@ -277,7 +277,7 @@ func (wm *WatcherManager) handleKubernetesEvent(event watch.Event) {
 	if wm.cacheInvalidator != nil {
 		wm.cacheInvalidator.InvalidateCacheForResource("events:")
 	}
-	
+
 	backendEvent := &Event{
 		Timestamp: time.Now(),
 		Type:      "kubernetes.event." + string(event.Type),

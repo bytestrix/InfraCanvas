@@ -55,9 +55,9 @@ func env(key, def string) string {
 // ---- Models ----------------------------------------------------------------
 
 type Agent struct {
-	UUID      string // primary key UUID in agents table
-	StringID  string // e.g. "ByteStrix-5bcfabe8"
-	OrgID     string // organization UUID
+	UUID     string // primary key UUID in agents table
+	StringID string // e.g. "ByteStrix-5bcfabe8"
+	OrgID    string // organization UUID
 }
 
 type wsMsg struct {

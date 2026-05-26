@@ -66,7 +66,7 @@ func isSystemdAvailable() bool {
 func parseServiceLine(line string) (*models.Service, error) {
 	// Format: UNIT LOAD ACTIVE SUB DESCRIPTION
 	// Example: docker.service loaded active running Docker Application Container Engine
-	
+
 	fields, err := validation.SafeSplitFields(line, 5, "systemctl list-units line")
 	if err != nil {
 		return nil, err
@@ -262,10 +262,10 @@ func (d *Discovery) GetServiceStatus(serviceName string) (*models.Service, error
 
 	cmd := exec.Command("systemctl", "status", serviceName, "--no-pager")
 	output, err := cmd.Output()
-	
+
 	// Note: systemctl status returns non-zero exit code for inactive services
 	// So we don't treat err as a fatal error here
-	
+
 	service := &models.Service{
 		BaseEntity: models.BaseEntity{
 			Type:      models.EntityTypeService,

@@ -26,13 +26,13 @@ func (d *Discovery) GetContainerStats(ctx context.Context, containerID string) (
 		return nil, fmt.Errorf("failed to get container stats: %w", err)
 	}
 	defer stats.Body.Close()
-	
+
 	// Read and parse stats
 	data, err := io.ReadAll(stats.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read stats: %w", err)
 	}
-	
+
 	var dockerStats struct {
 		CPUStats struct {
 			CPUUsage struct {
@@ -62,11 +62,11 @@ func (d *Discovery) GetContainerStats(ctx context.Context, containerID string) (
 			} `json:"io_service_bytes_recursive"`
 		} `json:"blkio_stats"`
 	}
-	
+
 	if err := json.Unmarshal(data, &dockerStats); err != nil {
 		return nil, fmt.Errorf("failed to parse stats: %w", err)
 	}
-	
+
 	// Calculate CPU percentage
 	cpuPercent := calculateCPUPercent(
 		dockerStats.CPUStats.CPUUsage.TotalUsage,
@@ -75,14 +75,14 @@ func (d *Discovery) GetContainerStats(ctx context.Context, containerID string) (
 		dockerStats.PreCPUStats.SystemCPUUsage,
 		dockerStats.CPUStats.OnlineCPUs,
 	)
-	
+
 	// Calculate network I/O
 	var networkRx, networkTx uint64
 	for _, netStats := range dockerStats.Networks {
 		networkRx += netStats.RxBytes
 		networkTx += netStats.TxBytes
 	}
-	
+
 	// Calculate block I/O
 	var blockRead, blockWrite uint64
 	for _, ioStat := range dockerStats.BlkioStats.IoServiceBytesRecursive {
@@ -93,7 +93,7 @@ func (d *Discovery) GetContainerStats(ctx context.Context, containerID string) (
 			blockWrite += ioStat.Value
 		}
 	}
-	
+
 	return &ContainerStats{
 		CPUPercent:      cpuPercent,
 		MemoryUsage:     dockerStats.MemoryStats.Usage,
@@ -109,10 +109,10 @@ func (d *Discovery) GetContainerStats(ctx context.Context, containerID string) (
 func calculateCPUPercent(cpuUsage, prevCPUUsage, systemUsage, prevSystemUsage, numCPUs uint64) float64 {
 	cpuDelta := float64(cpuUsage - prevCPUUsage)
 	systemDelta := float64(systemUsage - prevSystemUsage)
-	
+
 	if systemDelta > 0.0 && cpuDelta > 0.0 {
 		return (cpuDelta / systemDelta) * float64(numCPUs) * 100.0
 	}
-	
+
 	return 0.0
 }

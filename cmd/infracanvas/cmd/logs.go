@@ -19,14 +19,14 @@ import (
 )
 
 var (
-	logsNamespace  string
-	logsContainer  string
-	logsSince      string
-	logsTail       int64
-	logsFollow     bool
-	logsPrevious   bool
-	logsUnit       string
-	logsPriority   string
+	logsNamespace string
+	logsContainer string
+	logsSince     string
+	logsTail      int64
+	logsFollow    bool
+	logsPrevious  bool
+	logsUnit      string
+	logsPriority  string
 )
 
 // logsCmd represents the logs command

@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"time"
 
+	"infracanvas/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetPVCs collects all persistent volume claims in the specified namespace
 func (d *Discovery) GetPVCs(ctx context.Context, namespace string) ([]models.PersistentVolumeClaim, error) {
 	cacheKey := fmt.Sprintf("pvcs:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if pvcs, ok := cached.([]models.PersistentVolumeClaim); ok {
 			return pvcs, nil
 		}
 	}
-	
+
 	pvcList, err := d.clientset.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pvcs: %w", err)
@@ -85,14 +85,14 @@ func (d *Discovery) parsePVC(pvc *corev1.PersistentVolumeClaim) models.Persisten
 // GetPVs collects all persistent volumes
 func (d *Discovery) GetPVs(ctx context.Context) ([]models.PersistentVolume, error) {
 	cacheKey := "pvs"
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if pvs, ok := cached.([]models.PersistentVolume); ok {
 			return pvs, nil
 		}
 	}
-	
+
 	pvList, err := d.clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pvs: %w", err)
@@ -156,14 +156,14 @@ func (d *Discovery) parsePV(pv *corev1.PersistentVolume) models.PersistentVolume
 // GetStorageClasses collects all storage classes
 func (d *Discovery) GetStorageClasses(ctx context.Context) ([]models.StorageClass, error) {
 	cacheKey := "storageclasses"
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if storageclasses, ok := cached.([]models.StorageClass); ok {
 			return storageclasses, nil
 		}
 	}
-	
+
 	scList, err := d.clientset.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list storageclasses: %w", err)

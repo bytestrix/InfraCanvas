@@ -63,7 +63,7 @@ func TestTask4_1_HostInfoCollector(t *testing.T) {
 // Requirements: 1.3
 func TestTask4_2_CloudMetadataDetection(t *testing.T) {
 	d := NewDiscovery()
-	
+
 	// Try to get cloud metadata (may fail if not on cloud)
 	metadata, err := d.GetCloudMetadata()
 	if err != nil {
@@ -97,7 +97,7 @@ func TestTask4_3_NetworkInterfaceDiscovery(t *testing.T) {
 	// Note: May be empty if no non-loopback interfaces exist
 	t.Logf("✓ Task 4.3: Network interface discovery implemented")
 	t.Logf("  Found %d network interfaces", len(interfaces))
-	
+
 	for _, iface := range interfaces {
 		if iface.Name == "" {
 			t.Error("Interface name should not be empty")
@@ -108,8 +108,8 @@ func TestTask4_3_NetworkInterfaceDiscovery(t *testing.T) {
 		if iface.Status == "" {
 			t.Error("Interface status should not be empty")
 		}
-		
-		t.Logf("  - %s: MAC=%s, Status=%s, IPs=%v", 
+
+		t.Logf("  - %s: MAC=%s, Status=%s, IPs=%v",
 			iface.Name, iface.MACAddress, iface.Status, iface.IPAddresses)
 	}
 }
@@ -129,7 +129,7 @@ func TestTask4_4_ListeningPortsDiscovery(t *testing.T) {
 
 	t.Logf("✓ Task 4.4: Listening ports discovery implemented")
 	t.Logf("  Found %d listening ports", len(ports))
-	
+
 	// Verify port structure
 	for i, port := range ports {
 		if i >= 5 {
@@ -141,12 +141,12 @@ func TestTask4_4_ListeningPortsDiscovery(t *testing.T) {
 		if port.Protocol == "" {
 			t.Error("Protocol should not be empty")
 		}
-		
+
 		processInfo := "unknown"
 		if port.Process != "" {
 			processInfo = port.Process
 		}
-		t.Logf("  - Port %d/%s (PID: %d, Process: %s)", 
+		t.Logf("  - Port %d/%s (PID: %d, Process: %s)",
 			port.Port, port.Protocol, port.ProcessID, processInfo)
 	}
 }
@@ -199,7 +199,7 @@ func TestTask4_5_ResourceUsageCollection(t *testing.T) {
 
 	t.Logf("✓ Task 4.5: Resource usage collection implemented")
 	t.Logf("  CPU: %.2f%%", usage.CPUUsagePercent)
-	t.Logf("  Memory: %d/%d bytes (%.2f%%)", 
+	t.Logf("  Memory: %d/%d bytes (%.2f%%)",
 		usage.MemoryUsedBytes, usage.MemoryTotalBytes, usage.MemoryUsagePercent)
 	t.Logf("  Filesystems: %d", len(usage.Filesystems))
 	for _, fs := range usage.Filesystems {
@@ -232,7 +232,7 @@ func TestTask4_6_ProcessDiscovery(t *testing.T) {
 		if proc.Name == "" {
 			t.Error("Process name should not be empty")
 		}
-		
+
 		// Track process types
 		if proc.ProcessType != "" {
 			foundTypes[proc.ProcessType] = true
@@ -242,16 +242,16 @@ func TestTask4_6_ProcessDiscovery(t *testing.T) {
 	t.Logf("✓ Task 4.6: Process discovery implemented")
 	t.Logf("  Found %d processes", len(processes))
 	t.Logf("  Identified process types: %v", foundTypes)
-	
+
 	// Check for specific process types mentioned in requirements
 	expectedTypes := []string{"docker", "kubelet", "database", "webserver", "messagequeue"}
 	for _, expectedType := range expectedTypes {
 		found := false
 		for detectedType := range foundTypes {
-			if detectedType == expectedType || 
-			   (expectedType == "database" && len(detectedType) > 9 && detectedType[:9] == "database-") ||
-			   (expectedType == "webserver" && len(detectedType) > 10 && detectedType[:10] == "webserver-") ||
-			   (expectedType == "messagequeue" && len(detectedType) > 13 && detectedType[:13] == "messagequeue-") {
+			if detectedType == expectedType ||
+				(expectedType == "database" && len(detectedType) > 9 && detectedType[:9] == "database-") ||
+				(expectedType == "webserver" && len(detectedType) > 10 && detectedType[:10] == "webserver-") ||
+				(expectedType == "messagequeue" && len(detectedType) > 13 && detectedType[:13] == "messagequeue-") {
 				found = true
 				break
 			}
@@ -285,7 +285,7 @@ func TestTask4_7_SystemdServicesDiscovery(t *testing.T) {
 		if svc.Status == "" {
 			t.Error("Service status should not be empty")
 		}
-		
+
 		if svc.IsCritical {
 			criticalServices = append(criticalServices, svc.Name)
 		}
