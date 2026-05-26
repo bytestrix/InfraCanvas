@@ -27,7 +27,7 @@ func (d *Discovery) GetNetworkInterfaces() ([]models.NetworkInterface, error) {
 		}
 
 		ifaceName := entry.Name()
-		
+
 		// Skip loopback
 		if ifaceName == "lo" {
 			continue
@@ -112,7 +112,7 @@ func getIPAddressesFromProc(ifaceName string) ([]string, error) {
 	// This is a simplified fallback - /proc/net/fib_trie doesn't directly
 	// map interfaces to IPs, so we'll try to read from /proc/net/if_inet6
 	// for IPv6 and construct IPv4 from other sources
-	
+
 	ipAddrs := []string{}
 
 	// Try IPv6 from /proc/net/if_inet6
@@ -259,12 +259,12 @@ func parseListeningPorts(path string, protocol string) ([]models.ListeningPort, 
 func mapPortsToProcesses(ports []models.ListeningPort) {
 	// Build inode to port index mapping
 	inodeToPortIdx := make(map[string]int)
-	
+
 	// First pass: collect inodes from /proc/net files
 	for protocol, path := range map[string]string{
-		"tcp": "/proc/net/tcp",
+		"tcp":  "/proc/net/tcp",
 		"tcp6": "/proc/net/tcp6",
-		"udp": "/proc/net/udp",
+		"udp":  "/proc/net/udp",
 		"udp6": "/proc/net/udp6",
 	} {
 		data, err := os.ReadFile(path)
@@ -304,7 +304,7 @@ func mapPortsToProcesses(ports []models.ListeningPort) {
 
 			// Get inode
 			inode := fields[9]
-			
+
 			// Find matching port in our list
 			for idx, p := range ports {
 				if p.Port == port && p.Protocol == strings.TrimSuffix(protocol, "6") {

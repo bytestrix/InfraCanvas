@@ -58,10 +58,10 @@ func (t *Tracker) TrackKubernetesPods(pods []models.Pod) {
 			// Parse the image reference
 			imageID := container.ImageID
 			imageName := container.Image
-			
+
 			// Find or create image entry
 			img := t.findOrCreateImageFromK8s(imageID, imageName)
-			
+
 			// Track pod usage
 			found := false
 			for _, pid := range img.UsedByPods {
@@ -90,14 +90,14 @@ func (t *Tracker) TrackKubernetesWorkloads(
 			t.trackWorkloadImage(container.Image)
 		}
 	}
-	
+
 	// Track statefulset images
 	for _, sts := range statefulSets {
 		for _, container := range sts.Containers {
 			t.trackWorkloadImage(container.Image)
 		}
 	}
-	
+
 	// Track daemonset images
 	for _, ds := range daemonSets {
 		for _, container := range ds.Containers {
@@ -110,14 +110,14 @@ func (t *Tracker) TrackKubernetesWorkloads(
 func (t *Tracker) trackWorkloadImage(imageName string) {
 	// Parse the image reference
 	registry, repository, tag := ParseImageReference(imageName)
-	
+
 	// Try to find existing image by matching registry/repository/tag
 	for _, img := range t.images {
 		if img.Registry == registry && img.Repository == repository && img.Tag == tag {
 			return // Already tracked
 		}
 	}
-	
+
 	// Create a new image entry if not found
 	imageID := fmt.Sprintf("image:%s/%s:%s", registry, repository, tag)
 	img := &models.Image{
@@ -147,38 +147,38 @@ func (t *Tracker) GetAllImages() []models.Image {
 // GroupByRepository groups images by repository
 func (t *Tracker) GroupByRepository() map[string][]models.Image {
 	groups := make(map[string][]models.Image)
-	
+
 	for _, img := range t.images {
 		repoKey := fmt.Sprintf("%s/%s", img.Registry, img.Repository)
 		groups[repoKey] = append(groups[repoKey], *img)
 	}
-	
+
 	return groups
 }
 
 // GetImagesWithLatestTag returns images with "latest" tag
 func (t *Tracker) GetImagesWithLatestTag() []models.Image {
 	var images []models.Image
-	
+
 	for _, img := range t.images {
 		if img.Tag == "latest" {
 			images = append(images, *img)
 		}
 	}
-	
+
 	return images
 }
 
 // GetImagesWithoutExplicitTag returns images without explicit tags (tag is empty or "latest")
 func (t *Tracker) GetImagesWithoutExplicitTag() []models.Image {
 	var images []models.Image
-	
+
 	for _, img := range t.images {
 		if img.Tag == "" || img.Tag == "latest" || img.Tag == "<none>" {
 			images = append(images, *img)
 		}
 	}
-	
+
 	return images
 }
 
@@ -197,7 +197,7 @@ func (t *Tracker) GetImagesByContainer(containerID string) *models.Image {
 // GetImagesByPod returns all images used by a specific pod
 func (t *Tracker) GetImagesByPod(podID string) []models.Image {
 	var images []models.Image
-	
+
 	for _, img := range t.images {
 		for _, pid := range img.UsedByPods {
 			if pid == podID {
@@ -206,14 +206,14 @@ func (t *Tracker) GetImagesByPod(podID string) []models.Image {
 			}
 		}
 	}
-	
+
 	return images
 }
 
 // createImageFromContainer creates an image entry from a Docker container
 func (t *Tracker) createImageFromContainer(container models.Container) models.Image {
 	registry, repository, tag := ParseImageReference(container.Image)
-	
+
 	return models.Image{
 		BaseEntity: models.BaseEntity{
 			ID:   fmt.Sprintf("image:%s", container.ImageID),
@@ -235,39 +235,39 @@ func (t *Tracker) findOrCreateImageFromK8s(imageID, imageName string) *models.Im
 		// Clean up imageID (remove docker-pullable:// prefix if present)
 		cleanImageID := strings.TrimPrefix(imageID, "docker-pullable://")
 		cleanImageID = strings.TrimPrefix(cleanImageID, "docker://")
-		
+
 		// Try exact match
 		if img, exists := t.images[cleanImageID]; exists {
 			return img
 		}
-		
+
 		// Try to find by matching the digest part
 		if strings.Contains(cleanImageID, "@sha256:") {
 			for _, img := range t.images {
-				if strings.Contains(img.ImageID, "@sha256:") && 
-				   strings.HasSuffix(cleanImageID, strings.Split(img.ImageID, "@sha256:")[1]) {
+				if strings.Contains(img.ImageID, "@sha256:") &&
+					strings.HasSuffix(cleanImageID, strings.Split(img.ImageID, "@sha256:")[1]) {
 					return img
 				}
 			}
 		}
 	}
-	
+
 	// Parse the image reference
 	registry, repository, tag := ParseImageReference(imageName)
-	
+
 	// Try to find by registry/repository/tag
 	for _, img := range t.images {
 		if img.Registry == registry && img.Repository == repository && img.Tag == tag {
 			return img
 		}
 	}
-	
+
 	// Create a new image entry
 	imageIDKey := imageID
 	if imageIDKey == "" {
 		imageIDKey = fmt.Sprintf("image:%s/%s:%s", registry, repository, tag)
 	}
-	
+
 	img := &models.Image{
 		BaseEntity: models.BaseEntity{
 			ID:   imageIDKey,
@@ -290,16 +290,16 @@ func ParseImageReference(imageName string) (registry, repository, tag string) {
 	if strings.Contains(imageName, "@") {
 		imageName = strings.Split(imageName, "@")[0]
 	}
-	
+
 	// Default tag
 	tag = "latest"
-	
+
 	// Find the last colon to check if it's a tag
 	lastColon := strings.LastIndex(imageName, ":")
 	lastSlash := strings.LastIndex(imageName, "/")
-	
+
 	var nameWithoutTag string
-	
+
 	// If there's a colon after the last slash, it's a tag
 	if lastColon > lastSlash && lastColon != -1 {
 		nameWithoutTag = imageName[:lastColon]
@@ -307,10 +307,10 @@ func ParseImageReference(imageName string) (registry, repository, tag string) {
 	} else {
 		nameWithoutTag = imageName
 	}
-	
+
 	// Parse registry and repository
 	parts := strings.Split(nameWithoutTag, "/")
-	
+
 	switch len(parts) {
 	case 1:
 		// No registry, library image (e.g., "nginx")
@@ -336,6 +336,6 @@ func ParseImageReference(imageName string) (registry, repository, tag string) {
 		registry = parts[0]
 		repository = strings.Join(parts[1:], "/")
 	}
-	
+
 	return registry, repository, tag
 }

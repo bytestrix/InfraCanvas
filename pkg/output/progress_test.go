@@ -27,14 +27,14 @@ func TestProgressIndicatorUpdateMessage(t *testing.T) {
 
 	indicator.Start()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	indicator.UpdateMessage("Updated message")
-	
+
 	// Verify the message was updated
 	indicator.mu.Lock()
 	message := indicator.message
 	indicator.mu.Unlock()
-	
+
 	indicator.Stop()
 
 	if message != "Updated message" {

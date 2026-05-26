@@ -19,25 +19,25 @@ func ExampleDiscoverCommand(snapshot *models.InfraSnapshot, format string) error
 		"Building relationships",
 		"Calculating health status",
 	})
-	
+
 	tracker.Start()
-	
+
 	// Simulate discovery stages
 	// (In real implementation, these would be actual discovery calls)
 	time.Sleep(100 * time.Millisecond)
 	tracker.NextStage()
-	
+
 	time.Sleep(100 * time.Millisecond)
 	tracker.NextStage()
-	
+
 	time.Sleep(100 * time.Millisecond)
 	tracker.NextStage()
-	
+
 	time.Sleep(100 * time.Millisecond)
 	tracker.NextStage()
-	
+
 	tracker.Complete()
-	
+
 	// Format output based on user preference
 	var formatter Formatter
 	switch format {
@@ -50,12 +50,12 @@ func ExampleDiscoverCommand(snapshot *models.InfraSnapshot, format string) error
 	default:
 		formatter = &TableFormatter{} // Default to table
 	}
-	
+
 	output, err := formatter.Format(snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to format output: %w", err)
 	}
-	
+
 	fmt.Println(string(output))
 	return nil
 }
@@ -65,20 +65,20 @@ func ExampleLongRunningOperation() error {
 	indicator := NewProgressIndicator("Collecting container statistics...")
 	indicator.Start()
 	defer indicator.Stop()
-	
+
 	// Simulate long-running operation
 	for i := 0; i < 10; i++ {
 		time.Sleep(100 * time.Millisecond)
 		indicator.UpdateMessage(fmt.Sprintf("Processing container %d/10...", i+1))
 	}
-	
+
 	return nil
 }
 
 // Example: Using simple progress for quick feedback
 func ExampleQuickFeedback() {
 	progress := NewSimpleProgress()
-	
+
 	progress.Show("Checking Docker availability...")
 	// Check Docker
 	dockerAvailable := true
@@ -87,7 +87,7 @@ func ExampleQuickFeedback() {
 	} else {
 		progress.Warning("Docker is not available, skipping Docker discovery")
 	}
-	
+
 	progress.Show("Checking Kubernetes availability...")
 	// Check Kubernetes
 	k8sAvailable := false
@@ -96,7 +96,7 @@ func ExampleQuickFeedback() {
 	} else {
 		progress.Warning("Kubernetes is not available, skipping Kubernetes discovery")
 	}
-	
+
 	progress.Show("Checking permissions...")
 	// Check permissions
 	hasPermissions := true
@@ -116,7 +116,7 @@ func ExampleFormatEntityType(entities []models.Entity, entityType models.EntityT
 			filtered[entity.GetID()] = entity
 		}
 	}
-	
+
 	// Create a snapshot with only the filtered entities
 	snapshot := &models.InfraSnapshot{
 		Timestamp: time.Now(),
@@ -126,7 +126,7 @@ func ExampleFormatEntityType(entities []models.Entity, entityType models.EntityT
 			Scope: []string{string(entityType)},
 		},
 	}
-	
+
 	// Format as table
 	formatter := &TableFormatter{}
 	output, err := formatter.Format(snapshot)
@@ -134,25 +134,25 @@ func ExampleFormatEntityType(entities []models.Entity, entityType models.EntityT
 		fmt.Printf("Error formatting output: %v\n", err)
 		return
 	}
-	
+
 	fmt.Println(string(output))
 }
 
 // Example: Handling errors during discovery
 func ExampleErrorHandling(snapshot *models.InfraSnapshot) {
 	progress := NewSimpleProgress()
-	
+
 	// Check for errors in metadata
 	if len(snapshot.Metadata.Errors) > 0 {
 		progress.Warning(fmt.Sprintf("Discovery completed with %d errors", len(snapshot.Metadata.Errors)))
-		
+
 		for _, err := range snapshot.Metadata.Errors {
 			progress.Error(fmt.Sprintf("%s: %s", err.Layer, err.Message))
 		}
 	} else {
 		progress.Success("Discovery completed successfully")
 	}
-	
+
 	// Check for permission issues
 	if len(snapshot.Metadata.PermissionIssues) > 0 {
 		progress.Warning("Some operations were skipped due to insufficient permissions:")
@@ -166,17 +166,17 @@ func ExampleErrorHandling(snapshot *models.InfraSnapshot) {
 func ExampleStreamingOutput(snapshot *models.InfraSnapshot) error {
 	// For very large snapshots, you might want to stream JSON output
 	// instead of loading everything into memory
-	
+
 	formatter := &JSONFormatter{PrettyPrint: false}
 	output, err := formatter.Format(snapshot)
 	if err != nil {
 		return err
 	}
-	
+
 	// In a real implementation, you might write directly to a file or stdout
 	// in chunks to avoid memory issues
 	fmt.Println(string(output))
-	
+
 	return nil
 }
 
@@ -185,12 +185,12 @@ func ExampleCustomTableFormatting(snapshot *models.InfraSnapshot) error {
 	formatter := &TableFormatter{
 		MaxColumnWidth: 80, // Increase max column width for detailed output
 	}
-	
+
 	output, err := formatter.Format(snapshot)
 	if err != nil {
 		return err
 	}
-	
+
 	fmt.Println(string(output))
 	return nil
 }

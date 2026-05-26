@@ -191,7 +191,7 @@ func DoWithResultAndContext[T any](ctx context.Context, op OperationWithResult[T
 func calculateBackoff(attempt int, config *Config) time.Duration {
 	// Calculate exponential backoff: initialBackoff * (multiplier ^ attempt)
 	backoff := float64(config.InitialBackoff) * math.Pow(config.Multiplier, float64(attempt))
-	
+
 	// Cap at max backoff
 	if backoff > float64(config.MaxBackoff) {
 		backoff = float64(config.MaxBackoff)

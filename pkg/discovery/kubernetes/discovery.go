@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"infracanvas/internal/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"infracanvas/internal/models"
 )
 
 // Discovery implements Kubernetes-level infrastructure discovery

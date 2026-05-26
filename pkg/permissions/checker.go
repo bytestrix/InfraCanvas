@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PermissionLevel represents the level of access available
@@ -95,59 +95,59 @@ func (c *Checker) HasCriticalIssues() bool {
 func (c *Checker) checkHostPermissions() {
 	// Check basic file system access
 	c.addCheck(PermissionCheck{
-		Layer:     "host",
-		Operation: "read_os_info",
-		Required:  true,
-		Available: c.canReadFile("/etc/os-release"),
-		Level:     c.getLevel(c.canReadFile("/etc/os-release")),
-		Message:   "Read OS information from /etc/os-release",
+		Layer:      "host",
+		Operation:  "read_os_info",
+		Required:   true,
+		Available:  c.canReadFile("/etc/os-release"),
+		Level:      c.getLevel(c.canReadFile("/etc/os-release")),
+		Message:    "Read OS information from /etc/os-release",
 		Suggestion: "Ensure the file /etc/os-release exists and is readable",
 	})
 
 	// Check /proc access
 	c.addCheck(PermissionCheck{
-		Layer:     "host",
-		Operation: "read_proc",
-		Required:  true,
-		Available: c.canReadDir("/proc"),
-		Level:     c.getLevel(c.canReadDir("/proc")),
-		Message:   "Read process information from /proc",
+		Layer:      "host",
+		Operation:  "read_proc",
+		Required:   true,
+		Available:  c.canReadDir("/proc"),
+		Level:      c.getLevel(c.canReadDir("/proc")),
+		Message:    "Read process information from /proc",
 		Suggestion: "Ensure /proc filesystem is mounted and accessible",
 	})
 
 	// Check systemd availability
 	systemdAvailable := c.isCommandAvailable("systemctl")
 	c.addCheck(PermissionCheck{
-		Layer:     "host",
-		Operation: "systemd_access",
-		Required:  false,
-		Available: systemdAvailable,
-		Level:     c.getLevel(systemdAvailable),
-		Message:   "Access systemd services via systemctl",
+		Layer:      "host",
+		Operation:  "systemd_access",
+		Required:   false,
+		Available:  systemdAvailable,
+		Level:      c.getLevel(systemdAvailable),
+		Message:    "Access systemd services via systemctl",
 		Suggestion: "Install systemd or run on a system with systemd support",
 	})
 
 	// Check journalctl availability
 	journalAvailable := c.isCommandAvailable("journalctl")
 	c.addCheck(PermissionCheck{
-		Layer:     "host",
-		Operation: "journal_access",
-		Required:  false,
-		Available: journalAvailable,
-		Level:     c.getLevel(journalAvailable),
-		Message:   "Access system logs via journalctl",
+		Layer:      "host",
+		Operation:  "journal_access",
+		Required:   false,
+		Available:  journalAvailable,
+		Level:      c.getLevel(journalAvailable),
+		Message:    "Access system logs via journalctl",
 		Suggestion: "Install systemd or add user to 'systemd-journal' group",
 	})
 
 	// Check if running as root or with elevated permissions
 	isRoot := os.Geteuid() == 0
 	c.addCheck(PermissionCheck{
-		Layer:     "host",
-		Operation: "elevated_access",
-		Required:  false,
-		Available: isRoot,
-		Level:     c.getPartialLevel(isRoot),
-		Message:   "Elevated permissions for full process and port information",
+		Layer:      "host",
+		Operation:  "elevated_access",
+		Required:   false,
+		Available:  isRoot,
+		Level:      c.getPartialLevel(isRoot),
+		Message:    "Elevated permissions for full process and port information",
 		Suggestion: "Run with sudo or as root for complete host discovery",
 	})
 }
@@ -160,23 +160,23 @@ func (c *Checker) checkDockerPermissions() {
 		// If DOCKER_HOST is set, we'll check connectivity instead
 		socketAccessible := c.canAccessDockerSocket()
 		c.addCheck(PermissionCheck{
-			Layer:     "docker",
-			Operation: "docker_socket",
-			Required:  true,
-			Available: socketAccessible,
-			Level:     c.getLevel(socketAccessible),
-			Message:   fmt.Sprintf("Access Docker via DOCKER_HOST=%s", dockerHost),
+			Layer:      "docker",
+			Operation:  "docker_socket",
+			Required:   true,
+			Available:  socketAccessible,
+			Level:      c.getLevel(socketAccessible),
+			Message:    fmt.Sprintf("Access Docker via DOCKER_HOST=%s", dockerHost),
 			Suggestion: "Ensure DOCKER_HOST is correctly configured and accessible",
 		})
 	} else {
 		socketAccessible := c.canAccessFile(dockerSocket)
 		c.addCheck(PermissionCheck{
-			Layer:     "docker",
-			Operation: "docker_socket",
-			Required:  true,
-			Available: socketAccessible,
-			Level:     c.getLevel(socketAccessible),
-			Message:   fmt.Sprintf("Access Docker socket at %s", dockerSocket),
+			Layer:      "docker",
+			Operation:  "docker_socket",
+			Required:   true,
+			Available:  socketAccessible,
+			Level:      c.getLevel(socketAccessible),
+			Message:    fmt.Sprintf("Access Docker socket at %s", dockerSocket),
 			Suggestion: "Add user to 'docker' group: sudo usermod -aG docker $USER",
 		})
 	}
@@ -184,12 +184,12 @@ func (c *Checker) checkDockerPermissions() {
 	// Check Docker client connectivity
 	dockerAvailable := c.canConnectToDocker()
 	c.addCheck(PermissionCheck{
-		Layer:     "docker",
-		Operation: "docker_api",
-		Required:  true,
-		Available: dockerAvailable,
-		Level:     c.getLevel(dockerAvailable),
-		Message:   "Connect to Docker API",
+		Layer:      "docker",
+		Operation:  "docker_api",
+		Required:   true,
+		Available:  dockerAvailable,
+		Level:      c.getLevel(dockerAvailable),
+		Message:    "Connect to Docker API",
 		Suggestion: "Ensure Docker daemon is running and accessible",
 	})
 }
@@ -199,14 +199,14 @@ func (c *Checker) checkKubernetesPermissions() {
 	// Check kubeconfig availability
 	kubeconfigPath := c.getKubeconfigPath()
 	kubeconfigExists := kubeconfigPath != ""
-	
+
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "kubeconfig",
-		Required:  true,
-		Available: kubeconfigExists,
-		Level:     c.getLevel(kubeconfigExists),
-		Message:   "Kubeconfig file found",
+		Layer:      "kubernetes",
+		Operation:  "kubeconfig",
+		Required:   true,
+		Available:  kubeconfigExists,
+		Level:      c.getLevel(kubeconfigExists),
+		Message:    "Kubeconfig file found",
 		Suggestion: "Configure kubectl or set KUBECONFIG environment variable",
 	})
 
@@ -217,12 +217,12 @@ func (c *Checker) checkKubernetesPermissions() {
 	// Check Kubernetes API connectivity
 	k8sAvailable, config := c.canConnectToKubernetes()
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "k8s_api",
-		Required:  true,
-		Available: k8sAvailable,
-		Level:     c.getLevel(k8sAvailable),
-		Message:   "Connect to Kubernetes API server",
+		Layer:      "kubernetes",
+		Operation:  "k8s_api",
+		Required:   true,
+		Available:  k8sAvailable,
+		Level:      c.getLevel(k8sAvailable),
+		Message:    "Connect to Kubernetes API server",
 		Suggestion: "Ensure cluster is running and kubeconfig is valid",
 	})
 
@@ -247,60 +247,60 @@ func (c *Checker) checkKubernetesResourcePermissions(config *rest.Config) {
 	// Check node access
 	_, err = clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{Limit: 1})
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "list_nodes",
-		Required:  false,
-		Available: err == nil,
-		Level:     c.getLevel(err == nil),
-		Message:   "List cluster nodes",
+		Layer:      "kubernetes",
+		Operation:  "list_nodes",
+		Required:   false,
+		Available:  err == nil,
+		Level:      c.getLevel(err == nil),
+		Message:    "List cluster nodes",
 		Suggestion: "Grant 'get' and 'list' permissions for nodes resource",
 	})
 
 	// Check pod access
 	_, err = clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{Limit: 1})
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "list_pods",
-		Required:  true,
-		Available: err == nil,
-		Level:     c.getLevel(err == nil),
-		Message:   "List pods across all namespaces",
+		Layer:      "kubernetes",
+		Operation:  "list_pods",
+		Required:   true,
+		Available:  err == nil,
+		Level:      c.getLevel(err == nil),
+		Message:    "List pods across all namespaces",
 		Suggestion: "Grant 'get' and 'list' permissions for pods resource",
 	})
 
 	// Check deployment access
 	_, err = clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{Limit: 1})
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "list_deployments",
-		Required:  false,
-		Available: err == nil,
-		Level:     c.getLevel(err == nil),
-		Message:   "List deployments",
+		Layer:      "kubernetes",
+		Operation:  "list_deployments",
+		Required:   false,
+		Available:  err == nil,
+		Level:      c.getLevel(err == nil),
+		Message:    "List deployments",
 		Suggestion: "Grant 'get' and 'list' permissions for deployments resource",
 	})
 
 	// Check service access
 	_, err = clientset.CoreV1().Services("").List(ctx, metav1.ListOptions{Limit: 1})
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "list_services",
-		Required:  false,
-		Available: err == nil,
-		Level:     c.getLevel(err == nil),
-		Message:   "List services",
+		Layer:      "kubernetes",
+		Operation:  "list_services",
+		Required:   false,
+		Available:  err == nil,
+		Level:      c.getLevel(err == nil),
+		Message:    "List services",
 		Suggestion: "Grant 'get' and 'list' permissions for services resource",
 	})
 
 	// Check event access
 	_, err = clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{Limit: 1})
 	c.addCheck(PermissionCheck{
-		Layer:     "kubernetes",
-		Operation: "list_events",
-		Required:  false,
-		Available: err == nil,
-		Level:     c.getLevel(err == nil),
-		Message:   "List cluster events",
+		Layer:      "kubernetes",
+		Operation:  "list_events",
+		Required:   false,
+		Available:  err == nil,
+		Level:      c.getLevel(err == nil),
+		Message:    "List cluster events",
 		Suggestion: "Grant 'get' and 'list' permissions for events resource",
 	})
 }

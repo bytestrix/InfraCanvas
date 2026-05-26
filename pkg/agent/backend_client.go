@@ -32,8 +32,8 @@ func NewBackendClient(config *Config) *BackendClient {
 	}
 
 	return &BackendClient{
-		config:  config,
-		baseURL: config.BackendURL,
+		config:    config,
+		baseURL:   config.BackendURL,
 		authToken: config.AuthToken,
 		httpClient: &http.Client{
 			Timeout:   30 * time.Second,
@@ -67,7 +67,7 @@ func (c *BackendClient) Register(req *RegistrationRequest) (*RegistrationRespons
 	}
 
 	var regResp RegistrationResponse
-	
+
 	// Use retry logic for registration
 	err = retry.Do(func() error {
 		resp, err := c.doRequest("POST", "/api/v1/agents/register", data)

@@ -9,7 +9,7 @@ import (
 
 func TestDetectFromHost(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name     string
 		host     *models.Host
@@ -91,7 +91,7 @@ func TestDetectFromHost(t *testing.T) {
 			expected: EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromHost(tt.host)
@@ -104,7 +104,7 @@ func TestDetectFromHost(t *testing.T) {
 
 func TestDetectFromContainer(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name      string
 		container *models.Container
@@ -172,7 +172,7 @@ func TestDetectFromContainer(t *testing.T) {
 			expected:  EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromContainer(tt.container)
@@ -185,7 +185,7 @@ func TestDetectFromContainer(t *testing.T) {
 
 func TestDetectFromNamespace(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name      string
 		namespace *models.Namespace
@@ -263,7 +263,7 @@ func TestDetectFromNamespace(t *testing.T) {
 			expected:  EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromNamespace(tt.namespace)
@@ -276,7 +276,7 @@ func TestDetectFromNamespace(t *testing.T) {
 
 func TestDetectFromPod(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name     string
 		pod      *models.Pod
@@ -326,7 +326,7 @@ func TestDetectFromPod(t *testing.T) {
 			expected: EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromPod(tt.pod)
@@ -339,7 +339,7 @@ func TestDetectFromPod(t *testing.T) {
 
 func TestDetectFromDeployment(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name       string
 		deployment *models.Deployment
@@ -377,7 +377,7 @@ func TestDetectFromDeployment(t *testing.T) {
 			expected:   EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromDeployment(tt.deployment)
@@ -390,7 +390,7 @@ func TestDetectFromDeployment(t *testing.T) {
 
 func TestDetectFromStatefulSet(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name        string
 		statefulset *models.StatefulSet
@@ -428,7 +428,7 @@ func TestDetectFromStatefulSet(t *testing.T) {
 			expected:    EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromStatefulSet(tt.statefulset)
@@ -441,7 +441,7 @@ func TestDetectFromStatefulSet(t *testing.T) {
 
 func TestDetectFromDaemonSet(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name      string
 		daemonset *models.DaemonSet
@@ -479,7 +479,7 @@ func TestDetectFromDaemonSet(t *testing.T) {
 			expected:  EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.DetectFromDaemonSet(tt.daemonset)
@@ -492,7 +492,7 @@ func TestDetectFromDaemonSet(t *testing.T) {
 
 func TestNormalizeEnvironment(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name     string
 		value    string
@@ -515,7 +515,7 @@ func TestNormalizeEnvironment(t *testing.T) {
 		{"empty string", "", EnvUnknown},
 		{"whitespace", "  ", EnvUnknown},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.normalizeEnvironment(tt.value)
@@ -528,7 +528,7 @@ func TestNormalizeEnvironment(t *testing.T) {
 
 func TestDetectFromSnapshot(t *testing.T) {
 	detector := NewDetector()
-	
+
 	snapshot := &models.InfraSnapshot{
 		Timestamp: time.Now(),
 		Entities: map[string]models.Entity{
@@ -575,9 +575,9 @@ func TestDetectFromSnapshot(t *testing.T) {
 			},
 		},
 	}
-	
+
 	envMap := detector.DetectFromSnapshot(snapshot)
-	
+
 	// Verify expected environments
 	expected := map[string]Environment{
 		"host-1":       EnvProduction,
@@ -586,7 +586,7 @@ func TestDetectFromSnapshot(t *testing.T) {
 		"pod-1":        EnvQA,
 		"deployment-1": EnvProduction,
 	}
-	
+
 	for id, expectedEnv := range expected {
 		if env, exists := envMap[id]; !exists {
 			t.Errorf("Expected environment for %s, but not found in map", id)
@@ -598,13 +598,13 @@ func TestDetectFromSnapshot(t *testing.T) {
 
 func TestDetectFromSnapshot_NilSnapshot(t *testing.T) {
 	detector := NewDetector()
-	
+
 	envMap := detector.DetectFromSnapshot(nil)
-	
+
 	if envMap == nil {
 		t.Error("DetectFromSnapshot(nil) returned nil, expected empty map")
 	}
-	
+
 	if len(envMap) != 0 {
 		t.Errorf("DetectFromSnapshot(nil) returned map with %d entries, expected 0", len(envMap))
 	}
@@ -612,7 +612,7 @@ func TestDetectFromSnapshot_NilSnapshot(t *testing.T) {
 
 func TestMatchHostname(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		hostname string
 		expected Environment
@@ -632,7 +632,7 @@ func TestMatchHostname(t *testing.T) {
 		{"generic-host", EnvUnknown},
 		{"", EnvUnknown},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.hostname, func(t *testing.T) {
 			result := detector.matchHostname(tt.hostname)
@@ -645,7 +645,7 @@ func TestMatchHostname(t *testing.T) {
 
 func TestMatchNamespace(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		namespace string
 		expected  Environment
@@ -666,7 +666,7 @@ func TestMatchNamespace(t *testing.T) {
 		{"kube-system", EnvUnknown},
 		{"", EnvUnknown},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.namespace, func(t *testing.T) {
 			result := detector.matchNamespace(tt.namespace)
@@ -679,7 +679,7 @@ func TestMatchNamespace(t *testing.T) {
 
 func TestDetectFromLabels(t *testing.T) {
 	detector := NewDetector()
-	
+
 	tests := []struct {
 		name     string
 		labels   map[string]string
@@ -724,7 +724,7 @@ func TestDetectFromLabels(t *testing.T) {
 		{
 			name: "no environment labels",
 			labels: map[string]string{
-				"app": "web",
+				"app":     "web",
 				"version": "1.0",
 			},
 			expected: EnvUnknown,
@@ -740,7 +740,7 @@ func TestDetectFromLabels(t *testing.T) {
 			expected: EnvUnknown,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.detectFromLabels(tt.labels)
@@ -753,7 +753,7 @@ func TestDetectFromLabels(t *testing.T) {
 
 func TestCaseInsensitiveMatching(t *testing.T) {
 	detector := NewDetector()
-	
+
 	// Test hostname patterns are case-insensitive
 	hostnames := []string{"PROD-server", "Prod-Server", "prod-SERVER"}
 	for _, hostname := range hostnames {
@@ -762,7 +762,7 @@ func TestCaseInsensitiveMatching(t *testing.T) {
 			t.Errorf("matchHostname(%q) = %v, want %v (case-insensitive test)", hostname, result, EnvProduction)
 		}
 	}
-	
+
 	// Test label values are case-insensitive
 	labels := []string{"PRODUCTION", "Production", "PrOdUcTiOn"}
 	for _, label := range labels {

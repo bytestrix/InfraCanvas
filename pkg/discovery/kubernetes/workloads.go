@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"time"
 
+	"infracanvas/internal/models"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetDeployments collects all deployments in the specified namespace (empty string for all namespaces)
 func (d *Discovery) GetDeployments(ctx context.Context, namespace string) ([]models.Deployment, error) {
 	cacheKey := fmt.Sprintf("deployments:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if deployments, ok := cached.([]models.Deployment); ok {
 			return deployments, nil
 		}
 	}
-	
+
 	deployList, err := d.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deployments: %w", err)
@@ -141,14 +141,14 @@ func parseContainerSpecs(cs []corev1.Container) []models.ContainerSpec {
 // GetStatefulSets collects all statefulsets in the specified namespace
 func (d *Discovery) GetStatefulSets(ctx context.Context, namespace string) ([]models.StatefulSet, error) {
 	cacheKey := fmt.Sprintf("statefulsets:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if statefulsets, ok := cached.([]models.StatefulSet); ok {
 			return statefulsets, nil
 		}
 	}
-	
+
 	stsList, err := d.clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list statefulsets: %w", err)
@@ -217,14 +217,14 @@ func (d *Discovery) parseStatefulSet(sts *appsv1.StatefulSet) models.StatefulSet
 // GetDaemonSets collects all daemonsets in the specified namespace
 func (d *Discovery) GetDaemonSets(ctx context.Context, namespace string) ([]models.DaemonSet, error) {
 	cacheKey := fmt.Sprintf("daemonsets:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if daemonsets, ok := cached.([]models.DaemonSet); ok {
 			return daemonsets, nil
 		}
 	}
-	
+
 	dsList, err := d.clientset.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list daemonsets: %w", err)
@@ -280,14 +280,14 @@ func (d *Discovery) parseDaemonSet(ds *appsv1.DaemonSet) models.DaemonSet {
 // GetJobs collects all jobs in the specified namespace
 func (d *Discovery) GetJobs(ctx context.Context, namespace string) ([]models.Job, error) {
 	cacheKey := fmt.Sprintf("jobs:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if jobs, ok := cached.([]models.Job); ok {
 			return jobs, nil
 		}
 	}
-	
+
 	jobList, err := d.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list jobs: %w", err)
@@ -369,14 +369,14 @@ func (d *Discovery) parseJob(j *batchv1.Job) models.Job {
 // GetCronJobs collects all cronjobs in the specified namespace
 func (d *Discovery) GetCronJobs(ctx context.Context, namespace string) ([]models.CronJob, error) {
 	cacheKey := fmt.Sprintf("cronjobs:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if cronjobs, ok := cached.([]models.CronJob); ok {
 			return cronjobs, nil
 		}
 	}
-	
+
 	cronList, err := d.clientset.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cronjobs: %w", err)

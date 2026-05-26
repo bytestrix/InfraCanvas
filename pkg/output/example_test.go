@@ -10,13 +10,13 @@ import (
 // ExampleJSONFormatter demonstrates JSON output formatting
 func ExampleJSONFormatter() {
 	snapshot := createExampleSnapshot()
-	
+
 	formatter := &output.JSONFormatter{PrettyPrint: true}
 	result, err := formatter.Format(snapshot)
 	if err != nil {
 		panic(err)
 	}
-	
+
 	fmt.Println("JSON output generated:", len(result) > 0)
 	// Output: JSON output generated: true
 }
@@ -24,13 +24,13 @@ func ExampleJSONFormatter() {
 // ExampleYAMLFormatter demonstrates YAML output formatting
 func ExampleYAMLFormatter() {
 	snapshot := createExampleSnapshot()
-	
+
 	formatter := &output.YAMLFormatter{}
 	result, err := formatter.Format(snapshot)
 	if err != nil {
 		panic(err)
 	}
-	
+
 	fmt.Println("YAML output generated:", len(result) > 0)
 	// Output: YAML output generated: true
 }
@@ -38,13 +38,13 @@ func ExampleYAMLFormatter() {
 // ExampleTableFormatter demonstrates table output formatting
 func ExampleTableFormatter() {
 	snapshot := createExampleSnapshot()
-	
+
 	formatter := &output.TableFormatter{}
 	result, err := formatter.Format(snapshot)
 	if err != nil {
 		panic(err)
 	}
-	
+
 	fmt.Println("Table output generated")
 	fmt.Println(string(result)[:50]) // Print first 50 chars
 }
@@ -52,17 +52,17 @@ func ExampleTableFormatter() {
 // ExampleNewFormatter demonstrates the formatter factory
 func ExampleNewFormatter() {
 	snapshot := createExampleSnapshot()
-	
+
 	// Create JSON formatter
 	jsonFormatter := output.NewFormatter(output.FormatJSON)
 	jsonResult, _ := jsonFormatter.Format(snapshot)
 	fmt.Println("JSON formatter created, output length:", len(jsonResult))
-	
+
 	// Create YAML formatter
 	yamlFormatter := output.NewFormatter(output.FormatYAML)
 	yamlResult, _ := yamlFormatter.Format(snapshot)
 	fmt.Println("YAML formatter created, output length:", len(yamlResult))
-	
+
 	// Create Table formatter
 	tableFormatter := output.NewFormatter(output.FormatTable)
 	tableResult, _ := tableFormatter.Format(snapshot)
@@ -72,18 +72,18 @@ func ExampleNewFormatter() {
 // ExampleProgressIndicator demonstrates progress indicator usage
 func ExampleProgressIndicator() {
 	indicator := output.NewProgressIndicator("Discovering infrastructure...")
-	
+
 	indicator.Start()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	indicator.UpdateMessage("Collecting host information...")
 	time.Sleep(100 * time.Millisecond)
-	
+
 	indicator.UpdateMessage("Collecting Docker containers...")
 	time.Sleep(100 * time.Millisecond)
-	
+
 	indicator.Stop()
-	
+
 	fmt.Println("Discovery complete")
 	// Output: Discovery complete
 }
@@ -95,32 +95,32 @@ func ExampleProgressTracker() {
 		"Discovering Docker containers",
 		"Discovering Kubernetes resources",
 	}
-	
+
 	tracker := output.NewProgressTracker(stages)
-	
+
 	tracker.Start()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	tracker.NextStage()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	tracker.NextStage()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	tracker.Complete()
-	
+
 	fmt.Println("All stages complete")
 }
 
 // ExampleSimpleProgress demonstrates simple progress messages
 func ExampleSimpleProgress() {
 	progress := output.NewSimpleProgress()
-	
+
 	progress.Show("Starting discovery...")
 	progress.Success("Host information collected")
 	progress.Warning("Docker socket not accessible")
 	progress.Error("Kubernetes API unreachable")
-	
+
 	fmt.Println("Progress messages displayed")
 	// Output: Progress messages displayed
 }
@@ -128,7 +128,7 @@ func ExampleSimpleProgress() {
 // createExampleSnapshot creates a sample snapshot for examples
 func createExampleSnapshot() *models.InfraSnapshot {
 	now := time.Now()
-	
+
 	host := &models.Host{
 		BaseEntity: models.BaseEntity{
 			ID:        "host-1",
@@ -141,11 +141,11 @@ func createExampleSnapshot() *models.InfraSnapshot {
 		CPUUsagePercent:    25.5,
 		MemoryUsagePercent: 45.2,
 	}
-	
+
 	entities := map[string]models.Entity{
 		"host-1": host,
 	}
-	
+
 	return &models.InfraSnapshot{
 		Timestamp: now,
 		HostID:    "host-1",

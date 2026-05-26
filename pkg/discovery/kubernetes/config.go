@@ -5,22 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	"infracanvas/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetConfigMaps collects all configmaps in the specified namespace
 func (d *Discovery) GetConfigMaps(ctx context.Context, namespace string) ([]models.ConfigMap, error) {
 	cacheKey := fmt.Sprintf("configmaps:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if configmaps, ok := cached.([]models.ConfigMap); ok {
 			return configmaps, nil
 		}
 	}
-	
+
 	cmList, err := d.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list configmaps: %w", err)
@@ -68,14 +68,14 @@ func (d *Discovery) parseConfigMap(cm *corev1.ConfigMap) models.ConfigMap {
 // GetSecrets collects all secrets in the specified namespace
 func (d *Discovery) GetSecrets(ctx context.Context, namespace string) ([]models.Secret, error) {
 	cacheKey := fmt.Sprintf("secrets:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if secrets, ok := cached.([]models.Secret); ok {
 			return secrets, nil
 		}
 	}
-	
+
 	secretList, err := d.clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list secrets: %w", err)

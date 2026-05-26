@@ -16,13 +16,13 @@ type Cluster struct {
 type Node struct {
 	BaseEntity
 
-	Name              string `json:"name"`
-	Status            string `json:"status"` // Ready, NotReady
+	Name              string   `json:"name"`
+	Status            string   `json:"status"` // Ready, NotReady
 	Roles             []string `json:"roles"`
-	KubernetesVersion string `json:"kubernetes_version"`
-	ContainerRuntime  string `json:"container_runtime"`
-	OSImage           string `json:"os_image"`
-	KernelVersion     string `json:"kernel_version"`
+	KubernetesVersion string   `json:"kubernetes_version"`
+	ContainerRuntime  string   `json:"container_runtime"`
+	OSImage           string   `json:"os_image"`
+	KernelVersion     string   `json:"kernel_version"`
 
 	// Capacity
 	CPUCapacity    string `json:"cpu_capacity"`
@@ -60,21 +60,21 @@ type Namespace struct {
 type Deployment struct {
 	BaseEntity
 
-	Name              string            `json:"name"`
-	Namespace         string            `json:"namespace"`
-	Replicas          int32             `json:"replicas"`
-	AvailableReplicas int32             `json:"available_replicas"`
-	ReadyReplicas     int32             `json:"ready_replicas"`
-	UpdatedReplicas   int32             `json:"updated_replicas"`
-	Selector          map[string]string `json:"selector"`
-	Containers        []ContainerSpec   `json:"containers"`
-	Strategy          string            `json:"strategy"`
-	Generation        int64             `json:"generation,omitempty"`
-	ObservedGeneration int64            `json:"observed_generation,omitempty"`
-	ServiceAccount    string            `json:"service_account,omitempty"`
-	ImagePullSecrets  []string          `json:"image_pull_secrets,omitempty"`
-	ChartVersion      string            `json:"chart_version,omitempty"`
-	HelmRelease       string            `json:"helm_release,omitempty"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	Replicas           int32             `json:"replicas"`
+	AvailableReplicas  int32             `json:"available_replicas"`
+	ReadyReplicas      int32             `json:"ready_replicas"`
+	UpdatedReplicas    int32             `json:"updated_replicas"`
+	Selector           map[string]string `json:"selector"`
+	Containers         []ContainerSpec   `json:"containers"`
+	Strategy           string            `json:"strategy"`
+	Generation         int64             `json:"generation,omitempty"`
+	ObservedGeneration int64             `json:"observed_generation,omitempty"`
+	ServiceAccount     string            `json:"service_account,omitempty"`
+	ImagePullSecrets   []string          `json:"image_pull_secrets,omitempty"`
+	ChartVersion       string            `json:"chart_version,omitempty"`
+	HelmRelease        string            `json:"helm_release,omitempty"`
 }
 
 // StatefulSet represents a Kubernetes StatefulSet

@@ -18,7 +18,7 @@ func (d *Discovery) DiscoverAll() (*models.Host, []models.Process, []models.Serv
 
 	// Use goroutines for parallel collection of optional data
 	var wg sync.WaitGroup
-	
+
 	// Get cloud metadata (optional)
 	wg.Add(1)
 	go func() {
@@ -70,7 +70,7 @@ func (d *Discovery) DiscoverAll() (*models.Host, []models.Process, []models.Serv
 
 	var processes []models.Process
 	var services []models.Service
-	
+
 	// Get processes
 	wg.Add(1)
 	go func() {
@@ -94,7 +94,7 @@ func (d *Discovery) DiscoverAll() (*models.Host, []models.Process, []models.Serv
 			services = s
 		}
 	}()
-	
+
 	// Wait for all parallel operations to complete
 	wg.Wait()
 

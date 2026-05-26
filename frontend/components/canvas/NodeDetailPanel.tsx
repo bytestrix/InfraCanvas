@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight,
   AlertTriangle, FileText, Terminal, Eye, EyeOff, Download,
   ShieldOff, Shield, ArrowRightLeft, KeyRound, Search, Pencil,
+  Activity, BookText,
   type LucideIcon,
 } from 'lucide-react'
 import { type GraphNode } from '@/types'
@@ -80,6 +81,8 @@ const ACTIONS: Record<string, ActionDef[]> = {
       buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_deployment', target: k8sTarget('deployment', n), parameters: {} }) },
     { id: 'rollback', label: 'Rollback', Icon: Undo2, confirm: true,
       buildPayload: (n) => ({ action_id: `undo-${Date.now()}`, type: 'k8s_rollout_undo', target: k8sTarget('deployment', n), parameters: {} }) },
+    { id: 'rollout_status', label: 'Rollout Status', Icon: Activity,
+      buildPayload: (n) => ({ action_id: `rs-${Date.now()}`, type: 'k8s_rollout_status', target: k8sTarget('deployment', n), parameters: {} }) },
     { id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [
         { key: 'container', label: 'Container', type: 'select',
@@ -99,6 +102,8 @@ const ACTIONS: Record<string, ActionDef[]> = {
       buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'k8s_restart_statefulset', target: k8sTarget('statefulset', n), parameters: {} }) },
     { id: 'rollback', label: 'Rollback', Icon: Undo2, confirm: true,
       buildPayload: (n) => ({ action_id: `undo-${Date.now()}`, type: 'k8s_rollout_undo', target: k8sTarget('statefulset', n), parameters: {} }) },
+    { id: 'rollout_status', label: 'Rollout Status', Icon: Activity,
+      buildPayload: (n) => ({ action_id: `rs-${Date.now()}`, type: 'k8s_rollout_status', target: k8sTarget('statefulset', n), parameters: {} }) },
     { id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [
         { key: 'container', label: 'Container', type: 'select',
@@ -107,6 +112,8 @@ const ACTIONS: Record<string, ActionDef[]> = {
         { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
       ],
       buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('statefulset', n), parameters: { image: v.image, container: v.container } }) },
+    { id: 'delete', label: 'Delete StatefulSet', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `del-${Date.now()}`, type: 'k8s_delete_statefulset', target: k8sTarget('statefulset', n), parameters: {} }) },
   ],
   daemonset: [
     { id: 'restart', label: 'Rolling Restart', Icon: RotateCw, confirm: true,
@@ -176,6 +183,15 @@ const ACTIONS: Record<string, ActionDef[]> = {
       buildPayload: (n) => ({ action_id: `disk-${Date.now()}`, type: 'host_disk_usage', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
     { id: 'top_processes', label: 'Top Processes', Icon: Layers,
       buildPayload: (n) => ({ action_id: `proc-${Date.now()}`, type: 'host_top_processes', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: {} }) },
+    { id: 'service_status', label: 'Service Status', Icon: Activity,
+      form: [{ key: 'service', label: 'Service (blank = all)', placeholder: 'nginx', defaultValue: () => '' }],
+      buildPayload: (n, v) => ({ action_id: `svc-${Date.now()}`, type: 'host_service_status', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { service: v.service } }) },
+    { id: 'journalctl', label: 'Journalctl', Icon: BookText,
+      form: [
+        { key: 'unit', label: 'Unit (blank = system)', placeholder: 'nginx', defaultValue: () => '' },
+        { key: 'lines', label: 'Lines', placeholder: '200', type: 'number', defaultValue: () => '200' },
+      ],
+      buildPayload: (n, v) => ({ action_id: `jctl-${Date.now()}`, type: 'host_journalctl', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { unit: v.unit, lines: v.lines || '200' } }) },
   ],
 }
 
@@ -404,7 +420,7 @@ interface NodeDetailPanelProps {
 }
 
 type ActionStatus = 'idle' | 'confirming' | 'running' | 'success' | 'error'
-const TOOLS_NODES = new Set(['container', 'pod', 'host'])
+const TOOLS_NODES = new Set(['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset'])
 
 // Action button accent colors (functional — kept for UX clarity)
 const ACTION_COLORS: Record<string, string> = {

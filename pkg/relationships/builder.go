@@ -261,8 +261,8 @@ func (b *Builder) buildKubernetesRelationships(entities map[string]models.Entity
 
 	// Pod -> Docker Image (USES relation via container image name matching)
 	// Builds two indexes: exact repo:tag and normalized (registry-stripped) repo:tag
-	imageIndex := make(map[string]string)       // exact "repo:tag" -> entity ID
-	imageIndexNorm := make(map[string]string)   // normalized (no registry prefix) -> entity ID
+	imageIndex := make(map[string]string)     // exact "repo:tag" -> entity ID
+	imageIndexNorm := make(map[string]string) // normalized (no registry prefix) -> entity ID
 	for id, entity := range entities {
 		if entity.GetType() == models.EntityTypeImage {
 			if img, ok := entity.(*models.Image); ok && img.Repository != "<none>" && img.Tag != "<none>" {
@@ -513,7 +513,7 @@ func (b *Builder) findHostEntity(entities map[string]models.Entity) string {
 func (b *Builder) findImageByID(entities map[string]models.Entity, imageID string) string {
 	// Clean the imageID - Docker returns it with sha256: prefix
 	cleanImageID := strings.TrimPrefix(imageID, "sha256:")
-	
+
 	for id, entity := range entities {
 		if entity.GetType() == models.EntityTypeImage {
 			if image, ok := entity.(*models.Image); ok {

@@ -14,12 +14,12 @@ func (d *Discovery) GetRuntimeInfo(ctx context.Context) (*models.ContainerRuntim
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
-	
+
 	version, err := d.client.ServerVersion(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker version: %w", err)
 	}
-	
+
 	runtime := &models.ContainerRuntime{
 		BaseEntity: models.BaseEntity{
 			ID:        "docker-runtime",
@@ -34,6 +34,6 @@ func (d *Discovery) GetRuntimeInfo(ctx context.Context) (*models.ContainerRuntim
 		CgroupDriver:  info.CgroupDriver,
 		SocketPath:    "/var/run/docker.sock",
 	}
-	
+
 	return runtime, nil
 }

@@ -15,14 +15,14 @@ func (d *Discovery) GetNetworks(ctx context.Context) ([]models.Network, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list networks: %w", err)
 	}
-	
+
 	networks := make([]models.Network, 0, len(networkList))
-	
+
 	for _, net := range networkList {
 		network := d.parseNetwork(net)
 		networks = append(networks, network)
 	}
-	
+
 	return networks, nil
 }
 
@@ -34,7 +34,7 @@ func (d *Discovery) parseNetwork(net network.Inspect) models.Network {
 		subnet = net.IPAM.Config[0].Subnet
 		gateway = net.IPAM.Config[0].Gateway
 	}
-	
+
 	return models.Network{
 		BaseEntity: models.BaseEntity{
 			ID:          fmt.Sprintf("network:%s", net.ID[:12]),
@@ -61,13 +61,13 @@ func TrackNetworkUsage(networks []models.Network, containers []models.Container)
 	for i := range networks {
 		networkMap[networks[i].Name] = &networks[i]
 	}
-	
+
 	// Track which containers are connected to each network
 	for _, container := range containers {
 		// Parse network mode to determine connected networks
 		// Network mode can be: "bridge", "host", "none", "container:<id>", or custom network name
 		networkMode := container.NetworkMode
-		
+
 		// For standard modes, use the mode name as network name
 		if networkMode == "bridge" || networkMode == "host" || networkMode == "none" {
 			if net, exists := networkMap[networkMode]; exists {
@@ -80,12 +80,12 @@ func TrackNetworkUsage(networks []models.Network, containers []models.Container)
 			}
 		}
 	}
-	
+
 	// Convert map back to slice
 	result := make([]models.Network, 0, len(networkMap))
 	for _, net := range networkMap {
 		result = append(result, *net)
 	}
-	
+
 	return result
 }

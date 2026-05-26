@@ -6,23 +6,23 @@ import (
 	"strconv"
 	"time"
 
+	"infracanvas/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetServices collects all services in the specified namespace
 func (d *Discovery) GetServices(ctx context.Context, namespace string) ([]models.K8sService, error) {
 	cacheKey := fmt.Sprintf("services:%s", namespace)
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if services, ok := cached.([]models.K8sService); ok {
 			return services, nil
 		}
 	}
-	
+
 	svcList, err := d.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list services: %w", err)

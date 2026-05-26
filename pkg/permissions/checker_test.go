@@ -16,15 +16,15 @@ func TestNewChecker(t *testing.T) {
 
 func TestGetSummary(t *testing.T) {
 	checker := NewChecker()
-	
+
 	checker.checks = []PermissionCheck{
 		{Available: true, Level: PermissionFull},
 		{Available: true, Level: PermissionPartial},
 		{Available: false, Level: PermissionNone},
 	}
-	
+
 	available, unavailable, partial := checker.GetSummary()
-	
+
 	if available != 1 {
 		t.Errorf("Expected 1 available, got %d", available)
 	}
@@ -66,12 +66,12 @@ func TestHasCriticalIssues(t *testing.T) {
 			expected: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			checker := NewChecker()
 			checker.checks = tt.checks
-			
+
 			result := checker.HasCriticalIssues()
 			if result != tt.expected {
 				t.Errorf("Expected %v, got %v", tt.expected, result)
@@ -82,7 +82,7 @@ func TestHasCriticalIssues(t *testing.T) {
 
 func TestCanReadFile(t *testing.T) {
 	checker := NewChecker()
-	
+
 	// Test with /etc/os-release which should exist on most Linux systems
 	result := checker.canReadFile("/etc/os-release")
 	// We can't assert true/false as it depends on the system
@@ -92,13 +92,13 @@ func TestCanReadFile(t *testing.T) {
 
 func TestIsCommandAvailable(t *testing.T) {
 	checker := NewChecker()
-	
+
 	// Test with a command that should exist
 	result := checker.isCommandAvailable("ls")
 	if !result {
 		t.Error("Expected 'ls' command to be available")
 	}
-	
+
 	// Test with a command that shouldn't exist
 	result = checker.isCommandAvailable("nonexistent-command-xyz")
 	if result {
@@ -108,11 +108,11 @@ func TestIsCommandAvailable(t *testing.T) {
 
 func TestGetLevel(t *testing.T) {
 	checker := NewChecker()
-	
+
 	if level := checker.getLevel(true); level != PermissionFull {
 		t.Errorf("Expected PermissionFull, got %s", level)
 	}
-	
+
 	if level := checker.getLevel(false); level != PermissionNone {
 		t.Errorf("Expected PermissionNone, got %s", level)
 	}
@@ -120,11 +120,11 @@ func TestGetLevel(t *testing.T) {
 
 func TestGetPartialLevel(t *testing.T) {
 	checker := NewChecker()
-	
+
 	if level := checker.getPartialLevel(true); level != PermissionFull {
 		t.Errorf("Expected PermissionFull, got %s", level)
 	}
-	
+
 	if level := checker.getPartialLevel(false); level != PermissionPartial {
 		t.Errorf("Expected PermissionPartial, got %s", level)
 	}

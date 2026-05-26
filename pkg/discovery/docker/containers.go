@@ -22,9 +22,9 @@ func (d *Discovery) GetContainers(ctx context.Context) ([]models.Container, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
-	
+
 	var (
-		containers []models.Container
+		containers   []models.Container
 		containersMu sync.Mutex
 	)
 
@@ -96,22 +96,22 @@ func (d *Discovery) GetContainers(ctx context.Context) ([]models.Container, erro
 func (d *Discovery) parseContainer(c container.Summary, inspect container.InspectResponse) models.Container {
 	// Parse container name (remove leading slash)
 	name := strings.TrimPrefix(c.Names[0], "/")
-	
+
 	// Parse created time
 	created, _ := time.Parse(time.RFC3339Nano, inspect.Created)
-	
+
 	// Parse started time
 	var started time.Time
 	if inspect.State.StartedAt != "" {
 		started, _ = time.Parse(time.RFC3339Nano, inspect.State.StartedAt)
 	}
-	
+
 	// Parse finished time
 	var finished time.Time
 	if inspect.State.FinishedAt != "" {
 		finished, _ = time.Parse(time.RFC3339Nano, inspect.State.FinishedAt)
 	}
-	
+
 	// Parse environment variables with redaction
 	environment := make(map[string]string)
 	for _, env := range inspect.Config.Env {
@@ -122,13 +122,13 @@ func (d *Discovery) parseContainer(c container.Summary, inspect container.Inspec
 			environment[key] = d.redactor.RedactValue(key, value)
 		}
 	}
-	
+
 	// Parse port mappings
 	portMappings := parsePortMappings(inspect.NetworkSettings.Ports)
-	
+
 	// Parse mounts
 	mounts := parseMounts(inspect.Mounts)
-	
+
 	// Extract docker-compose labels
 	composeProject := inspect.Config.Labels["com.docker.compose.project"]
 	composeService := inspect.Config.Labels["com.docker.compose.service"]
@@ -141,10 +141,10 @@ func (d *Discovery) parseContainer(c container.Summary, inspect container.Inspec
 	for networkName := range inspect.NetworkSettings.Networks {
 		networks = append(networks, networkName)
 	}
-	
+
 	// Calculate health status
 	health := calculateContainerHealth(inspect.State)
-	
+
 	container := models.Container{
 		BaseEntity: models.BaseEntity{
 			ID:          fmt.Sprintf("container:%s", c.ID[:12]),
@@ -172,31 +172,31 @@ func (d *Discovery) parseContainer(c container.Summary, inspect container.Inspec
 		ComposeProject: composeProject,
 		ComposeService: composeService,
 	}
-	
+
 	return container
 }
 
 // parsePortMappings parses Docker port mappings
 func parsePortMappings(ports nat.PortMap) []models.PortMapping {
 	mappings := []models.PortMapping{}
-	
+
 	for port, bindings := range ports {
 		// Parse container port and protocol
 		portStr := port.Port()
 		protocol := port.Proto()
-		
+
 		containerPort, err := strconv.Atoi(portStr)
 		if err != nil {
 			continue
 		}
-		
+
 		// Add each binding
 		for _, binding := range bindings {
 			hostPort, err := strconv.Atoi(binding.HostPort)
 			if err != nil {
 				continue
 			}
-			
+
 			mappings = append(mappings, models.PortMapping{
 				HostIP:        binding.HostIP,
 				HostPort:      hostPort,
@@ -205,14 +205,14 @@ func parsePortMappings(ports nat.PortMap) []models.PortMapping {
 			})
 		}
 	}
-	
+
 	return mappings
 }
 
 // parseMounts parses Docker mounts
 func parseMounts(dockerMounts []container.MountPoint) []models.Mount {
 	mounts := make([]models.Mount, 0, len(dockerMounts))
-	
+
 	for _, m := range dockerMounts {
 		mounts = append(mounts, models.Mount{
 			Source:      m.Source,
@@ -221,7 +221,7 @@ func parseMounts(dockerMounts []container.MountPoint) []models.Mount {
 			Type:        string(m.Type),
 		})
 	}
-	
+
 	return mounts
 }
 

@@ -87,7 +87,7 @@ func parseProcStat(pid int) (*ProcStat, error) {
 	}
 
 	name := line[startIdx+1 : endIdx]
-	
+
 	// Parse remaining fields after the name
 	fields := strings.Fields(line[endIdx+2:])
 	if len(fields) < 22 {

@@ -49,7 +49,7 @@ func TestGetHostInfo(t *testing.T) {
 		t.Error("CPUCores should not be zero")
 	}
 
-	t.Logf("Host: %s, Arch: %s, Kernel: %s, CPU: %s (%d cores)", 
+	t.Logf("Host: %s, Arch: %s, Kernel: %s, CPU: %s (%d cores)",
 		host.Hostname, host.Architecture, host.KernelVersion, host.CPUModel, host.CPUCores)
 }
 
@@ -65,7 +65,7 @@ func TestGetNetworkInterfaces(t *testing.T) {
 	}
 
 	for _, iface := range interfaces {
-		t.Logf("Interface: %s, MAC: %s, Status: %s, IPs: %v", 
+		t.Logf("Interface: %s, MAC: %s, Status: %s, IPs: %v",
 			iface.Name, iface.MACAddress, iface.Status, iface.IPAddresses)
 	}
 }
@@ -81,10 +81,10 @@ func TestGetResourceUsage(t *testing.T) {
 		t.Fatal("GetResourceUsage returned nil")
 	}
 
-	t.Logf("CPU: %.2f%%, Memory: %d/%d bytes (%.2f%%)", 
-		usage.CPUUsagePercent, 
-		usage.MemoryUsedBytes, 
-		usage.MemoryTotalBytes, 
+	t.Logf("CPU: %.2f%%, Memory: %d/%d bytes (%.2f%%)",
+		usage.CPUUsagePercent,
+		usage.MemoryUsedBytes,
+		usage.MemoryTotalBytes,
 		usage.MemoryUsagePercent)
 
 	if len(usage.Filesystems) > 0 {

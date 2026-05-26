@@ -69,32 +69,32 @@ func getCPUUsage() (float64, error) {
 	if err != nil {
 		user = 0
 	}
-	
+
 	nice, err := validation.SafeParseInt64(fields[2], "nice", "/proc/stat")
 	if err != nil {
 		nice = 0
 	}
-	
+
 	system, err := validation.SafeParseInt64(fields[3], "system", "/proc/stat")
 	if err != nil {
 		system = 0
 	}
-	
+
 	idle, err := validation.SafeParseInt64(fields[4], "idle", "/proc/stat")
 	if err != nil {
 		idle = 0
 	}
-	
+
 	iowait, err := validation.SafeParseInt64(fields[5], "iowait", "/proc/stat")
 	if err != nil {
 		iowait = 0
 	}
-	
+
 	irq, err := validation.SafeParseInt64(fields[6], "irq", "/proc/stat")
 	if err != nil {
 		irq = 0
 	}
-	
+
 	softirq, err := validation.SafeParseInt64(fields[7], "softirq", "/proc/stat")
 	if err != nil {
 		softirq = 0
@@ -177,7 +177,7 @@ func getMemoryUsage() (total int64, used int64, percent float64, err error) {
 	// Calculate percentage
 	if memTotal > 0 {
 		percent = float64(used) / float64(memTotal) * 100.0
-		
+
 		// Validate range
 		if err := validation.ValidateRange(percent, 0.0, 100.0, "memory_usage_percent", "/proc/meminfo"); err != nil {
 			validation.LogParseError(err, "memory usage validation")
@@ -243,7 +243,7 @@ func getFilesystems() ([]models.Filesystem, error) {
 		var usagePercent float64
 		if totalBytes > 0 {
 			usagePercent = float64(usedBytes) / float64(totalBytes) * 100.0
-			
+
 			// Validate range
 			if err := validation.ValidateRange(usagePercent, 0.0, 100.0, "disk_usage_percent", mountPoint); err != nil {
 				validation.LogParseError(err, fmt.Sprintf("disk usage validation for %s", mountPoint))
@@ -327,17 +327,17 @@ func (d *Discovery) GetNetworkIOStats() (map[string]*NetworkIOStats, error) {
 		if err != nil {
 			rxBytes = 0
 		}
-		
+
 		rxPackets, err := validation.SafeParseInt64(fields[1], "rx_packets", fmt.Sprintf("/proc/net/dev:%s", ifaceName))
 		if err != nil {
 			rxPackets = 0
 		}
-		
+
 		txBytes, err := validation.SafeParseInt64(fields[8], "tx_bytes", fmt.Sprintf("/proc/net/dev:%s", ifaceName))
 		if err != nil {
 			txBytes = 0
 		}
-		
+
 		txPackets, err := validation.SafeParseInt64(fields[9], "tx_packets", fmt.Sprintf("/proc/net/dev:%s", ifaceName))
 		if err != nil {
 			txPackets = 0

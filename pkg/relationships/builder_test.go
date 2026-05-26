@@ -399,7 +399,7 @@ func TestExportGraph(t *testing.T) {
 
 func TestExportRelationshipGraph(t *testing.T) {
 	entities := make(map[string]models.Entity)
-	
+
 	// Add some test entities
 	pod := &models.Pod{
 		BaseEntity: models.BaseEntity{

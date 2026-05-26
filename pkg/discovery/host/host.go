@@ -133,7 +133,7 @@ func getUnameInfo() (kernelVersion string, arch string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("failed to execute uname -r: %w", err)
 	}
-	
+
 	kernelVersion = strings.TrimSpace(string(output))
 	if err := validation.ValidateNotEmpty(kernelVersion, "kernel_version", "uname -r"); err != nil {
 		validation.LogParseError(err, "uname -r output validation")
@@ -146,7 +146,7 @@ func getUnameInfo() (kernelVersion string, arch string, err error) {
 	if err != nil {
 		return kernelVersion, "", fmt.Errorf("failed to execute uname -m: %w", err)
 	}
-	
+
 	arch = strings.TrimSpace(string(output))
 	if err := validation.ValidateNotEmpty(arch, "architecture", "uname -m"); err != nil {
 		validation.LogParseError(err, "uname -m output validation")
@@ -163,7 +163,7 @@ func detectVirtualization() (virtType string, hypervisor string, err error) {
 	output, err := cmd.Output()
 	if err == nil {
 		virt := strings.TrimSpace(string(output))
-		
+
 		// Validate output is not empty
 		if err := validation.ValidateNotEmpty(virt, "virtualization_type", "systemd-detect-virt"); err != nil {
 			validation.LogParseError(err, "systemd-detect-virt output validation")
@@ -233,7 +233,7 @@ func getCPUInfo() (model string, cores int, err error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Parse model name (only capture first occurrence)
 		if cpuModel == "" && strings.HasPrefix(line, "model name") {
 			parts := strings.SplitN(line, ":", 2)
@@ -241,7 +241,7 @@ func getCPUInfo() (model string, cores int, err error) {
 				cpuModel = strings.TrimSpace(parts[1])
 			}
 		}
-		
+
 		// Count processor entries to get core count
 		if strings.HasPrefix(line, "processor") {
 			coreCount++
@@ -329,12 +329,12 @@ type NetworkStats struct {
 
 // LogOptions represents options for log retrieval
 type LogOptions struct {
-	Since      time.Time
-	Until      time.Time
-	Tail       int
-	Follow     bool
-	Priority   string
-	Unit       string
+	Since    time.Time
+	Until    time.Time
+	Tail     int
+	Follow   bool
+	Priority string
+	Unit     string
 }
 
 // GetLogs retrieves system logs

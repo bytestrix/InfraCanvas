@@ -15,12 +15,12 @@ import (
 
 // Agent represents the infrastructure discovery agent
 type Agent struct {
-	config          *Config
-	orchestrator    *orchestrator.Orchestrator
-	backendClient   *BackendClient
-	strategyManager *StrategyManager
-	watcherManager  *WatcherManager
-	startTime       time.Time
+	config           *Config
+	orchestrator     *orchestrator.Orchestrator
+	backendClient    *BackendClient
+	strategyManager  *StrategyManager
+	watcherManager   *WatcherManager
+	startTime        time.Time
 	collectionErrors int
 }
 
@@ -36,7 +36,7 @@ func NewAgent(config *Config) (*Agent, error) {
 
 	// Get Kubernetes discovery for cache invalidation
 	k8sDiscovery := orch.GetKubernetesDiscovery()
-	
+
 	watcherManager, err := NewWatcherManager(config, backendClient, k8sDiscovery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create watcher manager: %w", err)

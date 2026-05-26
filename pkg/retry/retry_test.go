@@ -202,19 +202,19 @@ func TestCalculateBackoff(t *testing.T) {
 
 func TestNetworkConfig(t *testing.T) {
 	config := NetworkConfig()
-	
+
 	if config.MaxRetries != 3 {
 		t.Errorf("expected MaxRetries=3, got %d", config.MaxRetries)
 	}
-	
+
 	if config.InitialBackoff != 500*time.Millisecond {
 		t.Errorf("expected InitialBackoff=500ms, got %v", config.InitialBackoff)
 	}
-	
+
 	if config.MaxBackoff != 5*time.Second {
 		t.Errorf("expected MaxBackoff=5s, got %v", config.MaxBackoff)
 	}
-	
+
 	if config.Multiplier != 2.0 {
 		t.Errorf("expected Multiplier=2.0, got %f", config.Multiplier)
 	}

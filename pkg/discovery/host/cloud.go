@@ -46,7 +46,7 @@ func (d *Discovery) GetCloudMetadata() (*CloudMetadata, error) {
 // getAWSMetadata fetches AWS EC2 metadata with retry logic
 func getAWSMetadata() (*CloudMetadata, error) {
 	baseURL := "http://169.254.169.254/latest/meta-data/"
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 2 * time.Second,
@@ -217,7 +217,7 @@ func getIMDSv2Token(client *http.Client) (string, error) {
 // getGCPMetadata fetches GCP metadata with retry logic
 func getGCPMetadata() (*CloudMetadata, error) {
 	baseURL := "http://metadata.google.internal/computeMetadata/v1/"
-	
+
 	client := &http.Client{
 		Timeout: 2 * time.Second,
 	}
@@ -307,18 +307,18 @@ func getGCPMetadata() (*CloudMetadata, error) {
 // getAzureMetadata fetches Azure metadata with retry logic
 func getAzureMetadata() (*CloudMetadata, error) {
 	url := "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
-	
+
 	client := &http.Client{
 		Timeout: 2 * time.Second,
 	}
 
 	var azureMetadata struct {
 		Compute struct {
-			VMID             string `json:"vmId"`
-			VMSize           string `json:"vmSize"`
-			Location         string `json:"location"`
-			Zone             string `json:"zone"`
-			Tags             string `json:"tags"`
+			VMID     string `json:"vmId"`
+			VMSize   string `json:"vmSize"`
+			Location string `json:"location"`
+			Zone     string `json:"zone"`
+			Tags     string `json:"tags"`
 		} `json:"compute"`
 	}
 

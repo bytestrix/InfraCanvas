@@ -5,22 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	"infracanvas/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"infracanvas/internal/models"
 )
 
 // GetNamespaces collects all namespaces in the cluster
 func (d *Discovery) GetNamespaces(ctx context.Context) ([]models.Namespace, error) {
 	cacheKey := "namespaces"
-	
+
 	// Check cache first
 	if cached, found := d.cache.Get(cacheKey); found {
 		if namespaces, ok := cached.([]models.Namespace); ok {
 			return namespaces, nil
 		}
 	}
-	
+
 	nsList, err := d.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list namespaces: %w", err)
