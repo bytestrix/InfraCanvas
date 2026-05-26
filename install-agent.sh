@@ -362,20 +362,28 @@ if [[ "$USE_TUNNEL" == "true" ]]; then
     # has registered with the Cloudflare edge, so seeing the URL in the journal
     # is itself proof the tunnel is live.
     #
-    # However, Cloudflare free quick-tunnels can drop within seconds of
-    # connecting. The watchdog respawns cloudflared and writes a NEW URL to
-    # state.json. We wait 8 seconds here so the state file settles, then
-    # re-read it. This way we print the *current* URL, not a URL that was
-    # already replaced before the user even opened the browser.
-    info "Stabilising tunnel (8s)..."
-    sleep 8
-    STABLE_URL=""
-    if [[ -r "$STATE_FILE" ]]; then
-      STABLE_URL=$(run_priv grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$STATE_FILE" 2>/dev/null | tail -1 || true)
-    fi
-    if [[ -n "$STABLE_URL" && "$STABLE_URL" != "$TUNNEL_URL" ]]; then
-      info "Tunnel cycled once during stabilisation — updated URL captured."
-      TUNNEL_URL="$STABLE_URL"
+    # However, free quick-tunnels can cycle within seconds: the watchdog
+    # respawns cloudflared and writes a NEW URL to state.json. Rather than
+    # sleeping a fixed amount and hoping the URL is still valid, we actively
+    # probe the health endpoint. On each tick we also re-read state.json so
+    # that if the tunnel cycled we automatically switch to the new URL.
+    info "Verifying tunnel is reachable..."
+    VERIFIED=false
+    for _ in $(seq 1 24); do
+      # Always pick up the latest URL in case the tunnel cycled during this loop.
+      if [[ -r "$STATE_FILE" ]]; then
+        LATEST=$(run_priv grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$STATE_FILE" 2>/dev/null | tail -1 || true)
+        [[ -n "$LATEST" ]] && TUNNEL_URL="$LATEST"
+      fi
+      if curl -fsS --max-time 4 "${TUNNEL_URL}/api/health" >/dev/null 2>&1; then
+        VERIFIED=true
+        break
+      fi
+      sleep 2
+    done
+    if [[ "$VERIFIED" != "true" ]]; then
+      warn "Tunnel didn't respond within 50s — the URL below may still need a moment."
+      warn "If it doesn't load, run: sudo infracanvas url"
     fi
     TUNNEL_REACHABLE="true"
   fi
