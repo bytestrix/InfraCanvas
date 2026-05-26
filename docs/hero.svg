@@ -1,0 +1,402 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#08080E"/>
+      <stop offset="100%" style="stop-color:#0D0B1A"/>
+    </linearGradient>
+    <linearGradient id="glow-purple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7C3AED;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#A855F7;stop-opacity:0.05"/>
+    </linearGradient>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#13111F"/>
+      <stop offset="100%" style="stop-color:#0F0D1A"/>
+    </linearGradient>
+    <linearGradient id="panel-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#110F1E"/>
+      <stop offset="100%" style="stop-color:#0C0B18"/>
+    </linearGradient>
+    <linearGradient id="green-pulse" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10B981"/>
+      <stop offset="100%" style="stop-color:#34D399"/>
+    </linearGradient>
+    <linearGradient id="bar-cpu" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7C3AED"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+    <linearGradient id="bar-mem" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0891B2"/>
+      <stop offset="100%" style="stop-color:#06B6D4"/>
+    </linearGradient>
+    <filter id="node-glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="subtle-glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="edge-glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <radialGradient id="ambient1" cx="30%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#4F1D96;stop-opacity:0.12"/>
+      <stop offset="100%" style="stop-color:#08080E;stop-opacity:0"/>
+    </radialGradient>
+    <radialGradient id="ambient2" cx="75%" cy="60%" r="40%">
+      <stop offset="0%" style="stop-color:#0E7490;stop-opacity:0.08"/>
+      <stop offset="100%" style="stop-color:#08080E;stop-opacity:0"/>
+    </radialGradient>
+    <clipPath id="canvas-clip">
+      <rect x="0" y="0" width="800" height="630"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#ambient1)"/>
+  <rect width="1200" height="630" fill="url(#ambient2)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="0.04" stroke="#8B5CF6" stroke-width="0.5">
+    <line x1="0" y1="60" x2="1200" y2="60"/>
+    <line x1="0" y1="120" x2="1200" y2="120"/>
+    <line x1="0" y1="180" x2="1200" y2="180"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="0" y1="300" x2="1200" y2="300"/>
+    <line x1="0" y1="360" x2="1200" y2="360"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="480" x2="1200" y2="480"/>
+    <line x1="0" y1="540" x2="1200" y2="540"/>
+    <line x1="0" y1="600" x2="1200" y2="600"/>
+    <line x1="60" y1="0" x2="60" y2="630"/>
+    <line x1="120" y1="0" x2="120" y2="630"/>
+    <line x1="180" y1="0" x2="180" y2="630"/>
+    <line x1="240" y1="0" x2="240" y2="630"/>
+    <line x1="300" y1="0" x2="300" y2="630"/>
+    <line x1="360" y1="0" x2="360" y2="630"/>
+    <line x1="420" y1="0" x2="420" y2="630"/>
+    <line x1="480" y1="0" x2="480" y2="630"/>
+    <line x1="540" y1="0" x2="540" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="660" y1="0" x2="660" y2="630"/>
+    <line x1="720" y1="0" x2="720" y2="630"/>
+    <line x1="780" y1="0" x2="780" y2="630"/>
+  </g>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="1200" height="46" fill="#0C0B18" opacity="0.95"/>
+  <line x1="0" y1="46" x2="1200" y2="46" stroke="#2A2640" stroke-width="1"/>
+
+  <!-- Logo dot -->
+  <circle cx="22" cy="23" r="7" fill="#7C3AED" opacity="0.9"/>
+  <circle cx="22" cy="23" r="4" fill="#A855F7"/>
+
+  <!-- Brand name -->
+  <text x="36" y="29" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#EEE8FF" letter-spacing="-0.3">InfraCanvas</text>
+
+  <!-- Top bar nav items -->
+  <text x="140" y="28" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#6B6380">Canvas</text>
+  <text x="190" y="28" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#9B91C0">Logs</text>
+  <text x="228" y="28" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="#6B6380">Terminal</text>
+
+  <!-- Status pill -->
+  <rect x="290" y="15" width="70" height="17" rx="8" fill="#052E1A" stroke="#064E2A" stroke-width="1"/>
+  <circle cx="302" cy="23.5" r="3.5" fill="#10B981"/>
+  <text x="310" y="27" font-family="system-ui,-apple-system,sans-serif" font-size="10" fill="#10B981">live</text>
+
+  <!-- Host pill -->
+  <rect x="370" y="15" width="120" height="17" rx="8" fill="#161326" stroke="#2A2640" stroke-width="1"/>
+  <text x="382" y="27" font-family="system-ui,-apple-system,sans-serif" font-size="10" fill="#8B82B0">datacenter-vm-01</text>
+
+  <!-- Right side top bar -->
+  <text x="1090" y="28" font-family="ui-monospace,monospace" font-size="10" fill="#4B4560">v0.9.6</text>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- CANVAS AREA (left 800px) -->
+  <!-- ══════════════════════════════════════════════════════ -->
+
+  <!-- Canvas label -->
+  <text x="20" y="72" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="600" fill="#4B4560" letter-spacing="1" text-transform="uppercase">CANVAS</text>
+  <line x1="0" y1="78" x2="800" y2="78" stroke="#1A1730" stroke-width="1"/>
+
+  <!-- ── NETWORK NODE (hub) ── -->
+  <!-- bridge network -->
+  <g transform="translate(200, 220)" filter="url(#subtle-glow)">
+    <rect x="-48" y="-22" width="96" height="44" rx="8" fill="#0F0E1C" stroke="#2A2050" stroke-width="1.5"/>
+    <rect x="-48" y="-22" width="96" height="44" rx="8" fill="none" stroke="#7C3AED" stroke-width="1" opacity="0.4"/>
+    <circle cx="-30" cy="0" r="6" fill="#1A1535" stroke="#6D28D9" stroke-width="1.5"/>
+    <line x1="-30" y1="-3" x2="-30" y2="3" stroke="#8B5CF6" stroke-width="1.5"/>
+    <line x1="-33" y1="0" x2="-27" y2="0" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="-18" y="-6" font-family="ui-monospace,monospace" font-size="8" fill="#9B91C0">bridge</text>
+    <text x="-18" y="7" font-family="ui-monospace,monospace" font-size="7" fill="#5B5278">172.17.0.0/16</text>
+  </g>
+
+  <!-- overlay network -->
+  <g transform="translate(420, 180)">
+    <rect x="-48" y="-22" width="96" height="44" rx="8" fill="#0F0E1C" stroke="#1E3A5F" stroke-width="1.5"/>
+    <circle cx="-30" cy="0" r="6" fill="#0C1E35" stroke="#0891B2" stroke-width="1.5"/>
+    <line x1="-30" y1="-3" x2="-30" y2="3" stroke="#06B6D4" stroke-width="1.5"/>
+    <line x1="-33" y1="0" x2="-27" y2="0" stroke="#06B6D4" stroke-width="1.5"/>
+    <text x="-18" y="-6" font-family="ui-monospace,monospace" font-size="8" fill="#7DB8CC">overlay</text>
+    <text x="-18" y="7" font-family="ui-monospace,monospace" font-size="7" fill="#4A7A8A">10.0.0.0/24</text>
+  </g>
+
+  <!-- ── EDGES (network connections) ── -->
+  <!-- nginx → bridge -->
+  <line x1="200" y1="220" x2="135" y2="305" stroke="#7C3AED" stroke-width="1" opacity="0.35" stroke-dasharray="4,3"/>
+  <!-- postgres → bridge -->
+  <line x1="200" y1="220" x2="260" y2="330" stroke="#7C3AED" stroke-width="1" opacity="0.35" stroke-dasharray="4,3"/>
+  <!-- redis → bridge -->
+  <line x1="200" y1="220" x2="130" y2="160" stroke="#7C3AED" stroke-width="1" opacity="0.35" stroke-dasharray="4,3"/>
+  <!-- api → bridge -->
+  <line x1="200" y1="220" x2="310" y2="210" stroke="#7C3AED" stroke-width="1" opacity="0.35" stroke-dasharray="4,3"/>
+  <!-- api → overlay -->
+  <line x1="420" y1="180" x2="355" y2="210" stroke="#0891B2" stroke-width="1" opacity="0.3" stroke-dasharray="4,3"/>
+  <!-- k8s pods → overlay -->
+  <line x1="420" y1="180" x2="500" y2="250" stroke="#0891B2" stroke-width="1" opacity="0.3" stroke-dasharray="4,3"/>
+  <line x1="420" y1="180" x2="560" y2="175" stroke="#0891B2" stroke-width="1" opacity="0.3" stroke-dasharray="4,3"/>
+  <line x1="420" y1="180" x2="490" y2="135" stroke="#0891B2" stroke-width="1" opacity="0.3" stroke-dasharray="4,3"/>
+
+  <!-- ── CONTAINER NODES ── -->
+
+  <!-- nginx -->
+  <g transform="translate(100, 305)">
+    <rect x="-38" y="-28" width="76" height="56" rx="8" fill="url(#card-grad)" stroke="#1E3A1E" stroke-width="1.5"/>
+    <rect x="-38" y="-28" width="76" height="8" rx="8" fill="#052E1A" opacity="0.8"/>
+    <rect x="-38" y="-24" width="76" height="4" fill="#052E1A" opacity="0.8"/>
+    <circle cx="0" cy="-10" r="9" fill="#0A1A0A" stroke="#10B981" stroke-width="1.5"/>
+    <text x="-4" y="-6" font-family="ui-monospace,monospace" font-size="9" fill="#10B981">▶</text>
+    <text x="0" y="7" font-family="ui-monospace,monospace" font-size="8" fill="#9B91C0" text-anchor="middle">nginx</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="7" fill="#4B4560" text-anchor="middle">:80 :443</text>
+    <circle cx="28" cy="-20" r="4" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- postgres -->
+  <g transform="translate(270, 340)">
+    <rect x="-42" y="-28" width="84" height="56" rx="8" fill="url(#card-grad)" stroke="#1E3A1E" stroke-width="1.5"/>
+    <rect x="-42" y="-28" width="84" height="8" rx="8" fill="#052E1A" opacity="0.8"/>
+    <rect x="-42" y="-24" width="84" height="4" fill="#052E1A" opacity="0.8"/>
+    <circle cx="0" cy="-10" r="9" fill="#0A1A0A" stroke="#10B981" stroke-width="1.5"/>
+    <text x="-4" y="-6" font-family="ui-monospace,monospace" font-size="9" fill="#10B981">▶</text>
+    <text x="0" y="7" font-family="ui-monospace,monospace" font-size="8" fill="#9B91C0" text-anchor="middle">postgres</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="7" fill="#4B4560" text-anchor="middle">:5432</text>
+    <circle cx="32" cy="-20" r="4" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- redis -->
+  <g transform="translate(105, 160)">
+    <rect x="-36" y="-28" width="72" height="56" rx="8" fill="url(#card-grad)" stroke="#1E3A1E" stroke-width="1.5"/>
+    <rect x="-36" y="-28" width="72" height="8" rx="8" fill="#052E1A" opacity="0.8"/>
+    <rect x="-36" y="-24" width="72" height="4" fill="#052E1A" opacity="0.8"/>
+    <circle cx="0" cy="-10" r="9" fill="#0A1A0A" stroke="#10B981" stroke-width="1.5"/>
+    <text x="-4" y="-6" font-family="ui-monospace,monospace" font-size="9" fill="#10B981">▶</text>
+    <text x="0" y="7" font-family="ui-monospace,monospace" font-size="8" fill="#9B91C0" text-anchor="middle">redis</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="7" fill="#4B4560" text-anchor="middle">:6379</text>
+    <circle cx="26" cy="-20" r="4" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- api-server -->
+  <g transform="translate(340, 215)">
+    <rect x="-46" y="-28" width="92" height="56" rx="8" fill="url(#card-grad)" stroke="#1E3A1E" stroke-width="1.5"/>
+    <rect x="-46" y="-28" width="92" height="8" rx="8" fill="#052E1A" opacity="0.8"/>
+    <rect x="-46" y="-24" width="92" height="4" fill="#052E1A" opacity="0.8"/>
+    <circle cx="0" cy="-10" r="9" fill="#0A1A0A" stroke="#10B981" stroke-width="1.5"/>
+    <text x="-4" y="-6" font-family="ui-monospace,monospace" font-size="9" fill="#10B981">▶</text>
+    <text x="0" y="7" font-family="ui-monospace,monospace" font-size="8" fill="#9B91C0" text-anchor="middle">api-server</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="7" fill="#4B4560" text-anchor="middle">:8080</text>
+    <circle cx="36" cy="-20" r="4" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- ── KUBERNETES PODS ── -->
+
+  <!-- K8s namespace badge -->
+  <rect x="460" y="88" width="280" height="200" rx="10" fill="#08070F" stroke="#1E1840" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <rect x="460" y="85" width="100" height="16" rx="4" fill="#0C0B18" stroke="#1E1840" stroke-width="1"/>
+  <circle cx="472" cy="93" r="4" fill="#0C1E35" stroke="#0891B2" stroke-width="1.5"/>
+  <text x="482" y="97" font-family="ui-monospace,monospace" font-size="8" fill="#0891B2">k8s: default</text>
+
+  <!-- pod: web-6d4fb -->
+  <g transform="translate(510, 145)">
+    <rect x="-40" y="-24" width="80" height="48" rx="7" fill="#0C0B18" stroke="#1E3A5F" stroke-width="1.5"/>
+    <circle cx="0" cy="-8" r="8" fill="#071525" stroke="#0891B2" stroke-width="1.5"/>
+    <text x="-5" y="-4" font-family="ui-monospace,monospace" font-size="9" fill="#06B6D4">⬡</text>
+    <text x="0" y="8" font-family="ui-monospace,monospace" font-size="7" fill="#7DB8CC" text-anchor="middle">web-6d4fb</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="6" fill="#3A6070" text-anchor="middle">Running</text>
+    <circle cx="30" cy="-16" r="3.5" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- pod: worker-7c9b2 -->
+  <g transform="translate(610, 200)">
+    <rect x="-44" y="-24" width="88" height="48" rx="7" fill="#0C0B18" stroke="#1E3A5F" stroke-width="1.5"/>
+    <circle cx="0" cy="-8" r="8" fill="#071525" stroke="#0891B2" stroke-width="1.5"/>
+    <text x="-5" y="-4" font-family="ui-monospace,monospace" font-size="9" fill="#06B6D4">⬡</text>
+    <text x="0" y="8" font-family="ui-monospace,monospace" font-size="7" fill="#7DB8CC" text-anchor="middle">worker-7c9b2</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="6" fill="#3A6070" text-anchor="middle">Running</text>
+    <circle cx="34" cy="-16" r="3.5" fill="#10B981" opacity="0.9"/>
+  </g>
+
+  <!-- pod: cron-3f1a9 - pending/yellow -->
+  <g transform="translate(510, 255)">
+    <rect x="-40" y="-24" width="80" height="48" rx="7" fill="#0C0B18" stroke="#4A3A10" stroke-width="1.5"/>
+    <circle cx="0" cy="-8" r="8" fill="#141205" stroke="#D97706" stroke-width="1.5"/>
+    <text x="-5" y="-4" font-family="ui-monospace,monospace" font-size="9" fill="#F59E0B">⬡</text>
+    <text x="0" y="8" font-family="ui-monospace,monospace" font-size="7" fill="#9B8A50" text-anchor="middle">cron-3f1a9</text>
+    <text x="0" y="18" font-family="ui-monospace,monospace" font-size="6" fill="#7A6A30" text-anchor="middle">Pending</text>
+    <circle cx="30" cy="-16" r="3.5" fill="#F59E0B" opacity="0.9"/>
+  </g>
+
+  <!-- Volume node -->
+  <g transform="translate(170, 430)">
+    <rect x="-44" y="-24" width="88" height="48" rx="7" fill="#0C0B18" stroke="#2A2640" stroke-width="1.5"/>
+    <circle cx="-20" cy="0" r="8" fill="#110F1E" stroke="#6D28D9" stroke-width="1.5"/>
+    <text x="-24" y="4" font-family="ui-monospace,monospace" font-size="9" fill="#8B5CF6">◫</text>
+    <text x="0" y="-5" font-family="ui-monospace,monospace" font-size="7" fill="#9B91C0" text-anchor="middle">pg-data</text>
+    <text x="0" y="7" font-family="ui-monospace,monospace" font-size="6" fill="#4B4560" text-anchor="middle">volume · 14GB</text>
+    <text x="0" y="17" font-family="ui-monospace,monospace" font-size="6" fill="#4B4560" text-anchor="middle">ext4</text>
+  </g>
+  <!-- postgres → volume edge -->
+  <line x1="245" y1="340" x2="185" y2="415" stroke="#6D28D9" stroke-width="1" opacity="0.3" stroke-dasharray="3,3"/>
+
+  <!-- ── DIVIDER ── -->
+  <line x1="800" y1="46" x2="800" y2="630" stroke="#1A1730" stroke-width="1"/>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- RIGHT PANEL (800–1200) -->
+  <!-- ══════════════════════════════════════════════════════ -->
+
+  <!-- Section: Host Stats -->
+  <rect x="810" y="56" width="380" height="130" rx="10" fill="url(#panel-grad)" stroke="#1E1B35" stroke-width="1"/>
+  <text x="828" y="76" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B6380" letter-spacing="1">HOST</text>
+  <text x="990" y="76" font-family="ui-monospace,monospace" font-size="10" fill="#4B4560">datacenter-vm-01</text>
+
+  <!-- CPU bar -->
+  <text x="828" y="97" font-family="ui-monospace,monospace" font-size="10" fill="#8B82B0">CPU</text>
+  <rect x="868" y="88" width="200" height="8" rx="4" fill="#1A1730"/>
+  <rect x="868" y="88" width="124" height="8" rx="4" fill="url(#bar-cpu)"/>
+  <text x="1076" y="97" font-family="ui-monospace,monospace" font-size="10" fill="#A78BFA">62%</text>
+
+  <!-- MEM bar -->
+  <text x="828" y="117" font-family="ui-monospace,monospace" font-size="10" fill="#8B82B0">MEM</text>
+  <rect x="868" y="108" width="200" height="8" rx="4" fill="#1A1730"/>
+  <rect x="868" y="108" width="150" height="8" rx="4" fill="url(#bar-mem)"/>
+  <text x="1076" y="117" font-family="ui-monospace,monospace" font-size="10" fill="#67E8F9">75%</text>
+
+  <!-- DISK bar -->
+  <text x="828" y="137" font-family="ui-monospace,monospace" font-size="10" fill="#8B82B0">DSK</text>
+  <rect x="868" y="128" width="200" height="8" rx="4" fill="#1A1730"/>
+  <rect x="868" y="128" width="86" height="8" rx="4" fill="#065F46"/>
+  <text x="1076" y="137" font-family="ui-monospace,monospace" font-size="10" fill="#6EE7B7">43%</text>
+
+  <!-- Summary chips -->
+  <rect x="828" y="150" width="52" height="20" rx="5" fill="#0C1E10" stroke="#064E28" stroke-width="1"/>
+  <text x="854" y="163" font-family="ui-monospace,monospace" font-size="9" fill="#10B981" text-anchor="middle">8 cores</text>
+
+  <rect x="888" y="150" width="52" height="20" rx="5" fill="#0C1A25" stroke="#0A3A4E" stroke-width="1"/>
+  <text x="914" y="163" font-family="ui-monospace,monospace" font-size="9" fill="#06B6D4" text-anchor="middle">32 GB</text>
+
+  <rect x="948" y="150" width="66" height="20" rx="5" fill="#0C1225" stroke="#1A1A4E" stroke-width="1"/>
+  <text x="981" y="163" font-family="ui-monospace,monospace" font-size="9" fill="#818CF8" text-anchor="middle">Ubuntu 22</text>
+
+  <rect x="1022" y="150" width="66" height="20" rx="5" fill="#150C25" stroke="#2A1840" stroke-width="1"/>
+  <text x="1055" y="163" font-family="ui-monospace,monospace" font-size="9" fill="#C084FC" text-anchor="middle">k8s 1.31</text>
+
+  <!-- Section: Containers -->
+  <rect x="810" y="198" width="380" height="190" rx="10" fill="url(#panel-grad)" stroke="#1E1B35" stroke-width="1"/>
+  <text x="828" y="218" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B6380" letter-spacing="1">CONTAINERS</text>
+  <text x="1100" y="218" font-family="ui-monospace,monospace" font-size="9" fill="#4B4560" text-anchor="end">4 running</text>
+
+  <!-- Container rows -->
+  <g font-family="ui-monospace,monospace" font-size="10">
+    <!-- header -->
+    <text x="828" y="235" fill="#3A3558" font-size="9">NAME</text>
+    <text x="960" y="235" fill="#3A3558" font-size="9">IMAGE</text>
+    <text x="1080" y="235" fill="#3A3558" font-size="9">STATUS</text>
+    <line x1="820" y1="240" x2="1180" y2="240" stroke="#1E1B35" stroke-width="1"/>
+
+    <!-- row 1 -->
+    <circle cx="828" cy="255" r="4" fill="#10B981"/>
+    <text x="840" y="259" fill="#C4BFDF">nginx</text>
+    <text x="960" y="259" fill="#5B5278">nginx:1.25</text>
+    <text x="1080" y="259" fill="#10B981">running</text>
+
+    <!-- row 2 -->
+    <circle cx="828" cy="278" r="4" fill="#10B981"/>
+    <text x="840" y="282" fill="#C4BFDF">postgres</text>
+    <text x="960" y="282" fill="#5B5278">postgres:16</text>
+    <text x="1080" y="282" fill="#10B981">running</text>
+
+    <!-- row 3 -->
+    <circle cx="828" cy="301" r="4" fill="#10B981"/>
+    <text x="840" y="305" fill="#C4BFDF">redis</text>
+    <text x="960" y="305" fill="#5B5278">redis:7.2</text>
+    <text x="1080" y="305" fill="#10B981">running</text>
+
+    <!-- row 4 -->
+    <circle cx="828" cy="324" r="4" fill="#10B981"/>
+    <text x="840" y="328" fill="#C4BFDF">api-server</text>
+    <text x="960" y="328" fill="#5B5278">node:20-alpine</text>
+    <text x="1080" y="328" fill="#10B981">running</text>
+
+    <!-- row 5 stopped -->
+    <circle cx="828" cy="347" r="4" fill="#4B4560"/>
+    <text x="840" y="351" fill="#4B4560">worker-old</text>
+    <text x="960" y="351" fill="#3A3558">node:18</text>
+    <text x="1080" y="351" fill="#4B4560">exited</text>
+  </g>
+
+  <!-- Section: Kubernetes Pods -->
+  <rect x="810" y="400" width="380" height="140" rx="10" fill="url(#panel-grad)" stroke="#1E1B35" stroke-width="1"/>
+  <text x="828" y="420" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B6380" letter-spacing="1">KUBERNETES PODS</text>
+  <text x="1100" y="420" font-family="ui-monospace,monospace" font-size="9" fill="#4B4560" text-anchor="end">ns: default</text>
+  <line x1="820" y1="425" x2="1180" y2="425" stroke="#1E1B35" stroke-width="1"/>
+
+  <g font-family="ui-monospace,monospace" font-size="10">
+    <circle cx="828" cy="441" r="4" fill="#10B981"/>
+    <text x="840" y="445" fill="#C4BFDF">web-6d4fb</text>
+    <text x="1000" y="445" fill="#5B5278">1/1</text>
+    <text x="1080" y="445" fill="#10B981">Running</text>
+
+    <circle cx="828" cy="464" r="4" fill="#10B981"/>
+    <text x="840" y="468" fill="#C4BFDF">worker-7c9b2</text>
+    <text x="1000" y="468" fill="#5B5278">1/1</text>
+    <text x="1080" y="468" fill="#10B981">Running</text>
+
+    <circle cx="828" cy="487" r="4" fill="#F59E0B"/>
+    <text x="840" y="491" fill="#9B8A50">cron-3f1a9</text>
+    <text x="1000" y="491" fill="#5B5278">0/1</text>
+    <text x="1080" y="491" fill="#F59E0B">Pending</text>
+
+    <circle cx="828" cy="510" r="4" fill="#10B981"/>
+    <text x="840" y="514" fill="#C4BFDF">metrics-svc</text>
+    <text x="1000" y="514" fill="#5B5278">1/1</text>
+    <text x="1080" y="514" fill="#10B981">Running</text>
+  </g>
+
+  <!-- ── INSTALL COMMAND BAR ── -->
+  <rect x="0" y="560" width="1200" height="70" fill="#07060F" opacity="0.97"/>
+  <line x1="0" y1="560" x2="1200" y2="560" stroke="#1A1730" stroke-width="1"/>
+
+  <!-- Left: tagline -->
+  <text x="40" y="585" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#EEE8FF">One command.</text>
+  <text x="40" y="606" font-family="system-ui,-apple-system,sans-serif" font-size="13" fill="#6B6380">See everything running on your server — live, in the browser.</text>
+
+  <!-- Right: install command box -->
+  <rect x="480" y="568" width="680" height="46" rx="8" fill="#0E0C1C" stroke="#2A2640" stroke-width="1.5"/>
+  <text x="500" y="586" font-family="ui-monospace,monospace" font-size="11" fill="#4B4560">$</text>
+  <text x="515" y="586" font-family="ui-monospace,monospace" font-size="11" fill="#8B82B0">curl -fsSL </text>
+  <text x="612" y="586" font-family="ui-monospace,monospace" font-size="11" fill="#C084FC">https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh</text>
+  <text x="515" y="604" font-family="ui-monospace,monospace" font-size="11" fill="#8B82B0">  | bash</text>
+  <text x="1140" y="597" font-family="ui-monospace,monospace" font-size="18" fill="#2A2640">▋</text>
+
+  <!-- ── Canvas bottom status bar ── -->
+  <rect x="0" y="540" width="800" height="20" fill="#07060F" opacity="0.8"/>
+  <line x1="0" y1="540" x2="800" y2="540" stroke="#1A1730" stroke-width="1"/>
+  <circle cx="20" cy="550" r="3" fill="#10B981"/>
+  <text x="30" y="554" font-family="ui-monospace,monospace" font-size="9" fill="#4B4560">4 containers · 4 pods · 2 networks · 1 volume · live</text>
+
+  <!-- Floating label top-left of canvas -->
+  <text x="20" y="545" font-family="ui-monospace,monospace" font-size="0" fill="#4B4560"/>
+
+</svg>

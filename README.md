@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/hero.svg" alt="InfraCanvas — live visual map of your server infrastructure" width="960" />
+</p>
+
+<p align="center">
   <img src="docs/demo.gif" alt="InfraCanvas demo" width="960" />
 </p>
 
