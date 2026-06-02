@@ -20,6 +20,59 @@ const HEALTH_BAR: Record<NodeHealth, string> = {
   healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:'var(--line3)',
 }
 
+const MONO = 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)'
+
+function meterColor(pct: number): string {
+  if (pct > 80) return '#ef4444'
+  if (pct > 50) return '#f59e0b'
+  return '#22c55e'
+}
+
+interface Meters { cpu: number | null; mem: number | null }
+
+function getMeters(nodeType: string, metadata: Record<string, any>): Meters | null {
+  if (nodeType === 'host') {
+    const cpu = typeof metadata.cpu_percent === 'number' ? metadata.cpu_percent : null
+    const mem = typeof metadata.memory_percent === 'number' ? metadata.memory_percent : null
+    if (cpu === null && mem === null) return null
+    return { cpu, mem }
+  }
+  if (nodeType === 'container') {
+    // Only show for running containers — stopped containers have no live stats
+    if (metadata.state !== 'running') return null
+    const cpu = typeof metadata.cpu === 'number' ? metadata.cpu : null
+    const memUsage = typeof metadata.memory === 'number' ? metadata.memory : 0
+    const memLimit = typeof metadata.memoryLimit === 'number' ? metadata.memoryLimit : 0
+    const mem = memLimit > 0 ? (memUsage / memLimit) * 100 : null
+    if (cpu === null && mem === null) return null
+    return { cpu, mem }
+  }
+  return null
+}
+
+function MiniBar({ label, value }: { label: string; value: number }) {
+  const clamped = Math.min(100, Math.max(0, value))
+  const color = meterColor(clamped)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{
+        fontSize: 9, color: 'var(--ink4)', width: 22, flexShrink: 0,
+        fontFamily: MONO, letterSpacing: '0.04em',
+      }}>{label}</span>
+      <div style={{ flex: 1, height: 3, background: 'var(--line)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          width: `${clamped}%`, height: '100%', background: color, borderRadius: 2,
+          transition: 'width 0.4s ease',
+        }} />
+      </div>
+      <span style={{
+        fontSize: 9, color: 'var(--ink3)', width: 30, textAlign: 'right', flexShrink: 0,
+        fontFamily: MONO,
+      }}>{clamped.toFixed(1)}%</span>
+    </div>
+  )
+}
+
 function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
   const lines: string[] = []
   switch (nodeType) {
@@ -81,9 +134,11 @@ function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
 const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
   const { nodeType, label, health, metadata } = data
   const keyMeta = getKeyMeta(nodeType, metadata)
+  const meters = getMeters(nodeType, metadata)
   const dotColor = HEALTH_DOT[health] ?? 'var(--ink4)'
   const barColor = HEALTH_BAR[health] ?? 'var(--line3)'
   const isUnhealthy = health === 'unhealthy' || health === 'degraded'
+  const hasContent = keyMeta.length > 0 || meters !== null
 
   return (
     <div style={{
@@ -116,25 +171,37 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
         </div>
 
         {/* Row 2: type badge */}
-        <div style={{ marginBottom: keyMeta.length ? 5 : 0 }}>
+        <div style={{ marginBottom: hasContent ? 5 : 0 }}>
           <span style={{
             fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
             background: 'var(--line)', color: 'var(--ink3)', border: '1px solid var(--line2)',
-            fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
+            fontFamily: MONO,
             letterSpacing: '0.04em',
           }}>{nodeType}</span>
         </div>
 
         {/* Row 3: key meta */}
         {keyMeta.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: meters ? 6 : 0 }}>
             {keyMeta.map((line, i) => (
               <span key={i} style={{
                 fontSize: 10, color: 'var(--ink3)',
-                fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
+                fontFamily: MONO,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }} title={line}>{line}</span>
             ))}
+          </div>
+        )}
+
+        {/* Row 4: resource meters — host always, containers only when running */}
+        {meters && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 3,
+            borderTop: keyMeta.length > 0 ? '1px solid var(--line)' : 'none',
+            paddingTop: keyMeta.length > 0 ? 6 : 0,
+          }}>
+            {meters.cpu !== null && <MiniBar label="CPU" value={meters.cpu} />}
+            {meters.mem !== null && <MiniBar label="MEM" value={meters.mem} />}
           </div>
         )}
       </div>

@@ -6,6 +6,7 @@
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go 1.21+"></a>
+  <a href="https://debuggix.space/verified"><img src="https://api.debuggix.space/badge/inline/bytestrix/InfraCanvas" alt="Debuggix Security"></a>
 </p>
 
 <p align="center">
