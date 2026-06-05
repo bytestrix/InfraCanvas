@@ -3,6 +3,7 @@
 <p align="center"><strong>A live, visual map of everything running on a server — installed with one command.</strong></p>
 
 <p align="center">
+  <a href="https://infracanvas.app"><img src="https://img.shields.io/badge/Website-infracanvas.app-6366f1?style=flat" alt="Website"></a>
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go 1.21+"></a>
@@ -334,3 +335,7 @@ This protects against large companies repackaging the project without contributi
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=bytestrix/InfraCanvas&type=Date)](https://star-history.com/#bytestrix/InfraCanvas&Date)
+
+---
+
+Built by [Bytestrix](https://bytestrix.com) — a product studio that ships software people actually need.
