@@ -6,11 +6,6 @@
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go 1.21+"></a>
-  <a href="https://debuggix.space/verified"><img src="https://api.debuggix.space/badge/inline/bytestrix/InfraCanvas" alt="Debuggix Security"></a>
-</p>
-
-<p align="center">
-  <img src="docs/hero2.svg" alt="InfraCanvas — live visual map of your server infrastructure" width="960" />
 </p>
 
 <p align="center">
@@ -130,6 +125,19 @@ You'll see your laptop's Docker containers and Kubernetes context (if any) on th
 - **Export** — PNG screenshot or full JSON of the graph.
 
 See the [features section](#all-features) for the full list.
+
+---
+
+## How is this different from Portainer, Lazydocker, or Dozzle?
+
+| Tool | What it's built for | What InfraCanvas does differently |
+|---|---|---|
+| **Portainer** | Full container *management* platform — users, teams, registries, stacks | InfraCanvas is a *map*, not a console. One binary, zero config, and it draws Docker, Kubernetes, and the host as a single connected graph |
+| **Lazydocker / k9s** | Excellent terminal UIs over SSH | Visual topology in any browser via a shareable URL — no SSH session, no terminal |
+| **Dozzle** | Real-time container log viewer | Logs are one panel here; the core is the relationship graph — what runs where, and how it's all connected |
+| **Weave Scope** | The original live topology map — archived and unmaintained | Same idea, actively developed, and a single static binary instead of per-host probes and an app server |
+
+Short version: if you need deep fleet management, run Portainer. If you want to *see* a machine — every container, pod, volume, and network, and how they connect — within 30 seconds of one command, that's InfraCanvas.
 
 ---
 
@@ -328,12 +336,6 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 - ❌ If you run this as a paid cloud service for customers, your modifications must be open source too
 
 This protects against large companies repackaging the project without contributing back. Individual developers and internal company use are unaffected.
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bytestrix/InfraCanvas&type=Date)](https://star-history.com/#bytestrix/InfraCanvas&Date)
 
 ---
 
