@@ -159,6 +159,16 @@ function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange
             </div>
           </div>
         </div>
+        {vm?.readOnly && (
+          <div style={{
+            margin:'4px 8px 0', padding:'3px 8px', borderRadius:6,
+            fontSize:10.5, fontFamily:MONO, textAlign:'center',
+            color:H.degraded, background:'rgba(245,158,11,0.08)',
+            border:'1px solid rgba(245,158,11,0.2)',
+          }}>
+            read-only demo
+          </div>
+        )}
       </div>
     </aside>
   )

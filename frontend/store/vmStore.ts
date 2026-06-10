@@ -10,7 +10,7 @@ interface VMStore {
   addVM: (code: string) => void
   removeVM: (code: string) => void
   setVMStatus: (code: string, status: VMStatus) => void
-  setVMConnected: (code: string, hostname: string, scope: string[]) => void
+  setVMConnected: (code: string, hostname: string, scope: string[], readOnly?: boolean) => void
   setVMGraph: (code: string, graph: GraphOutput) => void
   applyVMDiff: (code: string, diff: GraphDiff) => void
   setVMError: (code: string, error: string) => void
@@ -30,6 +30,7 @@ export const useVMStore = create<VMStore>((set) => ({
           status: 'connecting',
           hostname: null,
           scope: [],
+          readOnly: false,
           graph: null,
           error: null,
           lastUpdated: null,
@@ -51,7 +52,7 @@ export const useVMStore = create<VMStore>((set) => ({
       },
     })),
 
-  setVMConnected: (code, hostname, scope) =>
+  setVMConnected: (code, hostname, scope, readOnly = false) =>
     set((state) => ({
       vms: {
         ...state.vms,
@@ -60,6 +61,7 @@ export const useVMStore = create<VMStore>((set) => ({
           status: 'connected',
           hostname,
           scope,
+          readOnly,
           error: null,
         },
       },

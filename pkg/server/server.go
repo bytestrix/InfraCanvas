@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io/fs"
 	"log"
@@ -102,6 +103,7 @@ type PairedData struct {
 type AgentConnectedData struct {
 	Hostname string   `json:"hostname"`
 	Scope    []string `json:"scope"`
+	ReadOnly bool     `json:"readOnly,omitempty"`
 }
 
 // PairRequest is the first message browsers send after connecting.
@@ -124,6 +126,11 @@ type Options struct {
 	// /ws/canvas auto-binds to it. Used by `infracanvas serve`.
 	LocalMode bool
 
+	// ReadOnly blocks all mutating browser messages at the relay: actions
+	// and exec/terminal sessions are rejected before they reach the agent.
+	// Viewing the graph and fetching logs still work. Used for public demos.
+	ReadOnly bool
+
 	// AllowedOrigins, if non-empty, restricts CORS for WS upgrades.
 	AllowedOrigins []string
 }
@@ -136,6 +143,7 @@ type Server struct {
 	agentToken     string
 	uiToken        string
 	localMode      bool
+	readOnly       bool
 	allowedOrigins map[string]bool
 
 	localMu      sync.RWMutex
@@ -176,6 +184,7 @@ func NewWithOptions(opts Options) *Server {
 		agentToken:     opts.AgentToken,
 		uiToken:        opts.UIToken,
 		localMode:      opts.LocalMode,
+		readOnly:       opts.ReadOnly,
 		allowedOrigins: map[string]bool{},
 	}
 	for _, o := range opts.AllowedOrigins {
@@ -434,6 +443,7 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		msg := mustMarshalEnvelope(MsgAgentConnected, AgentConnectedData{
 			Hostname: hello.Hostname,
 			Scope:    hello.Scope,
+			ReadOnly: s.readOnly,
 		})
 		broadcastToBrowsers(sess, msg)
 
@@ -549,6 +559,19 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Notify agent it has a new viewer.
 	go func() { _ = writeMsg(sess.AgentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()}) }()
 
+	// Late joiners missed the HELLO broadcast — replay agent identity so the
+	// browser learns hostname, scope, and the read-only flag immediately.
+	sess.mu.RLock()
+	hostname, scope := sess.Hostname, sess.Scope
+	sess.mu.RUnlock()
+	if hostname != "" {
+		_ = writeMsg(conn, MsgAgentConnected, AgentConnectedData{
+			Hostname: hostname,
+			Scope:    scope,
+			ReadOnly: s.readOnly,
+		})
+	}
+
 	// Replay the last cached snapshot so the browser doesn't wait for the next tick.
 	sess.mu.RLock()
 	lastSnap := sess.LastSnapshot
@@ -575,11 +598,21 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		}
 		switch env.Type {
 		case MsgBrowserAction:
+			if s.readOnly && !isReadOnlySafeAction(env.Data) {
+				s.rejectReadOnlyAction(conn, env.Data)
+				continue
+			}
 			// Translate BROWSER_ACTION → ACTION_REQUEST before forwarding
 			env.Type = MsgActionRequest
 			payload, _ = json.Marshal(env)
 			fallthrough
 		case MsgCommand, MsgExecStart, MsgExecInput, MsgExecResize, MsgExecEnd:
+			if s.readOnly && (env.Type == MsgExecStart || env.Type == MsgExecInput || env.Type == MsgExecResize) {
+				if env.Type == MsgExecStart {
+					s.rejectReadOnlyExec(conn, env.Data)
+				}
+				continue
+			}
 			sess.mu.RLock()
 			agentConn := sess.AgentConn
 			sess.mu.RUnlock()
@@ -588,6 +621,61 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// ── read-only mode ───────────────────────────────────────────────────────────
+
+// readOnlySafeActions are BROWSER_ACTION types that only read state.
+var readOnlySafeActions = map[string]bool{
+	"docker_logs": true,
+	"k8s_logs":    true,
+	"host_logs":   true,
+}
+
+func isReadOnlySafeAction(data json.RawMessage) bool {
+	var req struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		return false
+	}
+	return readOnlySafeActions[req.Type]
+}
+
+// rejectReadOnlyAction answers a blocked BROWSER_ACTION with a failed
+// ACTION_RESULT in the same shape the agent would produce, so the UI
+// surfaces it as a normal action error.
+func (s *Server) rejectReadOnlyAction(conn *SafeConn, data json.RawMessage) {
+	var req struct {
+		ActionID string `json:"action_id"`
+		Type     string `json:"type"`
+	}
+	_ = json.Unmarshal(data, &req)
+	log.Printf("[browser] blocked action %q (read-only mode)", req.Type)
+	_ = writeMsg(conn, MsgActionResult, map[string]interface{}{
+		"action_id": req.ActionID,
+		"success":   false,
+		"message":   "",
+		"error":     "This is a read-only demo — actions are disabled.",
+		"details":   map[string]interface{}{},
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// rejectReadOnlyExec answers a blocked EXEC_START with a short message on the
+// terminal stream followed by EXEC_END, so the terminal panel closes cleanly.
+func (s *Server) rejectReadOnlyExec(conn *SafeConn, data json.RawMessage) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(data, &req)
+	log.Printf("[browser] blocked exec session (read-only mode)")
+	_ = writeMsg(conn, MsgExecData, map[string]interface{}{
+		"session_id": req.SessionID,
+		"data":       base64.StdEncoding.EncodeToString([]byte("This is a read-only demo — terminals are disabled.\r\n")),
+		"error":      "",
+	})
+	_ = writeMsg(conn, MsgExecEnd, map[string]interface{}{"session_id": req.SessionID})
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

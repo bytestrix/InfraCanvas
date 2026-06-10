@@ -7,6 +7,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] — 2026-06-10
+
+### Added
+- Read-only mode for public demos: `infracanvas serve --read-only`, installer flag `--read-only`, and `INFRACANVAS_READONLY=true` in `config.env`. The relay blocks every action and terminal request server-side before it reaches the agent; the topology graph and log viewing still work. Blocked actions surface as normal action errors in the UI, blocked terminals print a short notice and close cleanly, and the sidebar shows a "read-only demo" badge.
+- Late-joining browsers now receive `AGENT_CONNECTED` (hostname, scope, read-only flag) immediately on pairing instead of waiting for the next agent event.
+
+### Changed
+- `README.md`: added a "How is this different from Portainer, Lazydocker, or Dozzle?" comparison; compressed the demo gif 7.2 MB → 3.0 MB.
+
+---
+
 ## [0.4.2] — 2026-04-26
 
 ### Fixed

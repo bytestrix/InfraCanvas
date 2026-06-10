@@ -7,6 +7,8 @@
 #   --port <N>      Listen port (default 7777, auto-falls-back if taken)
 #   --no-tunnel     Don't open a Cloudflare quick-tunnel; bind the port directly
 #   --private       Imply --no-tunnel and bind 127.0.0.1 (SSH-tunnel only)
+#   --read-only     Viewers can look but not touch: actions and terminals
+#                   are blocked server-side (for public demos)
 #   --run-user <U>  Run the systemd service as this user (default: auto-detect
 #                   from $SUDO_USER, then any user with ~/.kube/config, then
 #                   any user in the docker group; falls back to root)
@@ -23,6 +25,7 @@ LEGACY_SERVICE_NAME="infracanvas-agent"
 PORT=7777
 BIND_PRIVATE="false"
 USE_TUNNEL="true"
+READ_ONLY="false"
 VERSION="latest"
 RUN_USER_OVERRIDE=""
 
@@ -42,10 +45,11 @@ while [[ $# -gt 0 ]]; do
     --port)      PORT="$2";          shift 2 ;;
     --no-tunnel) USE_TUNNEL="false";  shift ;;
     --private)   BIND_PRIVATE="true"; USE_TUNNEL="false"; shift ;;
+    --read-only) READ_ONLY="true";    shift ;;
     --run-user)  RUN_USER_OVERRIDE="$2"; shift 2 ;;
     --version)   VERSION="$2";        shift 2 ;;
     -h|--help)
-      sed -n '2,11p' "$0" | sed 's/^# //; s/^#//'
+      sed -n '2,15p' "$0" | sed 's/^# //; s/^#//'
       exit 0
       ;;
     *) error "Unknown argument: $1 (try --help)" ;;
@@ -146,6 +150,7 @@ run_priv mkdir -p "$CONFIG_DIR"
 SERVE_FLAGS=""
 [[ "$USE_TUNNEL"   != "true" ]] && SERVE_FLAGS="$SERVE_FLAGS --no-tunnel"
 [[ "$BIND_PRIVATE" == "true" ]] && SERVE_FLAGS="$SERVE_FLAGS --private"
+[[ "$READ_ONLY"    == "true" ]] && SERVE_FLAGS="$SERVE_FLAGS --read-only"
 
 run_priv tee "$CONFIG_DIR/config.env" >/dev/null <<EOF
 # InfraCanvas configuration
@@ -154,6 +159,7 @@ INFRACANVAS_UI_TOKEN=$TOKEN
 INFRACANVAS_PORT=$PORT
 INFRACANVAS_PRIVATE=$BIND_PRIVATE
 INFRACANVAS_TUNNEL=$USE_TUNNEL
+INFRACANVAS_READONLY=$READ_ONLY
 EOF
 run_priv chmod 600 "$CONFIG_DIR/config.env"
 

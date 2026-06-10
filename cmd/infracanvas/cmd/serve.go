@@ -33,6 +33,7 @@ var (
 	servePort     int
 	servePrivate  bool
 	serveNoTunnel bool
+	serveReadOnly bool
 	serveUIToken  string
 	serveScope    []string
 	serveRefresh  int
@@ -65,6 +66,7 @@ func init() {
 	serveCmd.Flags().IntVar(&servePort, "port", defaultPort, "Local port (auto-falls-back if taken)")
 	serveCmd.Flags().BoolVar(&servePrivate, "private", false, "With --no-tunnel: bind 127.0.0.1 instead of 0.0.0.0")
 	serveCmd.Flags().BoolVar(&serveNoTunnel, "no-tunnel", false, "Disable Cloudflare tunnel; bind the port directly")
+	serveCmd.Flags().BoolVar(&serveReadOnly, "read-only", false, "Block actions and terminals; viewers can only look (for public demos)")
 	serveCmd.Flags().StringVar(&serveUIToken, "token", "", "Override the UI auth token")
 	serveCmd.Flags().StringSliceVar(&serveScope, "discover", []string{"host", "docker", "kubernetes"}, "Discovery scopes")
 	serveCmd.Flags().IntVar(&serveRefresh, "refresh", 30, "Seconds between discovery refreshes")
@@ -79,13 +81,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 		host = "127.0.0.1"
 	}
 
+	readOnly := serveReadOnly || os.Getenv("INFRACANVAS_READONLY") == "true"
+
 	token := resolveToken()
 	uiFS, err := webui.FS()
 	if err != nil {
 		return fmt.Errorf("load embedded UI: %w", err)
 	}
-	srv := server.NewLocal(token)
+	srv := server.NewWithOptions(server.Options{
+		LocalMode: true,
+		UIToken:   token,
+		ReadOnly:  readOnly,
+	})
 	srv.MountUI(uiFS)
+
+	if readOnly {
+		log.Println("Read-only mode: actions and terminals are disabled for all viewers.")
+	}
 
 	listener, chosenPort, err := bindWithFallback(host, servePort, !cmd.Flags().Changed("port"))
 	if err != nil {

@@ -119,7 +119,7 @@ function handleMessage(code: string, msg: WsInbound): void {
 
   switch (msg.type) {
     case 'AGENT_CONNECTED':
-      store.setVMConnected(code, msg.data.hostname, msg.data.scope)
+      store.setVMConnected(code, msg.data.hostname, msg.data.scope, msg.data.readOnly ?? false)
       break
 
     case 'AGENT_DISCONNECTED':

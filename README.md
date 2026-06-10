@@ -95,6 +95,9 @@ curl -fsSL .../install.sh | bash -s -- --no-tunnel
 # Bind 127.0.0.1 only; reach via SSH tunnel (implies --no-tunnel)
 curl -fsSL .../install.sh | bash -s -- --private
 
+# Read-only: viewers can look but not touch (public demos, dashboards on a TV)
+curl -fsSL .../install.sh | bash -s -- --read-only
+
 # Pin a specific release
 curl -fsSL .../install.sh | bash -s -- --version v0.4.0
 ```
@@ -157,6 +160,8 @@ The dashboard, relay, and agent all run on the same machine, so there's no remot
 
 Treat the URL+token like an SSH key for the box. Anyone with both has the same effective power.
 
+**Read-only mode.** Pass `--read-only` (or set `INFRACANVAS_READONLY=true`) to turn the dashboard into a viewer: the relay rejects every action and terminal request server-side before it reaches the agent. The topology graph and log viewing still work. Use this for public demos or a wall-mounted status screen.
+
 **Secret redaction.** Environment variables whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer. File contents, database contents, and network traffic are never touched by InfraCanvas.
 
 **Service runs as you, not root.** When you install via `sudo …/install.sh`, the systemd unit is written with `User=$SUDO_USER` (and `Group=$SUDO_USER`). The agent inherits *your* `~/.kube/config` automatically — Kubernetes discovery just works for whatever cluster you can already `kubectl` against. If you're a member of the `docker` group, `SupplementaryGroups=docker` is added so Docker discovery works without sudo. Falling back to `root` only happens when there's no invoking user (rare). Net effect: no privilege escalation beyond what you can already do at the shell.
@@ -179,6 +184,7 @@ INFRACANVAS_UI_TOKEN=a8f3e2b1c9d4f02e
 INFRACANVAS_PORT=7777
 INFRACANVAS_TUNNEL=true
 INFRACANVAS_PRIVATE=false
+INFRACANVAS_READONLY=false
 ```
 
 Edit, then `sudo systemctl restart infracanvas`.

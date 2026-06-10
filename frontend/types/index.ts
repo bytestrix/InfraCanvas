@@ -118,7 +118,7 @@ export interface WsGraphDiff {
 
 export interface WsAgentConnected {
   type: 'AGENT_CONNECTED'
-  data: { hostname: string; scope: string[] }
+  data: { hostname: string; scope: string[]; readOnly?: boolean }
 }
 
 export interface WsAgentDisconnected {
@@ -175,6 +175,7 @@ export interface VMState {
   status: VMStatus
   hostname: string | null
   scope: string[]
+  readOnly: boolean
   graph: GraphOutput | null
   error: string | null
   lastUpdated: number | null
