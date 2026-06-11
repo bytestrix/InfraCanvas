@@ -56,12 +56,14 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
     const services     = byType('k8s_service')
     const ingresses    = byType('ingress')
     const volumes      = byType('volume')
+    const sysServices  = byType('service')
+    const processes    = byType('process')
     const hc = (arr: GraphNode[], h: string) => arr.filter(n => n.health === h).length
     const alerts = nodes.filter(n => (n.health === 'degraded' || n.health === 'unhealthy') && n.type !== 'host')
     return {
       host, clusters, runtimes, namespaces, pods, containers, k8sNodes,
       jobs, cronjobs, pvcs, pvs, deployments, statefulsets, daemonsets,
-      services, ingresses, volumes, alerts,
+      services, ingresses, volumes, sysServices, processes, alerts,
       totalDegraded:  nodes.filter(n => n.health === 'degraded').length,
       totalUnhealthy: nodes.filter(n => n.health === 'unhealthy').length,
       podsRunning: hc(pods, 'healthy'),
@@ -128,6 +130,8 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
     if (d.daemonsets.length > 0)   workTiles.push({ id:'tile-daemonsets',   typeLabel:'DAEMONSETS',   icon:'daemonset',   name:'daemonsets',   count:d.daemonsets.length,   stats:[['ready',`${d.daemonsets.filter(n=>n.health==='healthy').length}/${d.daemonsets.length}`]] as [string,string][], health:mkH(d.daemonsets),   state:'' })
     if (d.services.length > 0)     workTiles.push({ id:'tile-services',     typeLabel:'SERVICES',     icon:'service',     name:'k8s services', count:d.services.length,     stats:[['total',String(d.services.length)]] as [string,string][], health:mkH(d.services),     state:'' })
     if (d.ingresses.length > 0)    workTiles.push({ id:'tile-ingresses',    typeLabel:'INGRESSES',    icon:'ingress',     name:'ingresses',    count:d.ingresses.length,    stats:[['active',String(d.ingresses.length)]] as [string,string][], health:null, state:'' })
+    if (d.sysServices.length > 0) workTiles.push({ id:'tile-sysservices', typeLabel:'SYSTEM SERVICES', icon:'sysservice', name:'systemd services', count:d.sysServices.length, stats:[['running',String(d.sysServices.filter(n=>n.health==='healthy').length)],['failed',String(d.sysServices.filter(n=>n.health==='unhealthy').length)]] as [string,string][], health:mkH(d.sysServices), state:d.sysServices.some(n=>n.health==='unhealthy')?'alert':'' })
+    if (d.processes.length > 0)   workTiles.push({ id:'tile-processes',   typeLabel:'PROCESSES',       icon:'process', name:'listening processes', count:d.processes.length, stats:[['total',String(d.processes.length)]] as [string,string][], health:mkH(d.processes), state:'' })
     if (workTiles.length > 0) all.push({ id:'workloads', label:'Workloads', count:workTiles.reduce((s:number,t:any)=>s+t.count,0), tiles:workTiles })
 
     const jobTiles: any[] = []
@@ -153,6 +157,8 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       'tile-statefulsets':['statefulset'],
       'tile-daemonsets':  ['daemonset'],
       'tile-services':    ['k8s_service'],
+      'tile-sysservices': ['service'],
+      'tile-processes':   ['process'],
       'tile-ingresses':   ['ingress'],
       'tile-jobs':        ['job'],
       'tile-cronjobs':    ['cronjob'],
@@ -173,6 +179,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       'namespace':'namespace', 'deployment':'deployment', 'statefulset':'statefulset',
       'daemonset':'daemonset', 'service':'k8s_service', 'ingress':'ingress',
       'pod':'pod', 'job':'job', 'cronjob':'cronjob', 'volume':'pvc',
+      'sysservice':'service', 'process':'process',
     }
     const nodeType = iconToType[detailTile.icon] ?? detailTile.icon
     const hc = (h: string) => detailNodes.filter(n => n.health === h).length
@@ -379,6 +386,7 @@ const TILE_ICON_TYPE: Record<string, string> = {
   'k8s-node': 'node', 'namespace': 'namespace', 'deployment': 'deployment',
   'statefulset': 'statefulset', 'daemonset': 'daemonset', 'service': 'k8s_service',
   'ingress': 'ingress', 'pod': 'pod', 'job': 'job', 'cronjob': 'cronjob', 'volume': 'volume',
+  'sysservice': 'service', 'process': 'process',
 }
 
 function TileIcon({ icon }: { icon: string }) {

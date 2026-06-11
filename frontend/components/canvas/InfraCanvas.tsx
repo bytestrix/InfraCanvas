@@ -158,7 +158,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped')
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
-    new Set<FilterKey>(['k8s', 'docker', 'host'])
+    new Set<FilterKey>(['k8s', 'docker', 'host', 'services'])
   )
   const [expandedGroups] = useState<Set<string>>(new Set())
   const [drawerGroup, setDrawerGroup] = useState<GroupInfo | null>(null)
@@ -485,7 +485,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {/* Filter chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Filter size={11} color="var(--ink3)" />
-          {(['k8s', 'docker', 'host'] as FilterKey[]).map((key) => {
+          {(['k8s', 'docker', 'host', 'services'] as FilterKey[]).map((key) => {
             const g = FILTER_GROUPS[key]
             const active = activeFilters.has(key)
             const spotlit = spotlightKey === key
