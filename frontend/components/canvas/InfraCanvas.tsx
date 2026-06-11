@@ -78,6 +78,11 @@ const FILTER_GROUPS = {
     color: '#64748b',
     types: ['host'],
   },
+  services: {
+    label: 'Services',
+    color: '#a855f7',
+    types: ['service', 'process'],
+  },
   storage: {
     label: 'Storage',
     color: '#f59e0b',
@@ -663,7 +668,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             node={selectedNode}
             vmCode={vm.code}
             onClose={() => { setSelectedNodeId(null); setShowLogs(false); setShowTerminal(false) }}
-            onShowLogs={['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
+            onShowLogs={['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset', 'service'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
             onShowTerminal={['container', 'host', 'pod'].includes(selectedNode.type) ? () => {
               setTerminalLayer(selectedNode.type === 'host' ? 'host' : selectedNode.type === 'pod' ? 'kubernetes' : 'docker')
               setShowTerminal(true)

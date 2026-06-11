@@ -53,6 +53,12 @@ function dockerTarget(n: any) {
 function nodeTarget(n: any) {
   return { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata?.name ?? n.id }
 }
+function serviceTarget(n: any) {
+  return { layer: 'host', entity_type: 'service', entity_id: String(n.metadata?.unit ?? n.id) }
+}
+function processTarget(n: any) {
+  return { layer: 'host', entity_type: 'process', entity_id: String(n.metadata?.pid ?? n.id) }
+}
 
 const ACTIONS: Record<string, ActionDef[]> = {
   container: [
@@ -193,6 +199,22 @@ const ACTIONS: Record<string, ActionDef[]> = {
       ],
       buildPayload: (n, v) => ({ action_id: `jctl-${Date.now()}`, type: 'host_journalctl', target: { layer: 'host', entity_type: 'host', entity_id: n.id }, parameters: { unit: v.unit, lines: v.lines || '200' } }) },
   ],
+  service: [
+    { id: 'restart', label: 'Restart', Icon: RotateCw, confirm: true,
+      buildPayload: (n) => ({ action_id: `svc-restart-${Date.now()}`, type: 'service_restart', target: serviceTarget(n), parameters: {} }) },
+    { id: 'stop', label: 'Stop', Icon: Square, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `svc-stop-${Date.now()}`, type: 'service_stop', target: serviceTarget(n), parameters: {} }) },
+    { id: 'start', label: 'Start', Icon: Play,
+      buildPayload: (n) => ({ action_id: `svc-start-${Date.now()}`, type: 'service_start', target: serviceTarget(n), parameters: {} }) },
+    { id: 'status', label: 'Status', Icon: Activity,
+      buildPayload: (n) => ({ action_id: `svc-status-${Date.now()}`, type: 'host_service_status', target: serviceTarget(n), parameters: { service: String(n.metadata?.unit ?? n.label) } }) },
+  ],
+  process: [
+    { id: 'terminate', label: 'Terminate (SIGTERM)', Icon: Square, confirm: true,
+      buildPayload: (n) => ({ action_id: `proc-term-${Date.now()}`, type: 'process_kill', target: processTarget(n), parameters: { signal: 'TERM' } }) },
+    { id: 'kill', label: 'Force Kill (SIGKILL)', Icon: Trash2, danger: true, confirm: true,
+      buildPayload: (n) => ({ action_id: `proc-kill-${Date.now()}`, type: 'process_kill', target: processTarget(n), parameters: { signal: 'KILL' } }) },
+  ],
 }
 
 const KEY_META_FIELDS: Record<string, string[]> = {
@@ -204,6 +226,8 @@ const KEY_META_FIELDS: Record<string, string[]> = {
   pod:         ['namespace', 'node', 'phase', 'ip'],
   node:        ['roles', 'status', 'kernel_version', 'os_image'],
   host:        ['os', 'kernel', 'cpu_cores', 'memory_total'],
+  service:     ['unit', 'status', 'enabled', 'ports', 'mainPid', 'restartCount', 'description'],
+  process:     ['pid', 'user', 'ports', 'processType', 'memoryBytes', 'commandLine'],
   k8s_service: ['namespace', 'type', 'cluster_ip', 'ports'],
   ingress:     ['namespace', 'host', 'tls'],
   pvc:         ['namespace', 'storage_class', 'capacity', 'access_modes'],
@@ -420,7 +444,7 @@ interface NodeDetailPanelProps {
 }
 
 type ActionStatus = 'idle' | 'confirming' | 'running' | 'success' | 'error'
-const TOOLS_NODES = new Set(['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset'])
+const TOOLS_NODES = new Set(['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset', 'service'])
 
 // Action button accent colors (functional — kept for UX clarity)
 const ACTION_COLORS: Record<string, string> = {

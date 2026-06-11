@@ -70,16 +70,19 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
 
     const isK8sPod = targetNode.type === 'pod'
     const isHost = targetNode.type === 'host'
+    const isService = targetNode.type === 'service'
     sendAction(vmCode, {
       action_id: requestID,
-      type: isHost ? 'host_logs' : isK8sPod ? 'k8s_logs' : 'docker_logs',
+      type: isHost || isService ? 'host_logs' : isK8sPod ? 'k8s_logs' : 'docker_logs',
       target: {
-        layer: isHost ? 'host' : isK8sPod ? 'kubernetes' : 'docker',
-        entity_type: isHost ? 'host' : isK8sPod ? 'pod' : 'container',
+        layer: isHost || isService ? 'host' : isK8sPod ? 'kubernetes' : 'docker',
+        entity_type: isHost ? 'host' : isService ? 'service' : isK8sPod ? 'pod' : 'container',
         entity_id: targetNode.id,
         namespace: isK8sPod ? ((targetNode.metadata?.namespace as string) || 'default') : undefined,
       },
-      parameters: { tail: '200' },
+      parameters: isService
+        ? { tail: '200', unit: String(targetNode.metadata?.unit ?? targetNode.label ?? '') }
+        : { tail: '200' },
     })
 
     setTimeout(() => { setLoading(false); unsub() }, 35_000)

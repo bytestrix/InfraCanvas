@@ -48,6 +48,13 @@ func parseProcess(pid int) (*models.Process, error) {
 	// Identify process type
 	process.ProcessType = identifyProcessType(process.Name, process.CommandLine)
 
+	// A process we can read from /proc is running — that's healthy. Zombies
+	// (state Z in /proc/<pid>/stat) are degraded.
+	process.Health = models.HealthHealthy
+	if stat.State == "Z" {
+		process.Health = models.HealthDegraded
+	}
+
 	// Generate entity ID
 	process.ID = fmt.Sprintf("process:%d", pid)
 
@@ -57,6 +64,7 @@ func parseProcess(pid int) (*models.Process, error) {
 // ProcStat represents parsed data from /proc/<pid>/stat
 type ProcStat struct {
 	Name        string
+	State       string // R running, S sleeping, Z zombie, …
 	PPID        int
 	CPUPercent  float64
 	MemoryBytes int64
@@ -97,7 +105,8 @@ func parseProcStat(pid int) (*ProcStat, error) {
 	}
 
 	stat := &ProcStat{
-		Name: name,
+		Name:  name,
+		State: fields[0],
 	}
 
 	// Parse PPID (field 1 after name) with validation

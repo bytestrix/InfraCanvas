@@ -138,6 +138,10 @@ func enrichServiceDetails(service *models.Service) {
 		if strings.HasPrefix(line, "UnitFileState=") {
 			state := strings.TrimPrefix(line, "UnitFileState=")
 			service.Enabled = (state == "enabled")
+		} else if strings.HasPrefix(line, "MainPID=") {
+			if pid, err := validation.SafeParseInt(strings.TrimPrefix(line, "MainPID="), "main_pid", "systemctl show"); err == nil {
+				service.MainPID = pid
+			}
 		} else if strings.HasPrefix(line, "NRestarts=") {
 			restartStr := strings.TrimPrefix(line, "NRestarts=")
 			restartCount, err := validation.SafeParseInt(restartStr, "restart_count", fmt.Sprintf("systemctl show %s", service.Name))

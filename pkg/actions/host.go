@@ -9,7 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -24,11 +26,21 @@ func NewHostExecutor() *HostExecutor {
 // ValidateAction validates a host action
 func (h *HostExecutor) ValidateAction(action *Action) error {
 	switch action.Type {
-	case ActionRestartService:
+	case ActionRestartService, ActionStopService, ActionStartService:
 		if action.Target.EntityID == "" {
 			return fmt.Errorf("service name is required")
 		}
 		return h.validateServiceExists(action.Target.EntityID)
+
+	case ActionKillProcess:
+		pid, err := strconv.Atoi(action.Target.EntityID)
+		if err != nil || pid <= 1 {
+			return fmt.Errorf("invalid pid %q", action.Target.EntityID)
+		}
+		if pid == os.Getpid() {
+			return fmt.Errorf("refusing to kill the InfraCanvas agent itself")
+		}
+		return nil
 
 	case ActionUpdateAgent:
 		return nil
@@ -78,6 +90,15 @@ func (h *HostExecutor) ExecuteAction(ctx context.Context, action *Action) (*Acti
 	switch action.Type {
 	case ActionRestartService:
 		return h.restartService(ctx, action.Target.EntityID, startTime)
+
+	case ActionStopService:
+		return h.systemctlVerb(ctx, "stop", action.Target.EntityID, startTime)
+
+	case ActionStartService:
+		return h.systemctlVerb(ctx, "start", action.Target.EntityID, startTime)
+
+	case ActionKillProcess:
+		return h.killProcess(action.Target.EntityID, action.Parameters["signal"], startTime)
 
 	case ActionUpdateAgent:
 		return h.updateAgent(ctx, action.Parameters, startTime)
@@ -159,6 +180,54 @@ func (h *HostExecutor) restartService(ctx context.Context, serviceName string, s
 		Output:    string(output),
 		StartTime: startTime,
 		EndTime:   time.Now(),
+	}, nil
+}
+
+// systemctlVerb runs `systemctl <verb> <service>` (stop/start).
+func (h *HostExecutor) systemctlVerb(ctx context.Context, verb, serviceName string, startTime time.Time) (*ActionResult, error) {
+	cmd := exec.CommandContext(ctx, "systemctl", verb, serviceName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &ActionResult{
+			Success:   false,
+			Message:   fmt.Sprintf("Failed to %s service %s", verb, serviceName),
+			Output:    string(output),
+			Error:     err.Error(),
+			StartTime: startTime,
+			EndTime:   time.Now(),
+		}, err
+	}
+	return &ActionResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Successfully ran %s on service %s", verb, serviceName),
+		Output:    string(output),
+		StartTime: startTime,
+		EndTime:   time.Now(),
+	}, nil
+}
+
+// killProcess sends a signal to a pid (default SIGTERM; "KILL" forces).
+func (h *HostExecutor) killProcess(pidStr, signal string, startTime time.Time) (*ActionResult, error) {
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 1 {
+		return &ActionResult{
+			Success: false, Message: "Invalid pid", Error: fmt.Sprintf("pid %q", pidStr),
+			StartTime: startTime, EndTime: time.Now(),
+		}, fmt.Errorf("invalid pid %q", pidStr)
+	}
+	sig := syscall.SIGTERM
+	if strings.EqualFold(signal, "KILL") || signal == "9" {
+		sig = syscall.SIGKILL
+	}
+	if err := syscall.Kill(pid, sig); err != nil {
+		return &ActionResult{
+			Success: false, Message: fmt.Sprintf("Failed to signal pid %d", pid),
+			Error: err.Error(), StartTime: startTime, EndTime: time.Now(),
+		}, err
+	}
+	return &ActionResult{
+		Success: true, Message: fmt.Sprintf("Sent %s to pid %d", sig.String(), pid),
+		StartTime: startTime, EndTime: time.Now(),
 	}, nil
 }
 

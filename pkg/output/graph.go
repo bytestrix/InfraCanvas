@@ -280,14 +280,31 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 		node.Metadata["user"] = process.User
 		node.Metadata["cpu"] = process.CPUPercent
 		node.Metadata["memory"] = process.MemoryPercent
+		node.Metadata["memoryBytes"] = process.MemoryBytes
 		node.Metadata["processType"] = process.ProcessType
+		node.Metadata["commandLine"] = process.CommandLine
+		if len(process.ListeningPorts) > 0 {
+			node.Metadata["ports"] = process.ListeningPorts
+		}
+		if process.ServiceUnit != "" {
+			node.Metadata["serviceUnit"] = process.ServiceUnit
+		}
 
 	case models.EntityTypeService:
 		service := entity.(*models.Service)
-		node.Label = service.Name
+		node.Label = strings.TrimSuffix(service.Name, ".service")
+		node.Metadata["unit"] = service.Name
 		node.Metadata["status"] = service.Status
 		node.Metadata["enabled"] = service.Enabled
 		node.Metadata["critical"] = service.IsCritical
+		node.Metadata["description"] = service.Description
+		node.Metadata["restartCount"] = service.RestartCount
+		if service.MainPID > 0 {
+			node.Metadata["mainPid"] = service.MainPID
+		}
+		if len(service.Ports) > 0 {
+			node.Metadata["ports"] = service.Ports
+		}
 
 	case models.EntityTypeVolume:
 		volume := entity.(*models.Volume)
@@ -514,14 +531,24 @@ func (f *GraphFormatter) shouldFilterEntity(entity models.Entity, stats *Filtere
 		}
 
 	case models.EntityTypeProcess:
-		// Filter all processes — too numerous for a canvas view
+		// Keep only processes that serve something (listening ports) and are
+		// not already represented by their systemd service node. Everything
+		// else (kernel threads, shells, one-shot tools) is canvas noise.
+		process := entity.(*models.Process)
+		if len(process.ListeningPorts) > 0 && process.ServiceUnit == "" {
+			return false
+		}
 		stats.Processes++
 		return true
 
 	case models.EntityTypeService:
-		// Filter all systemd host services from the canvas — the host entity and
-		// docker-runtime entity already represent the host layer. 158 systemd services
-		// would make the canvas unworkable.
+		// Keep services that are actual workloads or need attention: ones with
+		// listening ports (postgres, nginx, redis…), failed units, and known
+		// critical services. The other ~150 systemd units are noise.
+		service := entity.(*models.Service)
+		if len(service.Ports) > 0 || strings.HasPrefix(service.Status, "failed") || service.IsCritical {
+			return false
+		}
 		stats.SystemdServices++
 		return true
 

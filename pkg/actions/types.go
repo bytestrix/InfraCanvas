@@ -8,6 +8,9 @@ type ActionType string
 const (
 	// Host actions
 	ActionRestartService   ActionType = "restart_service"
+	ActionStopService      ActionType = "stop_service"
+	ActionStartService     ActionType = "start_service"
+	ActionKillProcess      ActionType = "kill_process"
 	ActionUpdateAgent      ActionType = "update_agent"
 	ActionHostRunCommand   ActionType = "host_run_command"
 	ActionHostDiskUsage    ActionType = "host_disk_usage"

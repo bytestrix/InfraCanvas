@@ -1217,8 +1217,14 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 	// Host
 	case "update_agent":
 		return actions.ActionUpdateAgent, "host"
-	case "restart_service":
+	case "restart_service", "service_restart":
 		return actions.ActionRestartService, "host"
+	case "service_stop":
+		return actions.ActionStopService, "host"
+	case "service_start":
+		return actions.ActionStartService, "host"
+	case "process_kill":
+		return actions.ActionKillProcess, "host"
 	default:
 		return actions.ActionType(frontendType), ""
 	}

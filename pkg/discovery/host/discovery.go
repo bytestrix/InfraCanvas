@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,11 +99,64 @@ func (d *Discovery) DiscoverAll() (*models.Host, []models.Process, []models.Serv
 	// Wait for all parallel operations to complete
 	wg.Wait()
 
+	// Cross-link sockets, processes, and services: who listens where, which
+	// process belongs to which systemd unit, and who talks to whom locally.
+	enrichWithSockets(processes, services)
+
 	// Calculate host health
 	host.Health = calculateHostHealth(host)
 	host.Timestamp = time.Now()
 
 	return host, processes, services, nil
+}
+
+// enrichWithSockets populates listening/outbound ports on processes, assigns
+// processes to their owning systemd service (via MainPID + PPID descent), and
+// aggregates the service's ports from its process tree.
+func enrichWithSockets(processes []models.Process, services []models.Service) {
+	socks, err := buildSocketMaps()
+	if err != nil {
+		return
+	}
+
+	byPid := make(map[int]*models.Process, len(processes))
+	children := map[int][]int{}
+	for i := range processes {
+		p := &processes[i]
+		byPid[p.PID] = p
+		children[p.PPID] = append(children[p.PPID], p.PID)
+		p.ListeningPorts = socks.PidListenPorts[p.PID]
+		p.OutboundPorts = socks.PidOutboundPorts[p.PID]
+	}
+
+	// Walk each service's process tree from MainPID.
+	for i := range services {
+		svc := &services[i]
+		if svc.MainPID <= 0 {
+			continue
+		}
+		// user@N.service is the per-user session manager — descending its tree
+		// would swallow every user process (PM2 apps, dev servers) that should
+		// stand on their own.
+		if strings.HasPrefix(svc.Name, "user@") {
+			continue
+		}
+		stack := []int{svc.MainPID}
+		for len(stack) > 0 {
+			pid := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if p, ok := byPid[pid]; ok && p.ServiceUnit == "" {
+				p.ServiceUnit = svc.Name
+				for _, port := range p.ListeningPorts {
+					svc.Ports = appendUnique(svc.Ports, port)
+				}
+				for _, port := range p.OutboundPorts {
+					svc.OutboundPorts = appendUnique(svc.OutboundPorts, port)
+				}
+			}
+			stack = append(stack, children[pid]...)
+		}
+	}
 }
 
 // calculateHostHealth calculates the health status of a host

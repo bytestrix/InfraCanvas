@@ -116,6 +116,18 @@ export default function NodeSvgIcon({ type, size = 16 }: Props) {
         <path d="M8 21h8M12 17v4"/>
       </svg>
     )
+    case 'service': return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
+      </svg>
+    )
+    case 'process': return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="5" y="5" width="14" height="14" rx="2.5"/>
+        <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+      </svg>
+    )
     case 'pvc':
     case 'pv':
     case 'volume': return (

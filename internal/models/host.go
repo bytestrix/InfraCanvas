@@ -84,6 +84,13 @@ type Process struct {
 	MemoryBytes    int64   `json:"memory_bytes"`
 	ListeningPorts []int   `json:"listening_ports"`
 	ProcessType    string  `json:"process_type,omitempty"` // docker, kubelet, database, webserver, etc.
+
+	// ServiceUnit is the systemd service this process belongs to ("" if none).
+	// Processes owned by a service are represented by the service node.
+	ServiceUnit string `json:"service_unit,omitempty"`
+	// OutboundPorts are local ports this process has established connections
+	// to (loopback/local destinations) — used to draw service topology edges.
+	OutboundPorts []int `json:"outbound_ports,omitempty"`
 }
 
 // Service represents a systemd service
@@ -97,4 +104,11 @@ type Service struct {
 	Dependencies []string `json:"dependencies"` // Service names
 	RestartCount int      `json:"restart_count"`
 	IsCritical   bool     `json:"is_critical"`
+
+	// MainPID is the service's main process id (0 when not running).
+	MainPID int `json:"main_pid,omitempty"`
+	// Ports are TCP ports the service's process tree is listening on.
+	Ports []int `json:"ports,omitempty"`
+	// OutboundPorts are local ports the service's process tree connects to.
+	OutboundPorts []int `json:"outbound_ports,omitempty"`
 }

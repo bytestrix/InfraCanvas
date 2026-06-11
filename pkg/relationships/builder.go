@@ -1,6 +1,7 @@
 package relationships
 
 import (
+	"strconv"
 	"strings"
 
 	"infracanvas/internal/models"
@@ -23,6 +24,9 @@ func (b *Builder) BuildRelationships(entities map[string]models.Entity) []models
 
 	// Build Kubernetes relationships
 	raw = append(raw, b.buildKubernetesRelationships(entities)...)
+
+	// Build host service/process relationships
+	raw = append(raw, b.buildHostServiceRelationships(entities)...)
 
 	// Deduplicate: same source+target+type is only emitted once
 	seen := make(map[string]bool, len(raw))
@@ -493,6 +497,74 @@ func (b *Builder) buildKubernetesRelationships(entities map[string]models.Entity
 					},
 				})
 			}
+		}
+	}
+
+	return relations
+}
+
+// buildHostServiceRelationships anchors systemd services and standalone
+// processes to the host, and draws CONNECTS_TO edges between local workloads
+// based on established TCP connections (who talks to whose listening port).
+func (b *Builder) buildHostServiceRelationships(entities map[string]models.Entity) []models.Relation {
+	relations := []models.Relation{}
+	hostID := b.findHostEntity(entities)
+
+	// Map listening port → owning entity ID. Services win over their own
+	// member processes (the process is hidden behind the service node).
+	portOwner := map[int]string{}
+	for id, entity := range entities {
+		switch e := entity.(type) {
+		case *models.Service:
+			for _, port := range e.Ports {
+				portOwner[port] = id
+			}
+		case *models.Process:
+			if e.ServiceUnit != "" {
+				continue
+			}
+			for _, port := range e.ListeningPorts {
+				if _, taken := portOwner[port]; !taken {
+					portOwner[port] = id
+				}
+			}
+		}
+	}
+
+	connect := func(sourceID string, outbound []int) {
+		for _, port := range outbound {
+			target, ok := portOwner[port]
+			if !ok || target == sourceID {
+				continue
+			}
+			relations = append(relations, models.Relation{
+				SourceID:   sourceID,
+				TargetID:   target,
+				Type:       models.RelationConnectsTo,
+				Properties: map[string]string{"port": strconv.Itoa(port)},
+			})
+		}
+	}
+
+	for id, entity := range entities {
+		switch e := entity.(type) {
+		case *models.Service:
+			if hostID != "" {
+				relations = append(relations, models.Relation{
+					SourceID: id, TargetID: hostID, Type: models.RelationRunsOn,
+				})
+			}
+			connect(id, e.OutboundPorts)
+		case *models.Process:
+			if e.ServiceUnit != "" || len(e.ListeningPorts) == 0 {
+				continue // hidden behind a service node or filtered from canvas
+			}
+			if hostID != "" {
+				relations = append(relations, models.Relation{
+					SourceID: id, TargetID: hostID, Type: models.RelationRunsOn,
+				})
+			}
+			connect(id, e.OutboundPorts)
 		}
 	}
 
