@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-06-11
+
+### Added
+- **Systemd services and processes on the canvas.** Plain VMs — nginx + postgres + node via systemd or PM2, no Docker, no Kubernetes — now render their real workloads instead of an empty canvas:
+  - Services with listening ports (postgres, nginx, redis…), failed units, and critical services appear as nodes; ports are aggregated from each service's process tree via a single-pass `/proc/net/tcp` + `/proc/<pid>/fd` socket scan.
+  - Standalone listening processes (PM2 apps, dev servers) appear as their own nodes.
+  - `CONNECTS_TO` edges drawn from established local TCP connections — e.g. `next-server → postgres :5432` — giving real service topology on a bare VM.
+  - New actions: service start/stop/restart, process terminate (SIGTERM) and force-kill (SIGKILL, refuses pid ≤ 1 and the agent itself).
+  - Service journalctl logs in the Logs panel (`host_logs` with unit scoping).
+  - "Services" filter chip, dedicated icons, and detail-panel metadata (unit, ports, main PID, restart count).
+- Zombie processes are marked degraded (state `Z` in `/proc/<pid>/stat`).
+
+---
+
 ## [0.11.0] — 2026-06-10
 
 ### Added
