@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.1] — 2026-06-11
+
+### Fixed
+- Service and process nodes from v0.12.0 arrived in the graph but were never displayed: the `services` filter key was missing from the default active set and the hardcoded filter-chip rows, and Overview had no tiles for them. Canvas now shows Services/Processes group cards and a Services chip; Overview gains "System Services" and "Processes" tiles.
+
+---
+
 ## [0.12.0] — 2026-06-11
 
 ### Added
