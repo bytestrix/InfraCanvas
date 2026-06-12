@@ -2,7 +2,7 @@
   <img src="docs/banner.png" alt="InfraCanvas — Your infrastructure, as a live canvas" width="100%" />
 </p>
 
-<p align="center"><strong>See everything running on your server — as a live, visual map.</strong></p>
+
 
 <p align="center">
   One command. One binary. Open a URL and watch your containers, pods, volumes and networks<br/>draw themselves as a connected graph — with terminals, logs and actions built in.
