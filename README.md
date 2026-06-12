@@ -51,8 +51,6 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 
 That's the entire installation. The installer prints a public HTTPS URL (via a free Cloudflare [quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)) — open it in any browser, from anywhere. **No Docker required, no firewall changes, no signup, no config files.**
 
-> 🪶 Weave Scope walked so InfraCanvas could run — same live-topology idea, but actively maintained, a single static binary, and no per-host probes or app server to operate.
-
 ---
 
 ## ✨ Features
@@ -174,19 +172,6 @@ You'll see your laptop's Docker containers and Kubernetes context (if any) on th
 One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. A bundled `cloudflared` opens an **outbound-only** tunnel to Cloudflare's edge, which gives you a public HTTPS URL with no inbound firewall rule. Your laptop is just a browser.
 
 Prefer to expose the port directly? Pass `--no-tunnel` to bind `0.0.0.0:7777` (allow inbound TCP in your cloud security group). Add `--private` to bind `127.0.0.1` and reach the dashboard via SSH tunnel.
-
----
-
-## 🥊 How is this different from Portainer, k9s, or Dozzle?
-
-| Tool | What it's built for | What InfraCanvas does differently |
-|---|---|---|
-| **Portainer** | Full container *management* platform — users, teams, registries, stacks | InfraCanvas is a *map*, not a console. One binary, zero config, and it draws Docker, Kubernetes and the host as a single connected graph |
-| **Lazydocker / k9s** | Excellent terminal UIs over SSH | Visual topology in any browser via a shareable URL — no SSH session, no terminal |
-| **Dozzle** | Real-time container log viewer | Logs are one panel here; the core is the relationship graph — what runs where, and how it's all connected |
-| **Weave Scope** | The original live topology map — archived and unmaintained | Same idea, actively developed, and a single static binary instead of per-host probes and an app server |
-
-Short version: if you need deep fleet management, run Portainer. If you want to **see** a machine — every container, pod, volume and network, and how they connect — within 30 seconds of one command, that's InfraCanvas.
 
 ---
 
@@ -374,6 +359,16 @@ InfraCanvas/
 </details>
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
+
+---
+
+## Alternatives
+
+Different tools solve different problems — these are all great projects:
+
+- [Portainer](https://github.com/portainer/portainer) — full container management platform with users, teams and registries. InfraCanvas focuses on visualizing a single host as a connected graph instead.
+- [lazydocker](https://github.com/jesseduffield/lazydocker) / [k9s](https://github.com/derailed/k9s) — excellent terminal UIs. InfraCanvas trades the terminal for a visual canvas in the browser.
+- [Dozzle](https://github.com/amir20/dozzle) — great real-time log viewer. In InfraCanvas, logs are one panel; the topology graph is the core.
 
 ---
 
