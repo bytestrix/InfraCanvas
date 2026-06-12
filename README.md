@@ -33,11 +33,17 @@
 
 ---
 
-## Why InfraCanvas?
+## What is InfraCanvas?
+
+InfraCanvas is an **open-source infrastructure visualization tool**. It's a single Go binary you run on any Linux machine — it automatically discovers every container, pod, service, volume and network on that host and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not, and the graph updates itself as things change.
+
+It's not another list of containers. It's a map: what runs where, what talks to what, and what's broken — visible in one glance. And because terminals, logs and actions (restart, scale, update image) are built into the same UI, you can go from *"something's red"* to *"fixed"* without leaving the browser.
+
+## Why does it exist?
 
 You SSH into a server and start piecing things together: `docker ps`, `kubectl get pods`, `ss -tlnp`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-InfraCanvas replaces that ritual with a single command. It discovers every container, pod, service, volume and network on the host and renders them as a **live topology graph** in your browser — green when healthy, red when not, updated automatically.
+InfraCanvas replaces that ritual with one command:
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
