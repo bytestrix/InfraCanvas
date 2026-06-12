@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/logo.png" alt="InfraCanvas logo" width="120" />
+  <img src="docs/banner.png" alt="InfraCanvas — Your infrastructure, as a live canvas" width="100%" />
 </p>
-
-<h1 align="center">InfraCanvas</h1>
 
 <p align="center"><strong>See everything running on your server — as a live, visual map.</strong></p>
 
@@ -359,16 +357,6 @@ InfraCanvas/
 </details>
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
-
----
-
-## Alternatives
-
-Different tools solve different problems — these are all great projects:
-
-- [Portainer](https://github.com/portainer/portainer) — full container management platform with users, teams and registries. InfraCanvas focuses on visualizing a single host as a connected graph instead.
-- [lazydocker](https://github.com/jesseduffield/lazydocker) / [k9s](https://github.com/derailed/k9s) — excellent terminal UIs. InfraCanvas trades the terminal for a visual canvas in the browser.
-- [Dozzle](https://github.com/amir20/dozzle) — great real-time log viewer. In InfraCanvas, logs are one panel; the topology graph is the core.
 
 ---
 
