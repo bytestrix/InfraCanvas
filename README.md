@@ -2,13 +2,6 @@
   <img src="docs/banner.png" alt="InfraCanvas — Your infrastructure, as a live map" width="100%" />
 </p>
 
-<h1 align="center">InfraCanvas</h1>
-
-<p align="center">
-  <strong>Your infrastructure, as a live map.</strong><br/>
-  One binary. Runs on any Linux VM. Open a URL, see everything.
-</p>
-
 <p align="center">
   <a href="https://github.com/bytestrix/InfraCanvas/releases/latest"><img src="https://img.shields.io/github/v/release/bytestrix/InfraCanvas?color=success&label=Release" alt="Latest release"></a>
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
