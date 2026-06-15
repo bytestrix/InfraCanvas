@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { type GraphNode } from '@/types'
 import { sendAction, sendCommand, subscribeActionResult, subscribeActionProgress } from '@/lib/wsManager'
+import { useVMStore } from '@/store/vmStore'
 import NodeSvgIcon from './NodeSvgIcon'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -467,6 +468,8 @@ function getActionColor(id: string, danger?: boolean): string {
 export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onShowTerminal }: NodeDetailPanelProps) {
   const hc = HEALTH_COLOR[node.health] ?? '#6b7280'
   const actions = ACTIONS[node.type] ?? []
+  const { vms } = useVMStore()
+  const readOnly = Object.values(vms)[0]?.readOnly ?? false
 
   const [activeActionId, setActiveActionId] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
@@ -598,15 +601,17 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
         )}
 
         {/* Host quick-access banner */}
-        {node.type === 'host' && onShowTerminal && (
+        {node.type === 'host' && (onShowTerminal || onShowLogs) && (
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'var(--bg)' }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={onShowTerminal}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--ink2)', cursor: 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--ink2)' }}>
-                <Terminal size={13} /> Open Terminal
-              </button>
+              {!readOnly && onShowTerminal && (
+                <button onClick={onShowTerminal}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--ink2)', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--ink2)' }}>
+                  <Terminal size={13} /> Open Terminal
+                </button>
+              )}
               {onShowLogs && (
                 <button onClick={onShowLogs}
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--ink2)', cursor: 'pointer', transition: 'all 0.15s' }}
@@ -620,7 +625,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
         )}
 
         {/* Tools */}
-        {node.type !== 'host' && TOOLS_NODES.has(node.type) && (onShowLogs || onShowTerminal) && (
+        {node.type !== 'host' && TOOLS_NODES.has(node.type) && (onShowLogs || (!readOnly && onShowTerminal)) && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Tools</p>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -631,7 +636,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
                   <FileText size={11} /> Logs
                 </button>
               )}
-              {onShowTerminal && (
+              {!readOnly && onShowTerminal && (
                 <button onClick={onShowTerminal} style={TOOL_BTN}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.color = 'var(--ink)'; e.currentTarget.style.background = 'var(--line)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink3)'; e.currentTarget.style.background = 'var(--bg)' }}>
@@ -683,7 +688,16 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
         )}
 
         {/* Actions */}
-        {actions.length > 0 && (
+        {actions.length > 0 && readOnly && (
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Actions</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 7, background: '#f59e0b14', border: '1px solid #f59e0b30' }}>
+              <ShieldOff size={13} style={{ color: '#f59e0b', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--ink3)' }}>Actions disabled — <span style={{ color: '#f59e0b', fontWeight: 600 }}>read-only demo</span>. Install on your own VM to get full control.</span>
+            </div>
+          </div>
+        )}
+        {actions.length > 0 && !readOnly && (
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Actions</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeActionId ? 12 : 0 }}>
