@@ -1,23 +1,23 @@
 <p align="center">
-  <img src="docs/banner.png" alt="InfraCanvas — Your infrastructure, as a live canvas" width="100%" />
+  <img src="docs/logo.png" alt="InfraCanvas" width="120" />
 </p>
 
-
+<h1 align="center">InfraCanvas</h1>
 
 <p align="center">
-  One command. One binary. Open a URL and watch your containers, pods, volumes and networks<br/>draw themselves as a connected graph — with terminals, logs and actions built in.
+  <strong>Your infrastructure, as a live map.</strong><br/>
+  One binary. Runs on any Linux VM. Open a URL, see everything.
 </p>
 
 <p align="center">
   <a href="https://github.com/bytestrix/InfraCanvas/releases/latest"><img src="https://img.shields.io/github/v/release/bytestrix/InfraCanvas?color=success&label=Release" alt="Latest release"></a>
   <a href="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml"><img src="https://github.com/bytestrix/InfraCanvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://goreportcard.com/report/github.com/bytestrix/InfraCanvas"><img src="https://goreportcard.com/badge/github.com/bytestrix/InfraCanvas" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
-  <a href="https://github.com/bytestrix/InfraCanvas/stargazers"><img src="https://img.shields.io/github/stars/bytestrix/InfraCanvas?style=flat&color=yellow" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
   <a href="https://infracanvas.app">Website</a> ·
+  <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-how-it-works">How it works</a> ·
@@ -25,48 +25,24 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
+---
+
 <p align="center">
-  <img src="docs/demo.gif" alt="InfraCanvas demo — live infrastructure topology in the browser" width="960" />
+  <img src="docs/screenshots/canvas-overview.png" alt="InfraCanvas — infrastructure overview tiles" width="960" />
 </p>
 
 ---
 
-## What is InfraCanvas?
+## What is it?
 
-InfraCanvas is an **open-source infrastructure visualization tool**. It's a single Go binary you run on any Linux machine — it automatically discovers every container, pod, service, volume and network on that host and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not, and the graph updates itself as things change.
+You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-It's not another list of containers. It's a map: what runs where, what talks to what, and what's broken — visible in one glance. And because terminals, logs and actions (restart, scale, update image) are built into the same UI, you can go from *"something's red"* to *"fixed"* without leaving the browser.
+InfraCanvas replaces that ritual with one command. It automatically discovers every container, pod, service, volume and network on the host — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. You can open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page.
 
-## Why does it exist?
-
-You SSH into a server and start piecing things together: `docker ps`, `kubectl get pods`, `ss -tlnp`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
-
-InfraCanvas replaces that ritual with one command:
-
-```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
-```
-
-That's the entire installation. The installer prints a public HTTPS URL (via a free Cloudflare [quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)) — open it in any browser, from anywhere. **No Docker required, no firewall changes, no signup, no config files.**
-
----
-
-## ✨ Features
-
-- 🗺️ **Live topology graph** — every container, pod, service, volume and network drawn as connected nodes. Not a list — a map.
-- 🚦 **Health at a glance** — green / amber / red from real container and pod state, with an alert banner when something breaks.
-- 💻 **Terminals in the browser** — open a shell inside any container, or on the host itself. No SSH session needed.
-- 📜 **Logs without `docker logs`** — color-coded, downloadable, one click from the node.
-- ⚡ **Act from the map** — restart, stop, scale, rolling-restart, update image — Docker and Kubernetes actions from the UI.
-- 🔍 **Inspect everything** — env vars (secrets auto-masked), port mappings, volume mounts, image details.
-- 🧩 **Zero dependencies** — one static Go binary with the dashboard embedded. Works with Docker, Kubernetes, or plain processes — none of them required.
-- 🔒 **Secure by default** — binds localhost, outbound-only tunnel, token auth, secret redaction, optional read-only mode.
-- 📤 **Export** — PNG screenshot or full JSON of the graph.
+It is not another list. It is a **map** — what runs where, what talks to what, and what's broken — in one glance.
 
 <p align="center">
-  <img src="docs/screenshots/canvas-view.png" alt="Live canvas — host node with real-time CPU and memory" width="800" />
-  <br/>
-  <em>The canvas: real-time CPU/memory per node, filters for Kubernetes / Docker / Host, grouped or flat layout.</em>
+  <img src="docs/screenshots/canvas-view.png" alt="InfraCanvas — live topology canvas" width="960" />
 </p>
 
 ---
@@ -76,11 +52,10 @@ That's the entire installation. The installer prints a public HTTPS URL (via a f
 On any Linux VM (cloud or bare metal):
 
 ```bash
-ssh user@your-vm
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
 
-In under 30 seconds you'll see:
+In under 30 seconds:
 
 ```
 ✓ InfraCanvas installed and running
@@ -88,33 +63,31 @@ In under 30 seconds you'll see:
   Open in your browser:
     https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
 
-  This URL works from anywhere — Cloudflare's free quick-tunnel needs no
-  firewall rule. The URL is ephemeral; it changes whenever the service
-  restarts. Run with --no-tunnel for a stable URL on your own port.
-
   Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
 ```
 
-Open the URL — your VM's infrastructure is live on the canvas.
+Open the URL — your infrastructure is live on the canvas. **No Docker required. No firewall changes. No signup. No config files.**
+
+The URL is a free [Cloudflare quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — outbound-only, works from anywhere, no inbound port needed.
 
 <details>
-<summary><strong>Install options</strong> (port, no-tunnel, private, read-only, version pinning)</summary>
+<summary><strong>Install options</strong></summary>
 
 ```bash
 # Custom port (default 7777) — only matters with --no-tunnel
 curl -fsSL .../install.sh | bash -s -- --port 8888
 
-# Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly (open the port in your SG)
+# Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly
 curl -fsSL .../install.sh | bash -s -- --no-tunnel
 
 # Bind 127.0.0.1 only; reach via SSH tunnel (implies --no-tunnel)
 curl -fsSL .../install.sh | bash -s -- --private
 
-# Read-only: viewers can look but not touch (public demos, dashboards on a TV)
+# Read-only: viewers can look, not touch — public demos and dashboards on a TV
 curl -fsSL .../install.sh | bash -s -- --read-only
 
-# Pin a specific release
-curl -fsSL .../install.sh | bash -s -- --version v0.4.0
+# Pin a specific version
+curl -fsSL .../install.sh | bash -s -- --version v0.12.1
 ```
 
 </details>
@@ -122,23 +95,51 @@ curl -fsSL .../install.sh | bash -s -- --version v0.4.0
 <details>
 <summary><strong>Multiple VMs</strong></summary>
 
-Each VM is independent. Install on each, open the printed URL for each in a separate tab — no tunnel coordination needed. The binary is intentionally one-VM-per-dashboard.
+Each VM is independent. Install on each one, open the printed URL for each in a separate tab. The binary is intentionally one-VM-per-dashboard.
 
 </details>
 
 <details>
 <summary><strong>Run on your laptop</strong></summary>
 
-The same binary works locally — build from source (see [Building from source](#-building-from-source)), then:
+Build from source (see [Building from source](#-building-from-source)), then:
 
 ```bash
 infracanvas serve
-# → https://*.trycloudflare.com/?token=…   (or pass --no-tunnel for http://localhost:7777)
+# → https://*.trycloudflare.com/?token=…   (or --no-tunnel for http://localhost:7777)
 ```
 
-You'll see your laptop's Docker containers and Kubernetes context (if any) on the canvas. Useful for development and demos.
+You'll see your laptop's Docker containers and Kubernetes context on the canvas.
 
 </details>
+
+---
+
+## ✨ Features
+
+### Live topology map
+Every container, pod, service, volume and network drawn as connected nodes with edges showing what talks to what. Not a list — a map. Updates every 30 seconds, diff-only.
+
+### Works on any VM — even without Docker or Kubernetes
+Plain VMs running nginx, postgres, node via systemd or PM2 get real workload nodes on the canvas. Listening ports and established connections are mapped from `/proc/net/tcp` — so you get real `CONNECTS_TO` edges (e.g. `next-server → postgres :5432`) without any config.
+
+### Terminals, logs and actions — built in
+- **Container terminal** — full interactive shell inside any container
+- **VM shell** — host PTY, no SSH needed
+- **Logs** — tail any container, pod, or systemd service with one click, color-coded
+- **Actions** — restart, stop, start, scale, rolling-restart, update image, service start/stop, process kill — all from the node panel
+
+### Health at a glance
+Green / amber / red from real container state, pod phase, and zombie process detection. An alert banner appears automatically when something breaks.
+
+### Inspect everything
+Env vars (secrets auto-masked), port mappings, volume mounts, image details, service unit, main PID, restart count, established connections.
+
+### Zero dependencies
+One static Go binary with the dashboard embedded. Works with Docker, Kubernetes, plain systemd services, PM2 — none of them required.
+
+### Secure by default
+Binds localhost. Outbound-only Cloudflare tunnel. Random per-install auth token. Secret redaction before data leaves the discovery layer. Runs as your user, not root. Optional `--read-only` mode for public dashboards.
 
 ---
 
@@ -163,97 +164,27 @@ You'll see your laptop's Docker containers and Kubernetes context (if any) on th
                     │  Cloudflare quick-tunnel
                     ▼
               ┌──────────┐
-              │  laptop  │  →  https://xyz.trycloudflare.com
+              │  browser │  →  https://xyz.trycloudflare.com
               └──────────┘
 ```
 
-One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. A bundled `cloudflared` opens an **outbound-only** tunnel to Cloudflare's edge, which gives you a public HTTPS URL with no inbound firewall rule. Your laptop is just a browser.
-
-Prefer to expose the port directly? Pass `--no-tunnel` to bind `0.0.0.0:7777` (allow inbound TCP in your cloud security group). Add `--private` to bind `127.0.0.1` and reach the dashboard via SSH tunnel.
+One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. A bundled `cloudflared` opens an outbound-only tunnel so you get a public HTTPS URL with no inbound firewall rule. Your browser is just a client.
 
 ---
 
 ## 🔒 Security model
 
-The dashboard, relay and agent all run on the same machine, so there's no remote agent ↔ relay channel to secure. The two surfaces that matter:
+**The exposed URL.** Default mode binds `127.0.0.1:7777` and exposes it through a Cloudflare quick-tunnel — outbound-only from your VM, HTTPS-terminated at Cloudflare's edge. Pass `--no-tunnel` to bind `0.0.0.0` directly, or `--private` to bind `127.0.0.1` only and reach it via SSH tunnel.
 
-**1. The exposed URL.** Default mode binds `127.0.0.1:7777` and exposes it through a Cloudflare quick-tunnel — outbound-only from your VM, HTTPS-terminated at Cloudflare's edge. The URL is unguessable (random subdomain) but not secret — it's paired with the auth token below. With `--no-tunnel` the binary binds `0.0.0.0` directly. With `--private`, it binds `127.0.0.1` only and you reach it via SSH tunnel.
+**The auth token.** Every install generates a random 24-character token saved to `/etc/infracanvas/config.env`. The dashboard requires it on first visit (`?token=…`); after that it's in an HTTP-only cookie. Without the token, every request returns `401`. Treat the URL+token like an SSH key for the box.
 
-**2. The auth token.** Every install generates a random 24-character token (printed once, saved to `/etc/infracanvas/config.env`). The dashboard requires it on first visit (`?token=…`); after that it lives in an HTTP-only cookie. WebSocket calls also require the token. Without the token, every request returns `401`.
+**Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action and terminal request server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen.
 
-**What the dashboard can do once authenticated:** see the full topology, view logs, open a shell in any container or on the host, run Docker/Kubernetes actions. **Treat the URL+token like an SSH key for the box.**
+**Secret redaction.** Env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer.
 
-**Read-only mode.** Pass `--read-only` (or `INFRACANVAS_READONLY=true`) to turn the dashboard into a viewer: the relay rejects every action and terminal request server-side. Topology and logs still work — use this for public demos or a wall-mounted status screen.
-
-**Secret redaction.** Env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer. File contents, database contents and network traffic are never touched.
-
-**Runs as you, not root.** Installed via `sudo …/install.sh`, the systemd unit is written with `User=$SUDO_USER`. The agent inherits *your* `~/.kube/config` — Kubernetes discovery just works for whatever cluster you can already `kubectl` against. If you're in the `docker` group, `SupplementaryGroups=docker` is added so Docker discovery works without sudo. No privilege escalation beyond what you can already do at the shell.
+**Runs as you, not root.** The systemd unit runs as `$SUDO_USER`. The agent inherits your `~/.kube/config` and docker group membership — no privilege escalation beyond what you already have.
 
 See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
-
----
-
-## 📋 All features
-
-<details>
-<summary><strong>Canvas</strong></summary>
-
-| Feature | What it does |
-|---|---|
-| Live topology graph | Every container, pod, service, volume, network drawn as nodes with edges showing relationships |
-| Real-time updates | Full snapshot on first connect, then only changes every 30s |
-| Grouped view | Nodes grouped by type (Containers, K8s Workloads, Storage…) — one card per group, click to expand |
-| Flat view | Every node laid out individually by type and relationship |
-| Filter chips | Show/hide Kubernetes, Docker, Host, Pods, Storage, Events |
-| Health colors | Green = healthy, amber = degraded, red = unhealthy |
-| Alert banner | Appears automatically when any group has unhealthy nodes |
-| Export PNG | Save the canvas as a high-res image |
-| Export JSON | Download the raw graph (nodes, edges, metadata) |
-
-</details>
-
-<details>
-<summary><strong>Containers & Docker</strong></summary>
-
-| Feature | What it does |
-|---|---|
-| Container terminal | Full interactive shell inside any container |
-| Container logs | Last 200 lines, color-coded, downloadable |
-| Restart / Stop / Start | Run from the UI — executed by the in-process agent |
-| Update image | Set a new image tag and the agent pulls and recreates |
-| Environment variables | Shown with automatic secret masking |
-| Port mappings | Host ↔ container port pairs |
-| Volume mounts | Bind mounts and named volumes with paths |
-| Image details | Registry, tag, size, digest, which containers use it |
-
-</details>
-
-<details>
-<summary><strong>Kubernetes</strong></summary>
-
-| Feature | What it does |
-|---|---|
-| Full resource graph | Cluster → Nodes → Namespaces → Deployments → Pods → Services → Ingress → PVCs |
-| Health from pod phase | Running/Pending/Failed → green/amber/red |
-| Rolling restart | `kubectl rollout restart` for Deployments, StatefulSets, DaemonSets |
-| Update image | Change the image for any Deployment |
-| Scale | Change replica count for Deployments and StatefulSets |
-| Pod logs | Fetch logs from any pod |
-| K8s events | Shown as nodes linked to the resources they affect |
-
-</details>
-
-<details>
-<summary><strong>Host</strong></summary>
-
-| Feature | What it does |
-|---|---|
-| VM terminal | Interactive shell on the host (not inside a container) |
-| Host info | OS, kernel, CPU cores, memory, hostname |
-| Cloud detection | Identifies AWS / GCP / Azure / on-prem |
-| Environment detection | Infers prod/staging/dev from hostname patterns |
-
-</details>
 
 ---
 
@@ -266,7 +197,7 @@ sudo systemctl stop     infracanvas
 sudo journalctl -u infracanvas -f
 ```
 
-Config lives in `/etc/infracanvas/config.env`:
+Config in `/etc/infracanvas/config.env`:
 
 ```bash
 INFRACANVAS_UI_TOKEN=a8f3e2b1c9d4f02e
@@ -285,14 +216,7 @@ Edit, then `sudo systemctl restart infracanvas`.
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/uninstall.sh | sudo bash
 ```
 
-The uninstaller stops and disables the systemd service, then removes:
-
-- `/usr/local/bin/infracanvas` — the binary
-- `/etc/systemd/system/infracanvas.service` — the unit
-- `/etc/infracanvas/` — config and auth token
-- `~/.cache/infracanvas/` — the bundled `cloudflared` binary (~30 MB), for the user the service ran as
-
-If you cloned this repo, you can also run it locally: `sudo ./uninstall-agent.sh`
+Removes: binary, systemd unit, `/etc/infracanvas/`, and the cached `cloudflared` binary (~30 MB). Or run locally: `sudo ./uninstall-agent.sh`
 
 </details>
 
@@ -307,18 +231,18 @@ git clone https://github.com/bytestrix/InfraCanvas.git
 cd InfraCanvas
 
 make all                # build dashboard + binary (with embedded UI)
-./bin/infracanvas       # → http://localhost:7777/?token=…
+./bin/infracanvas serve # → http://localhost:7777/?token=…
 ```
 
 <details>
-<summary><strong>Other make targets</strong></summary>
+<summary><strong>Make targets</strong></summary>
 
 ```bash
-make build-frontend     # build the dashboard, embed under pkg/webui/dist/
-make build              # build binary with embedded dashboard (requires dist/)
-make build-stub         # build with placeholder UI — fastest, for backend iteration
-make release            # cross-compile for linux/darwin × amd64/arm64
-make test               # run all Go tests
+make build-frontend     # Next.js static export → pkg/webui/dist/
+make build              # binary with embedded UI (requires dist/)
+make build-stub         # binary with placeholder UI — fast, for backend iteration
+make release            # cross-compile linux/darwin × amd64/arm64 → bin/release/
+make test               # Go tests
 make clean              # remove bin/ and embedded dashboard
 ```
 
@@ -336,8 +260,8 @@ InfraCanvas/
 │   └── …
 ├── pkg/
 │   ├── agent/                # WebSocket agent: discover, diff, exec, actions
-│   ├── server/               # Relay: WebSocket broker, sessions, auth, static UI
-│   ├── webui/                # Embedded dashboard (build-tagged)
+│   ├── server/               # relay: WebSocket broker, sessions, auth, static UI
+│   ├── webui/                # embedded dashboard (build-tagged)
 │   ├── actions/              # Docker / K8s / Host action runners
 │   ├── discovery/            # docker, host, kubernetes
 │   ├── orchestrator/         # combines discovery sources into one snapshot
@@ -348,9 +272,9 @@ InfraCanvas/
 ├── frontend/
 │   ├── app/page.tsx          # single-VM dashboard, auto-connects on mount
 │   ├── components/canvas/    # ReactFlow canvas, node detail panel, terminal, logs
-│   ├── lib/wsManager.ts      # WS client, same-origin
+│   ├── lib/wsManager.ts      # WS client
 │   └── store/vmStore.ts      # Zustand state
-├── install-agent.sh          # one-command installer
+├── install-agent.sh
 └── uninstall-agent.sh
 ```
 
@@ -362,17 +286,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
 
 ## 🤝 Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
 
 New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
-
----
-
-## ⭐ Star history
-
-If InfraCanvas saved you a few SSH sessions, **star the repo** — it's the main way other people find it.
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bytestrix/InfraCanvas&type=Date)](https://star-history.com/#bytestrix/InfraCanvas&Date)
 
 ---
 
@@ -380,14 +296,12 @@ If InfraCanvas saved you a few SSH sessions, **star the repo** — it's the main
 
 GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 
-- ✅ Free for any personal or internal company use
-- ✅ Fork, modify, redistribute — just keep changes open source
-- ❌ If you run this as a paid cloud service for customers, your modifications must be open source too
-
-This protects against large companies repackaging the project without contributing back. Individual developers and internal company use are unaffected.
+- Free for any personal or internal company use
+- Fork, modify, redistribute — keep changes open source
+- If you run this as a paid cloud service for customers, your modifications must be open source too
 
 ---
 
 <p align="center">
-  Built by <a href="https://bytestrix.com">Bytestrix</a> — a product studio that ships software people actually need.
+  Built by <a href="https://bytestrix.com">Bytestrix</a>
 </p>
