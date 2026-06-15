@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="InfraCanvas" width="120" />
+  <img src="docs/banner.png" alt="InfraCanvas — Your infrastructure, as a live map" width="100%" />
 </p>
 
 <h1 align="center">InfraCanvas</h1>
