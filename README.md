@@ -165,6 +165,79 @@ One binary, one URL. The dashboard, relay and agent all run in the same process 
 
 ---
 
+## 🌐 Self-hosting without Cloudflare
+
+The default install uses a Cloudflare quick-tunnel for zero-config HTTPS. If you want to use your own domain and reverse proxy instead, pass `--no-tunnel`:
+
+```bash
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --no-tunnel
+# Binds 0.0.0.0:7777 — no cloudflared process started
+```
+
+Then point your reverse proxy at `127.0.0.1:7777`.
+
+<details>
+<summary><strong>Nginx + Let's Encrypt</strong></summary>
+
+```nginx
+server {
+    listen 80;
+    server_name infra.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name infra.yourdomain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/infra.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/infra.yourdomain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:7777;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+Get a cert: `sudo certbot --nginx -d infra.yourdomain.com`
+
+</details>
+
+<details>
+<summary><strong>Caddy (auto-HTTPS, simplest option)</strong></summary>
+
+```caddy
+infra.yourdomain.com {
+    reverse_proxy localhost:7777
+}
+```
+
+Caddy handles TLS automatically. No certbot needed.
+
+</details>
+
+<details>
+<summary><strong>SSH tunnel (no domain needed)</strong></summary>
+
+Keep the server private (`--private` binds `127.0.0.1` only), then forward to your laptop:
+
+```bash
+# On your laptop:
+ssh -L 7777:127.0.0.1:7777 user@your-server
+# Open: http://localhost:7777/?token=<your-token>
+```
+
+No public exposure, no domain, no TLS setup.
+
+</details>
+
+---
+
 ## 🔒 Security model
 
 **The exposed URL.** Default mode binds `127.0.0.1:7777` and exposes it through a Cloudflare quick-tunnel — outbound-only from your VM, HTTPS-terminated at Cloudflare's edge. Pass `--no-tunnel` to bind `0.0.0.0` directly, or `--private` to bind `127.0.0.1` only and reach it via SSH tunnel.
