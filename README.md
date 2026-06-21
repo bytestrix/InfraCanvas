@@ -116,6 +116,9 @@ Every container, pod, service, volume and network drawn as connected nodes with 
 ### Works on any VM — even without Docker or Kubernetes
 Plain VMs running nginx, postgres, node via systemd or PM2 get real workload nodes on the canvas. Listening ports and established connections are mapped from `/proc/net/tcp` — so you get real `CONNECTS_TO` edges (e.g. `next-server → postgres :5432`) without any config.
 
+### LXC / LXD / Incus
+Containers managed by LXD or Incus are auto-discovered from the local socket and drawn on the canvas alongside Docker and Kubernetes — name, status, memory, and network, no config. (Discovery/visualization today; terminal & actions for LXC/LXD are on the roadmap.)
+
 ### Terminals, logs and actions — built in
 - **Container terminal** — full interactive shell inside any container
 - **VM shell** — host PTY, no SSH needed

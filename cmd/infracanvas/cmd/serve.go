@@ -68,7 +68,7 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveNoTunnel, "no-tunnel", false, "Disable Cloudflare tunnel; bind the port directly")
 	serveCmd.Flags().BoolVar(&serveReadOnly, "read-only", false, "Block actions and terminals; viewers can only look (for public demos)")
 	serveCmd.Flags().StringVar(&serveUIToken, "token", "", "Override the UI auth token")
-	serveCmd.Flags().StringSliceVar(&serveScope, "discover", []string{"host", "docker", "kubernetes"}, "Discovery scopes")
+	serveCmd.Flags().StringSliceVar(&serveScope, "discover", []string{"host", "docker", "lxd", "kubernetes"}, "Discovery scopes")
 	serveCmd.Flags().IntVar(&serveRefresh, "refresh", 30, "Seconds between discovery refreshes")
 }
 

@@ -41,7 +41,7 @@ func Execute() {
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "Output format (json, yaml, table)")
-	rootCmd.PersistentFlags().StringSliceVarP(&scope, "scope", "s", []string{"host", "docker", "kubernetes"}, "Discovery scope (host, docker, kubernetes)")
+	rootCmd.PersistentFlags().StringSliceVarP(&scope, "scope", "s", []string{"host", "docker", "lxd", "kubernetes"}, "Discovery scope (host, docker, kubernetes)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-essential output")
 }

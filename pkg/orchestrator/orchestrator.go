@@ -11,6 +11,7 @@ import (
 	"infracanvas/pkg/discovery/docker"
 	"infracanvas/pkg/discovery/host"
 	"infracanvas/pkg/discovery/kubernetes"
+	"infracanvas/pkg/discovery/lxd"
 	"infracanvas/pkg/health"
 	"infracanvas/pkg/relationships"
 )
@@ -20,6 +21,7 @@ type Orchestrator struct {
 	hostDiscovery       *host.Discovery
 	dockerDiscovery     *docker.Discovery
 	kubernetesDiscovery *kubernetes.Discovery
+	lxdDiscovery        *lxd.Discovery
 	relationshipBuilder *relationships.Builder
 	healthCalculator    *health.Calculator
 	redactor            *redactor.Redactor
@@ -78,6 +80,22 @@ func (o *Orchestrator) Discover(ctx context.Context, scope []string) (*models.In
 				mu.Lock()
 				snapshot.Metadata.Errors = append(snapshot.Metadata.Errors, models.CollectionError{
 					Layer:   "docker",
+					Message: err.Error(),
+				})
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// Discover LXC/LXD/Incus layer
+	if contains(scope, "lxd") || contains(scope, "lxc") {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := o.discoverLXD(snapshot, &mu); err != nil {
+				mu.Lock()
+				snapshot.Metadata.Errors = append(snapshot.Metadata.Errors, models.CollectionError{
+					Layer:   "lxd",
 					Message: err.Error(),
 				})
 				mu.Unlock()
@@ -206,6 +224,32 @@ func (o *Orchestrator) discoverDocker(snapshot *models.InfraSnapshot, mu *sync.M
 		snapshot.Entities[networks[i].ID] = &networks[i]
 	}
 
+	return nil
+}
+
+// discoverLXD performs LXC/LXD/Incus discovery
+func (o *Orchestrator) discoverLXD(snapshot *models.InfraSnapshot, mu *sync.Mutex) error {
+	if o.lxdDiscovery == nil {
+		o.lxdDiscovery = lxd.NewDiscovery()
+	}
+	if !o.lxdDiscovery.IsAvailable() {
+		return fmt.Errorf("LXD/Incus is not available")
+	}
+
+	runtime, containers, err := o.lxdDiscovery.DiscoverAll()
+	if err != nil {
+		return fmt.Errorf("LXD discovery failed: %w", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if runtime != nil {
+		snapshot.Entities[runtime.ID] = runtime
+	}
+	for i := range containers {
+		snapshot.Entities[containers[i].ID] = &containers[i]
+	}
 	return nil
 }
 

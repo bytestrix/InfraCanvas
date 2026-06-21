@@ -209,6 +209,12 @@ func (f *GraphFormatter) entityToNode(id string, entity models.Entity) GraphNode
 	case models.EntityTypeContainer:
 		container := entity.(*models.Container)
 		node.Label = container.Name
+		if rt := container.Labels["runtime"]; rt != "" {
+			node.Metadata["runtime"] = rt
+		}
+		if lt := container.Labels["lxdType"]; lt != "" {
+			node.Metadata["lxdType"] = lt
+		}
 		node.Metadata["image"] = container.Image
 		node.Metadata["state"] = container.State
 		node.Metadata["status"] = container.Status
