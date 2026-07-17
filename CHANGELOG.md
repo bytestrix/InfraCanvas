@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.13.0] — 2026-07-07
+
+### Added
+- **LXC / LXD / Incus discovery.** Containers and VMs managed by LXD or Incus are auto-discovered from the local unix socket (snap LXD, deb LXD, and Incus paths) and drawn on the canvas alongside Docker and Kubernetes — name, status, type, and network, no config and no external dependencies. Instances render as container nodes carrying a `runtime` (`lxd`/`incus`) label.
+  - Wired into the continuous agent: a new `lxd` collection tick keeps LXD instances live in the graph (previously LXD was only picked up by one-shot `discover`).
+  - `infracanvas serve` includes `lxd` in its default discovery scope; the cloud agent (`infracanvas start`) auto-appends `lxd` when an LXD/Incus socket is present, so no scope change is needed at install time.
+
+---
+
 ## [0.12.1] — 2026-06-11
 
 ### Fixed

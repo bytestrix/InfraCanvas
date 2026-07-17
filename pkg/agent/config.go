@@ -19,6 +19,7 @@ type Config struct {
 	HostInterval       int `yaml:"host_interval" json:"host_interval"`
 	DockerInterval     int `yaml:"docker_interval" json:"docker_interval"`
 	KubernetesInterval int `yaml:"kubernetes_interval" json:"kubernetes_interval"`
+	LxdInterval        int `yaml:"lxd_interval" json:"lxd_interval"`
 	HeartbeatInterval  int `yaml:"heartbeat_interval" json:"heartbeat_interval"`
 
 	// Discovery scope
@@ -43,8 +44,9 @@ func DefaultConfig() *Config {
 		HostInterval:       10,
 		DockerInterval:     15,
 		KubernetesInterval: 20,
+		LxdInterval:        15,
 		HeartbeatInterval:  30,
-		Scope:              []string{"host", "docker", "kubernetes"},
+		Scope:              []string{"host", "docker", "kubernetes", "lxd"},
 		AgentID:            "",
 		AgentName:          hostname,
 		EnableRedaction:    true,
@@ -115,10 +117,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("scope must contain at least one layer")
 	}
 
-	validScopes := map[string]bool{"host": true, "docker": true, "kubernetes": true}
+	validScopes := map[string]bool{"host": true, "docker": true, "kubernetes": true, "lxd": true, "lxc": true}
 	for _, scope := range c.Scope {
 		if !validScopes[scope] {
-			return fmt.Errorf("invalid scope: %s (must be host, docker, or kubernetes)", scope)
+			return fmt.Errorf("invalid scope: %s (must be host, docker, kubernetes, or lxd)", scope)
 		}
 	}
 
@@ -138,6 +140,15 @@ func (c *Config) GetDockerIntervalDuration() time.Duration {
 // GetKubernetesIntervalDuration returns the Kubernetes collection interval as a duration
 func (c *Config) GetKubernetesIntervalDuration() time.Duration {
 	return time.Duration(c.KubernetesInterval) * time.Second
+}
+
+// GetLxdIntervalDuration returns the LXC/LXD/Incus collection interval as a
+// duration. Falls back to 15s for configs persisted before lxd_interval existed.
+func (c *Config) GetLxdIntervalDuration() time.Duration {
+	if c.LxdInterval < 1 {
+		return 15 * time.Second
+	}
+	return time.Duration(c.LxdInterval) * time.Second
 }
 
 // GetHeartbeatIntervalDuration returns the heartbeat interval as a duration

@@ -99,6 +99,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	kubernetesTicker := time.NewTicker(a.config.GetKubernetesIntervalDuration())
 	defer kubernetesTicker.Stop()
 
+	lxdTicker := time.NewTicker(a.config.GetLxdIntervalDuration())
+	defer lxdTicker.Stop()
+
 	heartbeatTicker := time.NewTicker(a.config.GetHeartbeatIntervalDuration())
 	defer heartbeatTicker.Stop()
 
@@ -132,6 +135,11 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-kubernetesTicker.C:
 			if containsScope(a.config.Scope, "kubernetes") {
 				a.collectAndSendDelta(ctx, "kubernetes")
+			}
+
+		case <-lxdTicker.C:
+			if containsScope(a.config.Scope, "lxd") || containsScope(a.config.Scope, "lxc") {
+				a.collectAndSendDelta(ctx, "lxd")
 			}
 
 		case <-heartbeatTicker.C:

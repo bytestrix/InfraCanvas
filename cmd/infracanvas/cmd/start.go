@@ -7,7 +7,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
+	"infracanvas/pkg/discovery/lxd"
 )
+
+// containsStr reports whether s is present in xs.
+func containsStr(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
 
 var (
 	backendURL     string
@@ -71,6 +82,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Override scope from env if set.
 	if envScope := os.Getenv("INFRACANVAS_SCOPE"); envScope != "" {
 		cfg.Scope = splitComma(envScope)
+	}
+
+	// Zero-config LXC/LXD/Incus: the install script pins a fixed scope
+	// (host,docker,kubernetes), so auto-append "lxd" when a local LXD/Incus
+	// socket is present and it isn't already in scope. Nothing to discover
+	// otherwise, so this is a no-op on hosts without LXD.
+	if !containsStr(cfg.Scope, "lxd") && !containsStr(cfg.Scope, "lxc") && lxd.NewDiscovery().IsAvailable() {
+		cfg.Scope = append(cfg.Scope, "lxd")
 	}
 
 	cfg.RefreshSeconds = refreshSeconds
