@@ -30,13 +30,14 @@ const (
 )
 
 var (
-	servePort     int
-	servePrivate  bool
-	serveNoTunnel bool
-	serveReadOnly bool
-	serveUIToken  string
-	serveScope    []string
-	serveRefresh  int
+	servePort       int
+	servePrivate    bool
+	serveNoTunnel   bool
+	serveReadOnly   bool
+	serveUIToken    string
+	serveAgentToken string
+	serveScope      []string
+	serveRefresh    int
 )
 
 var serveCmd = &cobra.Command{
@@ -55,9 +56,14 @@ cloud security group, or you're on a private network), pass --no-tunnel:
     infracanvas serve --no-tunnel             # bind 0.0.0.0:7777
     infracanvas serve --no-tunnel --private   # bind 127.0.0.1:7777 (SSH tunnel)
 
+Other VMs can join this dashboard: serve prints a join command with the agent
+token; run it (or 'infracanvas start --backend <url> --token <t>') on any VM
+and it appears in the sidebar's machine list.
+
 Environment variables:
-  INFRACANVAS_UI_TOKEN  Auth token (default: random per run)
-  INFRACANVAS_SCOPE     Discovery scopes (default: host,docker,kubernetes)`,
+  INFRACANVAS_UI_TOKEN     Auth token (default: random per run)
+  INFRACANVAS_AGENT_TOKEN  Join token other VMs use (default: random per run)
+  INFRACANVAS_SCOPE        Discovery scopes (default: host,docker,kubernetes)`,
 	RunE: runServe,
 }
 
@@ -68,6 +74,7 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveNoTunnel, "no-tunnel", false, "Disable Cloudflare tunnel; bind the port directly")
 	serveCmd.Flags().BoolVar(&serveReadOnly, "read-only", false, "Block actions and terminals; viewers can only look (for public demos)")
 	serveCmd.Flags().StringVar(&serveUIToken, "token", "", "Override the UI auth token")
+	serveCmd.Flags().StringVar(&serveAgentToken, "agent-token", "", "Override the join token other VMs use to connect")
 	serveCmd.Flags().StringSliceVar(&serveScope, "discover", []string{"host", "docker", "lxd", "kubernetes"}, "Discovery scopes")
 	serveCmd.Flags().IntVar(&serveRefresh, "refresh", 30, "Seconds between discovery refreshes")
 }
@@ -84,14 +91,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	readOnly := serveReadOnly || os.Getenv("INFRACANVAS_READONLY") == "true"
 
 	token := resolveToken()
+	agentToken := resolveAgentToken()
 	uiFS, err := webui.FS()
 	if err != nil {
 		return fmt.Errorf("load embedded UI: %w", err)
 	}
 	srv := server.NewWithOptions(server.Options{
-		LocalMode: true,
-		UIToken:   token,
-		ReadOnly:  readOnly,
+		LocalMode:      true,
+		UIToken:        token,
+		AgentToken:     agentToken,
+		LocalMachineID: agent.MachineID(),
+		ReadOnly:       readOnly,
 	})
 	srv.MountUI(uiFS)
 
@@ -150,12 +160,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err := runstate.Update(func(s *runstate.State) {
 		s.Port = chosenPort
 		s.Token = token
+		s.AgentToken = agentToken
 		s.TunnelURL = tunnelURL
 	}); err != nil {
 		log.Printf("[state] write: %v", err)
 	}
 
 	printServeBanner(host, chosenPort, token, publicIP, tunnelURL)
+	printJoinBanner(chosenPort, agentToken, publicIP, tunnelURL)
 
 	go func() {
 		select {
@@ -178,6 +190,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	cfg := agent.DefaultWSConfig()
 	cfg.BackendURL = fmt.Sprintf("ws://127.0.0.1:%d", chosenPort)
+	cfg.AuthToken = agentToken
 	cfg.Scope = scopes
 	cfg.RefreshSeconds = serveRefresh
 	cfg.EnableRedaction = true
@@ -213,6 +226,16 @@ func resolveToken() string {
 		return t
 	}
 	return randomToken(12)
+}
+
+func resolveAgentToken() string {
+	if serveAgentToken != "" {
+		return serveAgentToken
+	}
+	if t := os.Getenv("INFRACANVAS_AGENT_TOKEN"); t != "" {
+		return t
+	}
+	return randomToken(16)
 }
 
 func randomToken(n int) string {
@@ -403,5 +426,45 @@ func printServeBanner(host string, port int, token, publicIP, tunnelURL string) 
 	fmt.Println()
 	fmt.Printf("  Auth token: %s\n", token)
 	fmt.Println(bar)
+	fmt.Println()
+}
+
+// printJoinBanner shows how to add more VMs to this dashboard.
+func printJoinBanner(port int, agentToken, publicIP, tunnelURL string) {
+	// Bound to loopback with no tunnel: other VMs can't reach us directly.
+	if tunnelURL == "" && servePrivate {
+		fmt.Println("  Add more VMs to this dashboard: expose this port (drop --private,")
+		fmt.Println("  or put a reverse proxy in front), then on each VM run:")
+		fmt.Printf("    infracanvas start --backend <this-hub-url> --token %s\n", agentToken)
+		fmt.Println()
+		return
+	}
+
+	// Pick the most stable address other VMs can reach.
+	joinURL := ""
+	note := ""
+	switch {
+	case publicIP != "":
+		joinURL = fmt.Sprintf("http://%s:%d", publicIP, port)
+	case tunnelURL != "":
+		joinURL = tunnelURL
+		note = "  (quick-tunnel URLs change on restart — fine for a trial;\n   use --no-tunnel or your own domain for a permanent setup)"
+	default:
+		if internal := detectInternalIP(); internal != "" {
+			joinURL = fmt.Sprintf("http://%s:%d", internal, port)
+		} else {
+			joinURL = fmt.Sprintf("http://<this-host>:%d", port)
+		}
+	}
+
+	fmt.Println("  Add another VM to this dashboard — run on the other VM:")
+	fmt.Println()
+	fmt.Printf("    \033[1mcurl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh \\\n      | sudo bash -s -- --join %s --token %s\033[0m\n", joinURL, agentToken)
+	fmt.Println()
+	fmt.Println("  or, with the binary already installed there:")
+	fmt.Printf("    infracanvas start --backend %s --token %s\n", joinURL, agentToken)
+	if note != "" {
+		fmt.Println(note)
+	}
 	fmt.Println()
 }

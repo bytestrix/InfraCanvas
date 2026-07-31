@@ -184,11 +184,16 @@ export interface VMState {
 // ─── Session API Types ────────────────────────────────────────────────────────
 
 export interface SessionInfo {
+  id: string
   code: string
+  machineId?: string
   hostname: string
   scope: string[]
+  online: boolean
+  nodeCount: number
   browserCount: number
   paired: boolean
+  local: boolean
 }
 
 // ─── Node Color Map ───────────────────────────────────────────────────────────

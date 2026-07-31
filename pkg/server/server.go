@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -84,9 +85,10 @@ type Envelope struct {
 
 // HelloData is sent by the agent on connect.
 type HelloData struct {
-	Hostname string   `json:"hostname"`
-	Scope    []string `json:"scope"`
-	Version  string   `json:"version"`
+	Hostname  string   `json:"hostname"`
+	Scope     []string `json:"scope"`
+	Version   string   `json:"version"`
+	MachineID string   `json:"machineId,omitempty"`
 }
 
 // PairCodeData is sent to the agent after connection.
@@ -126,6 +128,11 @@ type Options struct {
 	// /ws/canvas auto-binds to it. Used by `infracanvas serve`.
 	LocalMode bool
 
+	// LocalMachineID pins the implicit local session to the in-process
+	// agent's machine ID, so a remote agent joining the hub can never
+	// displace the local canvas. Empty falls back to first-agent-wins.
+	LocalMachineID string
+
 	// ReadOnly blocks all mutating browser messages at the relay: actions
 	// and exec/terminal sessions are rejected before they reach the agent.
 	// Viewing the graph and fetching logs still work. Used for public demos.
@@ -143,6 +150,7 @@ type Server struct {
 	agentToken     string
 	uiToken        string
 	localMode      bool
+	localMachineID string
 	readOnly       bool
 	allowedOrigins map[string]bool
 
@@ -184,6 +192,7 @@ func NewWithOptions(opts Options) *Server {
 		agentToken:     opts.AgentToken,
 		uiToken:        opts.UIToken,
 		localMode:      opts.LocalMode,
+		localMachineID: opts.LocalMachineID,
 		readOnly:       opts.ReadOnly,
 		allowedOrigins: map[string]bool{},
 	}
@@ -212,7 +221,7 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/ws/agent", s.handleAgentWS)
 	s.mux.HandleFunc("/ws/canvas", s.handleBrowserWS)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
-	s.mux.HandleFunc("/api/sessions", s.requireAgentToken(s.handleSessions))
+	s.mux.HandleFunc("/api/sessions", s.requireUIOrAgentToken(s.handleSessions))
 	return s
 }
 
@@ -235,6 +244,23 @@ func (s *Server) requireAgentToken(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 		next(w, r)
+	}
+}
+
+// requireUIOrAgentToken protects API routes readable by both the dashboard
+// (UI token via cookie/query) and agents/automation (bearer token). When both
+// tokens are configured, either grants access; a route stays open only if
+// neither token is set (loopback-only deployments).
+func (s *Server) requireUIOrAgentToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uiOK := s.uiToken != "" && s.checkUIToken(r)
+		agentOK := s.agentToken != "" && r.Header.Get("Authorization") == "Bearer "+s.agentToken
+		open := s.uiToken == "" && s.agentToken == ""
+		if uiOK || agentOK || open {
+			next(w, r)
+			return
+		}
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
 
@@ -343,22 +369,27 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	s.sessions.mu.RLock()
-	info := make([]map[string]interface{}, 0, len(s.sessions.byCode))
-	for code, sess := range s.sessions.byCode {
-		sess.mu.RLock()
-		info = append(info, map[string]interface{}{
-			"code":         code,
-			"id":           sess.ID,
-			"hostname":     sess.Hostname,
-			"scope":        sess.Scope,
-			"browserCount": len(sess.Browsers),
-			"paired":       !sess.PairedAt.IsZero(),
-			"pairedAt":     sess.PairedAt,
-		})
-		sess.mu.RUnlock()
+
+	s.localMu.RLock()
+	localID := ""
+	if s.localSession != nil {
+		localID = s.localSession.ID
 	}
-	s.sessions.mu.RUnlock()
+	s.localMu.RUnlock()
+
+	info := s.sessions.List()
+	for i := range info {
+		info[i].Local = info[i].ID == localID
+	}
+	sort.Slice(info, func(a, b int) bool {
+		if info[a].Local != info[b].Local {
+			return info[a].Local
+		}
+		if info[a].Hostname != info[b].Hostname {
+			return info[a].Hostname < info[b].Hostname
+		}
+		return info[a].ID < info[b].ID
+	})
 	_ = json.NewEncoder(w).Encode(info)
 }
 
@@ -378,14 +409,49 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 	conn := newSafeConn(raw)
 
-	sess := s.sessions.Create(conn)
-	log.Printf("[agent] connected  session=%s  code=%s", sess.ID, sess.PairCode)
+	// The agent's first message is HELLO. Read it before creating the session
+	// so a machine-identified agent resumes its previous session (keeping any
+	// attached browsers) instead of appearing as a new machine.
+	_ = raw.SetReadDeadline(time.Now().Add(15 * time.Second))
+	_, firstPayload, err := conn.ReadMessage()
+	if err != nil {
+		log.Printf("[agent] no HELLO from %s: %v", r.RemoteAddr, err)
+		conn.Close()
+		return
+	}
+	_ = raw.SetReadDeadline(time.Time{})
 
-	// In local mode the first agent becomes the implicit local session;
-	// browsers auto-bind to it without a pair code.
+	var firstEnv Envelope
+	var hello HelloData
+	if json.Unmarshal(firstPayload, &firstEnv) == nil && firstEnv.Type == MsgHello {
+		_ = json.Unmarshal(firstEnv.Data, &hello)
+	}
+
+	var sess *Session
+	resumed := false
+	if hello.MachineID != "" {
+		sess, resumed = s.sessions.UpsertByMachine(conn, hello.MachineID)
+	} else {
+		sess = s.sessions.Create(conn)
+	}
+	if resumed {
+		log.Printf("[agent] resumed  session=%s  machine=%s", sess.ID, hello.MachineID)
+	} else {
+		log.Printf("[agent] connected  session=%s  code=%s", sess.ID, sess.PairCode)
+	}
+
+	// In local mode the in-process agent (matched by machine ID) owns the
+	// implicit local session; without a configured local machine ID the first
+	// agent wins. Remote agents joining the hub never displace it.
 	if s.localMode {
 		s.localMu.Lock()
-		s.localSession = sess
+		if s.localMachineID != "" {
+			if hello.MachineID == s.localMachineID {
+				s.localSession = sess
+			}
+		} else if s.localSession == nil || s.localSession == sess {
+			s.localSession = sess
+		}
 		s.localMu.Unlock()
 	}
 
@@ -393,24 +459,19 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	if err := writeMsg(conn, MsgPairCode, PairCodeData{Code: sess.PairCode}); err != nil {
 		log.Printf("[agent] failed to send PAIR_CODE: %v", err)
 		conn.Close()
-		s.sessions.Delete(sess)
+		s.dropAgentConn(sess, conn)
 		return
+	}
+
+	// Process the HELLO we already consumed (updates hostname/scope and
+	// re-announces the agent to any browsers attached from a previous run).
+	if firstEnv.Type != "" {
+		s.routeAgentMessage(sess, firstEnv, firstPayload)
 	}
 
 	defer func() {
 		conn.Close()
-		s.sessions.Delete(sess)
-		if s.localMode {
-			s.localMu.Lock()
-			if s.localSession == sess {
-				s.localSession = nil
-			}
-			s.localMu.Unlock()
-		}
-		log.Printf("[agent] disconnected  session=%s", sess.ID)
-		// Notify all paired browsers.
-		msg := mustMarshalEnvelope(MsgAgentDisconnected, struct{}{})
-		broadcastToBrowsers(sess, msg)
+		s.dropAgentConn(sess, conn)
 	}()
 
 	for {
@@ -424,6 +485,41 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 		}
 		s.routeAgentMessage(sess, env, payload)
 	}
+}
+
+// dropAgentConn handles an agent connection going away. Machine-identified
+// sessions are retained offline (browsers stay attached and the host list
+// keeps the machine with an offline marker); legacy pair-code sessions are
+// deleted as before. If the session was already resumed by a newer
+// connection, this is a no-op.
+func (s *Server) dropAgentConn(sess *Session, conn *SafeConn) {
+	sess.mu.Lock()
+	if sess.AgentConn != conn {
+		sess.mu.Unlock()
+		return // a newer connection already took over
+	}
+	machineOwned := sess.MachineID != ""
+	sess.AgentConn = nil
+	sess.Online = false
+	sess.LastSeen = time.Now()
+	sess.mu.Unlock()
+
+	if machineOwned {
+		log.Printf("[agent] offline  session=%s  machine=%s", sess.ID, sess.MachineID)
+	} else {
+		s.sessions.Delete(sess)
+		if s.localMode {
+			s.localMu.Lock()
+			if s.localSession == sess {
+				s.localSession = nil
+			}
+			s.localMu.Unlock()
+		}
+		log.Printf("[agent] disconnected  session=%s", sess.ID)
+	}
+
+	// Notify all paired browsers.
+	broadcastToBrowsers(sess, mustMarshalEnvelope(MsgAgentDisconnected, struct{}{}))
 }
 
 func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
@@ -448,10 +544,17 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		broadcastToBrowsers(sess, msg)
 
 	case MsgGraphSnapshot:
-		// Cache for late joiners, then relay.
+		// Cache for late joiners, count nodes for the host list, then relay.
+		var snap struct {
+			Data struct {
+				Nodes []json.RawMessage `json:"nodes"`
+			} `json:"data"`
+		}
+		_ = json.Unmarshal(raw, &snap)
 		sess.mu.Lock()
 		sess.LastSnapshot = make([]byte, len(raw))
 		copy(sess.LastSnapshot, raw)
+		sess.NodeCount = len(snap.Data.Nodes)
 		sess.mu.Unlock()
 
 		broadcastToBrowsers(sess, raw)
@@ -481,7 +584,9 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		broadcastToBrowsers(sess, raw)
 
 	case MsgHeartbeat:
-		// Nothing to do — gorilla handles ping/pong separately.
+		sess.mu.Lock()
+		sess.LastSeen = time.Now()
+		sess.mu.Unlock()
 
 	default:
 		log.Printf("[agent] unknown message type: %s", env.Type)
@@ -506,30 +611,63 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	var sess *Session
 
 	if s.localMode {
-		// Auto-pair: bind to the local session without requiring a PAIR message.
-		// If the agent hasn't connected yet, wait briefly for it.
-		for i := 0; i < 50; i++ { // up to ~5s
-			s.localMu.RLock()
-			sess = s.localSession
-			s.localMu.RUnlock()
-			if sess != nil {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if sess == nil {
-			_ = writeMsg(conn, MsgError, map[string]string{"message": "agent not yet ready — refresh in a moment"})
+		// The UI opens one socket per machine and sends PAIR with a key:
+		// the literal 'local' (this machine's canvas) or a session/machine
+		// ID from /api/sessions. A non-PAIR first message is treated as
+		// 'local' for back-compat and processed after attach.
+		var pendingEnv *Envelope
+		var pendingPayload []byte
+		key := "local"
+
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
 			return
 		}
-		s.sessions.mu.Lock()
-		sess.mu.Lock()
-		sess.Browsers = append(sess.Browsers, conn)
-		if sess.PairedAt.IsZero() {
-			sess.PairedAt = time.Now()
+		var env Envelope
+		if err := json.Unmarshal(payload, &env); err == nil {
+			if env.Type == "PAIR" {
+				var req PairRequest
+				_ = json.Unmarshal(env.Data, &req)
+				if req.Code != "" {
+					key = req.Code
+				}
+			} else {
+				pendingEnv, pendingPayload = &env, payload
+			}
 		}
-		sess.mu.Unlock()
-		s.sessions.mu.Unlock()
-		log.Printf("[browser] auto-paired (local)  session=%s  browsers=%d", sess.ID, sess.BrowserCount())
+
+		if key == "local" {
+			// Bind to the local session; if the in-process agent hasn't
+			// connected yet, wait briefly for it.
+			for i := 0; i < 50; i++ { // up to ~5s
+				s.localMu.RLock()
+				sess = s.localSession
+				s.localMu.RUnlock()
+				if sess != nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			if sess == nil {
+				_ = writeMsg(conn, MsgError, map[string]string{"message": "agent not yet ready — refresh in a moment"})
+				return
+			}
+			s.sessions.Attach(sess, conn)
+			log.Printf("[browser] paired (local)  session=%s  browsers=%d", sess.ID, sess.BrowserCount())
+		} else {
+			var ok bool
+			sess, ok = s.sessions.FindByAny(key)
+			if !ok {
+				_ = writeMsg(conn, MsgError, map[string]string{"message": "unknown machine"})
+				return
+			}
+			s.sessions.Attach(sess, conn)
+			log.Printf("[browser] paired  session=%s  key=%s  browsers=%d", sess.ID, key, sess.BrowserCount())
+		}
+
+		if pendingEnv != nil {
+			s.handleBrowserMessage(sess, conn, *pendingEnv, pendingPayload)
+		}
 	} else {
 		// Shared-relay mode: first message must be PAIR with a code.
 		_, payload, err := conn.ReadMessage()
@@ -547,17 +685,24 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var ok bool
-		sess, ok = s.sessions.AddBrowser(req.Code, conn)
+		sess, ok = s.sessions.FindByAny(req.Code)
 		if !ok {
 			_ = writeMsg(conn, MsgError, map[string]string{"message": "unknown pair code"})
 			return
 		}
+		s.sessions.Attach(sess, conn)
 		log.Printf("[browser] paired  session=%s  code=%s  browsers=%d",
 			sess.ID, req.Code, sess.BrowserCount())
 	}
 
-	// Notify agent it has a new viewer.
-	go func() { _ = writeMsg(sess.AgentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()}) }()
+	// Notify agent it has a new viewer (if it's currently connected).
+	sess.mu.RLock()
+	agentConn := sess.AgentConn
+	online := sess.Online
+	sess.mu.RUnlock()
+	if agentConn != nil {
+		go func() { _ = writeMsg(agentConn, MsgPaired, PairedData{BrowserCount: sess.BrowserCount()}) }()
+	}
 
 	// Late joiners missed the HELLO broadcast — replay agent identity so the
 	// browser learns hostname, scope, and the read-only flag immediately.
@@ -580,6 +725,12 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		_ = conn.WriteMessage(websocket.TextMessage, lastSnap)
 	}
 
+	// Attaching to an offline machine shows its last-known state; tell the
+	// browser the agent is away so the UI can badge it.
+	if !online {
+		_ = writeMsg(conn, MsgAgentDisconnected, struct{}{})
+	}
+
 	defer func() {
 		s.sessions.RemoveBrowser(sess, conn)
 		log.Printf("[browser] disconnected  session=%s  browsers=%d",
@@ -596,29 +747,34 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(payload, &env); err != nil {
 			continue
 		}
-		switch env.Type {
-		case MsgBrowserAction:
-			if s.readOnly && !isReadOnlySafeAction(env.Data) {
-				s.rejectReadOnlyAction(conn, env.Data)
-				continue
+		s.handleBrowserMessage(sess, conn, env, payload)
+	}
+}
+
+// handleBrowserMessage forwards COMMAND and BROWSER_ACTION messages to the agent.
+func (s *Server) handleBrowserMessage(sess *Session, conn *SafeConn, env Envelope, payload []byte) {
+	switch env.Type {
+	case MsgBrowserAction:
+		if s.readOnly && !isReadOnlySafeAction(env.Data) {
+			s.rejectReadOnlyAction(conn, env.Data)
+			return
+		}
+		// Translate BROWSER_ACTION → ACTION_REQUEST before forwarding
+		env.Type = MsgActionRequest
+		payload, _ = json.Marshal(env)
+		fallthrough
+	case MsgCommand, MsgExecStart, MsgExecInput, MsgExecResize, MsgExecEnd:
+		if s.readOnly && (env.Type == MsgExecStart || env.Type == MsgExecInput || env.Type == MsgExecResize) {
+			if env.Type == MsgExecStart {
+				s.rejectReadOnlyExec(conn, env.Data)
 			}
-			// Translate BROWSER_ACTION → ACTION_REQUEST before forwarding
-			env.Type = MsgActionRequest
-			payload, _ = json.Marshal(env)
-			fallthrough
-		case MsgCommand, MsgExecStart, MsgExecInput, MsgExecResize, MsgExecEnd:
-			if s.readOnly && (env.Type == MsgExecStart || env.Type == MsgExecInput || env.Type == MsgExecResize) {
-				if env.Type == MsgExecStart {
-					s.rejectReadOnlyExec(conn, env.Data)
-				}
-				continue
-			}
-			sess.mu.RLock()
-			agentConn := sess.AgentConn
-			sess.mu.RUnlock()
-			if agentConn != nil {
-				_ = agentConn.WriteMessage(websocket.TextMessage, payload)
-			}
+			return
+		}
+		sess.mu.RLock()
+		agentConn := sess.AgentConn
+		sess.mu.RUnlock()
+		if agentConn != nil {
+			_ = agentConn.WriteMessage(websocket.TextMessage, payload)
 		}
 	}
 }

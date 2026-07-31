@@ -17,10 +17,11 @@ import (
 
 // State is the on-disk snapshot. Fields are optional; readers tolerate zero values.
 type State struct {
-	TunnelURL string    `json:"tunnel_url,omitempty"`
-	Port      int       `json:"port,omitempty"`
-	Token     string    `json:"token,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	TunnelURL  string    `json:"tunnel_url,omitempty"`
+	Port       int       `json:"port,omitempty"`
+	Token      string    `json:"token,omitempty"`
+	AgentToken string    `json:"agent_token,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at,omitempty"`
 }
 
 // Dir returns the directory used to hold runtime state.

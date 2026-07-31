@@ -65,11 +65,15 @@ func setupReadOnly(t *testing.T) (agent, browser *websocket.Conn) {
 
 	agent = dialWS(t, srv, "/ws/agent")
 	t.Cleanup(func() { agent.Close() })
-	readUntil(t, agent, MsgPairCode)
+	// Real agents send HELLO as their first message; the server reads it
+	// before creating the session.
 	sendEnvelope(t, agent, MsgHello, HelloData{Hostname: "demo-vm", Scope: []string{"docker"}})
+	readUntil(t, agent, MsgPairCode)
 
 	browser = dialWS(t, srv, "/ws/canvas")
 	t.Cleanup(func() { browser.Close() })
+	// The dashboard sends PAIR on open; 'local' selects the local session.
+	sendEnvelope(t, browser, "PAIR", PairRequest{Code: "local"})
 
 	env := readUntil(t, browser, MsgAgentConnected)
 	var d AgentConnectedData

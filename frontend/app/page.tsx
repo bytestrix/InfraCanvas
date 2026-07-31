@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM } from '@/lib/wsManager'
+import { fetchSessions } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
 import { useTheme } from '@/hooks/useTheme'
 import { AlertCircle } from 'lucide-react'
+import type { SessionInfo } from '@/types'
 
 const LOCAL_KEY = 'local'
+const SESSIONS_POLL_MS = 10_000
+
+// The websocket/store key for a machine: the hub's own agent uses the
+// 'local' alias, remote agents their session id.
+const machineKey = (m: SessionInfo) => (m.local ? LOCAL_KEY : m.id)
 
 // All values are CSS variables — update automatically when data-theme changes
 const T = {
@@ -56,19 +63,36 @@ const IcMoon = () => (
 )
 
 export default function App() {
-  const { vms } = useVMStore()
-  const vm = vms[LOCAL_KEY]
+  const { vms, machines, activeKey, setMachines, setActiveKey } = useVMStore()
+  const vm = vms[activeKey]
   const [view, setView] = useState<View>('overview')
 
   useEffect(() => {
     if (!vms[LOCAL_KEY]) connectVM(LOCAL_KEY)
   }, [vms])
 
+  // Keep the machine list fresh; failures (e.g. old server) leave it empty,
+  // which hides the section entirely.
+  useEffect(() => {
+    let stop = false
+    const poll = () => fetchSessions().then(m => { if (!stop) setMachines(m) }).catch(() => {})
+    poll()
+    const t = setInterval(poll, SESSIONS_POLL_MS)
+    return () => { stop = true; clearInterval(t) }
+  }, [setMachines])
+
+  const selectMachine = (m: SessionInfo) => {
+    const key = machineKey(m)
+    if (!vms[key]) connectVM(key)
+    setActiveKey(key)
+  }
+
   return (
     <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', height:'100vh', background:T.bg, fontFamily:SANS, overflow:'hidden' }}>
-      <Sidebar vm={vm} view={view} onViewChange={setView} />
+      <Sidebar vm={vm} view={view} onViewChange={setView}
+        machines={machines} activeKey={activeKey} onSelectMachine={selectMachine} />
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
-        <MainContent vm={vm} view={view} onSwitchToCanvas={() => setView('canvas')} />
+        <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
       </main>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     </div>
@@ -76,7 +100,10 @@ export default function App() {
 }
 
 /* ── Sidebar ── */
-function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange: (v: View) => void }) {
+function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine }: {
+  vm: any; view: View; onViewChange: (v: View) => void
+  machines: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
+}) {
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
   const { theme, toggle } = useTheme()
@@ -119,6 +146,40 @@ function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange
           )
         })}
       </div>
+
+      {/* Machines — hub mode: hidden until the server reports sessions */}
+      {machines.length > 0 && (
+        <div style={{ marginTop:18 }}>
+          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:T.ink4, padding:'0 8px 6px', fontFamily:MONO }}>
+            Machines
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
+            {machines.map((m) => {
+              const key = machineKey(m)
+              const active = key === activeKey
+              return (
+                <button key={m.id} onClick={() => onSelectMachine(m)} title={m.hostname} style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  height:28, padding:'0 8px', borderRadius:7,
+                  fontSize:12.5, border:'none', cursor:'pointer', width:'100%', textAlign:'left',
+                  color: active ? T.ink : T.ink2,
+                  background: active ? T.surface : 'transparent',
+                  fontFamily: SANS, transition:'all 0.1s',
+                }}
+                  onMouseEnter={e=>{ if(!active){(e.currentTarget as any).style.color=T.ink;(e.currentTarget as any).style.background=T.surface} }}
+                  onMouseLeave={e=>{ if(!active){(e.currentTarget as any).style.color=T.ink2;(e.currentTarget as any).style.background='transparent'} }}
+                >
+                  <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: m.online ? H.healthy : T.ink4 }} />
+                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                    {m.hostname || m.id}
+                  </span>
+                  {m.local && <span style={{ fontSize:9.5, color:T.ink4, fontFamily:MONO, flexShrink:0 }}>local</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Spacer */}
       <div style={{ flex:1 }} />
@@ -175,7 +236,7 @@ function Sidebar({ vm, view, onViewChange }: { vm: any; view: View; onViewChange
 }
 
 /* ── Main content router ── */
-function MainContent({ vm, view, onSwitchToCanvas }: { vm: any; view: View; onSwitchToCanvas: () => void }) {
+function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: string; view: View; onSwitchToCanvas: () => void }) {
   const isLoading = !vm || vm.status === 'connecting' || vm.status === 'paired'
   const isError   = vm?.status === 'error'
 
@@ -198,7 +259,7 @@ function MainContent({ vm, view, onSwitchToCanvas }: { vm: any; view: View; onSw
     <AgentOverview
       graph={vm.graph}
       hostname={vm.hostname ?? null}
-      vmCode={LOCAL_KEY}
+      vmCode={vmKey}
       onSwitchToCanvas={onSwitchToCanvas}
     />
   )

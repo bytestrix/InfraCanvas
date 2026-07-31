@@ -1,12 +1,16 @@
 'use client'
 
 import { create } from 'zustand'
-import { VMState, GraphOutput, GraphDiff, VMStatus } from '@/types'
+import { VMState, GraphOutput, GraphDiff, VMStatus, SessionInfo } from '@/types'
 
 interface VMStore {
   vms: Record<string, VMState>
+  machines: SessionInfo[]
+  activeKey: string
 
   // Actions
+  setMachines: (machines: SessionInfo[]) => void
+  setActiveKey: (key: string) => void
   addVM: (code: string) => void
   removeVM: (code: string) => void
   setVMStatus: (code: string, status: VMStatus) => void
@@ -20,6 +24,11 @@ interface VMStore {
 
 export const useVMStore = create<VMStore>((set) => ({
   vms: {},
+  machines: [],
+  activeKey: 'local',
+
+  setMachines: (machines) => set({ machines }),
+  setActiveKey: (key) => set({ activeKey: key }),
 
   addVM: (code) =>
     set((state) => ({

@@ -141,9 +141,10 @@ func (a *WSAgent) Run(ctx context.Context) error {
 	// Send HELLO.
 	hostname, _ := os.Hostname()
 	if err := a.send("HELLO", map[string]interface{}{
-		"hostname": hostname,
-		"scope":    a.cfg.Scope,
-		"version":  "1.0.0",
+		"hostname":  hostname,
+		"scope":     a.cfg.Scope,
+		"version":   "1.0.0",
+		"machineId": MachineID(),
 	}); err != nil {
 		return fmt.Errorf("failed to send HELLO: %w", err)
 	}

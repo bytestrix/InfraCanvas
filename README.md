@@ -12,6 +12,8 @@
   <a href="https://infracanvas.app">Website</a> ·
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
   <a href="#-quick-start">Quick start</a> ·
+  <a href="#-can-i-trust-this-on-my-vm">Trust</a> ·
+  <a href="#-multiple-vms--one-dashboard">Multiple VMs</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-how-it-works">How it works</a> ·
   <a href="#-security-model">Security</a> ·
@@ -30,9 +32,9 @@
 
 You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-InfraCanvas replaces that ritual with one command. It automatically discovers every container, pod, service, volume and network on the host — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. You can open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page.
+InfraCanvas replaces that ritual with one binary you run yourself. It automatically discovers every container, pod, service, volume and network on the host — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. You can open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) and they all land in one dashboard.
 
-It is not another list. It is a **map** — what runs where, what talks to what, and what's broken — in one glance.
+It is not another list. It is a **map** — what runs where, what talks to what, and what's broken — in one glance. It is self-hosted end to end: your infrastructure data never leaves your machines.
 
 <p align="center">
   <img src="docs/screenshots/canvas-view.png" alt="InfraCanvas — live topology canvas" width="960" />
@@ -42,13 +44,43 @@ It is not another list. It is a **map** — what runs where, what talks to what,
 
 ## 🚀 Quick start
 
-On any Linux VM (cloud or bare metal):
+Everything runs on **your** machine — discovery, relay, and dashboard are one process, one binary. Nothing is sent to us; there is no backend, no account, no telemetry ([details](#-can-i-trust-this-on-my-vm)). Pick the path that matches how you like to run software:
+
+### Option A — Build from source, keep it fully private
+
+You compile it, you read it, nothing enters your VM that you didn't build. Requires Go 1.21+ and Node 20+:
+
+```bash
+git clone https://github.com/bytestrix/InfraCanvas.git
+cd InfraCanvas && make all
+
+./bin/infracanvas serve --no-tunnel --private
+# → http://localhost:7777/?token=…
+```
+
+Reach it from your laptop over SSH (`ssh -L 7777:127.0.0.1:7777 user@vm`), open your own port with `--no-tunnel`, or put [Nginx or Caddy in front](#-self-hosting-without-cloudflare) with your own domain and TLS. Your network rules, your call.
+
+### Option B — Release binary, your own network rules
+
+Grab a prebuilt binary from [Releases](https://github.com/bytestrix/InfraCanvas/releases/latest), make it executable, run it the same way:
+
+```bash
+curl -fsSLO https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-linux-amd64
+chmod +x infracanvas-linux-amd64
+
+./infracanvas-linux-amd64 serve --no-tunnel --private   # localhost only, SSH-tunnel in
+./infracanvas-linux-amd64 serve --no-tunnel             # bind 0.0.0.0:7777, open the port yourself
+```
+
+No installer, no systemd, no firewall changes made on your behalf — just a static binary you can delete when done.
+
+### Option C — One-command install (fastest way to try it)
+
+If you'd rather have it running in 30 seconds — installer, systemd unit, and a free outbound-only [Cloudflare quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) URL included ([read the script first](install-agent.sh) — it's one file of plain bash):
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
-
-In under 30 seconds:
 
 ```
 ✓ InfraCanvas installed and running
@@ -59,25 +91,26 @@ In under 30 seconds:
   Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
 ```
 
-Open the URL — your infrastructure is live on the canvas. **No Docker required. No firewall changes. No signup. No config files.**
-
-The URL is a free [Cloudflare quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — outbound-only, works from anywhere, no inbound port needed.
+The tunnel is optional even here — every private-by-default flag works through the installer too:
 
 <details>
 <summary><strong>Install options</strong></summary>
 
 ```bash
-# Custom port (default 7777) — only matters with --no-tunnel
-curl -fsSL .../install.sh | bash -s -- --port 8888
-
 # Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly
 curl -fsSL .../install.sh | bash -s -- --no-tunnel
 
 # Bind 127.0.0.1 only; reach via SSH tunnel (implies --no-tunnel)
 curl -fsSL .../install.sh | bash -s -- --private
 
+# Custom port (default 7777) — only matters with --no-tunnel
+curl -fsSL .../install.sh | bash -s -- --port 8888
+
 # Read-only: viewers can look, not touch — public demos and dashboards on a TV
 curl -fsSL .../install.sh | bash -s -- --read-only
+
+# Agent-only: join this VM to an existing hub (see Multiple VMs below)
+curl -fsSL .../install.sh | bash -s -- --join <hub-url> --token <join-token>
 
 # Pin a specific version
 curl -fsSL .../install.sh | bash -s -- --version v0.12.1
@@ -86,16 +119,9 @@ curl -fsSL .../install.sh | bash -s -- --version v0.12.1
 </details>
 
 <details>
-<summary><strong>Multiple VMs</strong></summary>
-
-Each VM is independent. Install on each one, open the printed URL for each in a separate tab. The binary is intentionally one-VM-per-dashboard.
-
-</details>
-
-<details>
 <summary><strong>Run on your laptop</strong></summary>
 
-Build from source (see [Building from source](#-building-from-source)), then:
+Build from source (Option A), then:
 
 ```bash
 infracanvas serve
@@ -105,6 +131,42 @@ infracanvas serve
 You'll see your laptop's Docker containers and Kubernetes context on the canvas.
 
 </details>
+
+---
+
+## 🔐 Can I trust this on my VM?
+
+You should ask that about anything you run on a production box. Here's the model, verifiable in this repo:
+
+- **Your data never leaves your machines.** Discovery, the relay, and the dashboard all run in one process on your VM. There is no cloud backend, no account, no telemetry, no phone-home. The only outbound connection is the optional Cloudflare tunnel — and you can turn it off.
+- **The tunnel is a convenience, not a requirement.** `--no-tunnel` binds a port you open yourself; `--private` binds `127.0.0.1` so the only way in is your own SSH. Zero third parties involved.
+- **Everything is readable before you run it.** The [installer](install-agent.sh) is one file of plain bash. The whole product is AGPL-3.0 — build it from source in two commands and run exactly what you compiled.
+- **Auth by default.** Every install generates a random token; without it every request gets `401`. Secrets in env vars are [redacted](#-security-model) before they ever reach the UI layer.
+- **Runs as your user, not root**, with only the access you already have (docker group, your kubeconfig).
+
+Full details in the [Security model](#-security-model) and [SECURITY.md](SECURITY.md).
+
+---
+
+## 💻 Multiple VMs — one dashboard
+
+One VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket — no ports opened, nothing installed beyond the agent.
+
+```bash
+# On the hub VM:
+infracanvas serve      # prints a join token + ready-made join command
+
+# On every other VM (copy the command serve printed):
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh \
+  | sudo bash -s -- --join <hub-url> --token <join-token>
+
+# or, with the binary already there:
+infracanvas start --backend <hub-url> --token <join-token>
+```
+
+Each machine appears in the sidebar's **Machines** list within seconds — click to switch between live canvases. Agents reconnect automatically and keep their identity across restarts.
+
+Prefer fully isolated dashboards instead? Just install normally on each VM — every one gets its own URL.
 
 ---
 
@@ -134,8 +196,11 @@ Env vars (secrets auto-masked), port mappings, volume mounts, image details, ser
 ### Zero dependencies
 One static Go binary with the dashboard embedded. Works with Docker, Kubernetes, plain systemd services, PM2 — none of them required.
 
+### Many VMs, one canvas
+Run the dashboard on one VM and join the rest as outbound-only agents — no inbound ports on the joined machines. Switch between them from the sidebar. See [Multiple VMs](#-multiple-vms--one-dashboard).
+
 ### Secure by default
-Binds localhost. Outbound-only Cloudflare tunnel. Random per-install auth token. Secret redaction before data leaves the discovery layer. Runs as your user, not root. Optional `--read-only` mode for public dashboards.
+Binds localhost. Tunnel is optional and outbound-only. Random per-install auth token, separate token for joining agents. Secret redaction before data leaves the discovery layer. Runs as your user, not root. Optional `--read-only` mode for public dashboards.
 
 ---
 
@@ -164,7 +229,17 @@ Binds localhost. Outbound-only Cloudflare tunnel. Random per-install auth token.
               └──────────┘
 ```
 
-One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. A bundled `cloudflared` opens an outbound-only tunnel so you get a public HTTPS URL with no inbound firewall rule. Your browser is just a client.
+One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. Your browser is just a client. The tunnel above is optional — with `--no-tunnel` or `--private` the diagram loses its `cloudflared` box entirely and nothing leaves your network.
+
+Adding more VMs keeps the same shape: the hub's relay accepts extra agents, each connecting **outbound** to the hub.
+
+```
+   other-vm-1 ──┐  outbound WS
+   other-vm-2 ──┤─────────────▶  hub-vm  ◀── browser
+   other-vm-3 ──┘  (agent only)   (relay + dashboard)
+```
+
+Joined VMs open no inbound port and serve no UI — they only push their graph to the hub.
 
 ---
 
@@ -247,6 +322,8 @@ No public exposure, no domain, no TLS setup.
 
 **The auth token.** Every install generates a random 24-character token saved to `/etc/infracanvas/config.env`. The dashboard requires it on first visit (`?token=…`); after that it's in an HTTP-only cookie. Without the token, every request returns `401`. Treat the URL+token like an SSH key for the box.
 
+**Joining agents.** In hub mode the relay issues a separate join token; an agent that can't present it is rejected at the WebSocket handshake. Joined VMs connect outbound only — the hub never dials into them, so they need no open port.
+
 **Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action and terminal request server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen.
 
 **Secret redaction.** Env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer.
@@ -274,6 +351,13 @@ INFRACANVAS_PORT=7777
 INFRACANVAS_TUNNEL=true
 INFRACANVAS_PRIVATE=false
 INFRACANVAS_READONLY=false
+```
+
+On a VM installed with `--join`, the same file instead holds the hub address and join token:
+
+```bash
+INFRACANVAS_BACKEND=https://hub.example.com
+INFRACANVAS_TOKEN=<join-token>
 ```
 
 Edit, then `sudo systemctl restart infracanvas`.
@@ -339,7 +423,7 @@ InfraCanvas/
 │   ├── health/               # health status calculation
 │   └── redactor/             # strips sensitive env vars
 ├── frontend/
-│   ├── app/page.tsx          # single-VM dashboard, auto-connects on mount
+│   ├── app/page.tsx          # dashboard shell, machine switcher, auto-connects local
 │   ├── components/canvas/    # ReactFlow canvas, node detail panel, terminal, logs
 │   ├── lib/wsManager.ts      # WS client
 │   └── store/vmStore.ts      # Zustand state

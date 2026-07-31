@@ -469,7 +469,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const hc = HEALTH_COLOR[node.health] ?? '#6b7280'
   const actions = ACTIONS[node.type] ?? []
   const { vms } = useVMStore()
-  const readOnly = Object.values(vms)[0]?.readOnly ?? false
+  const readOnly = vms[vmCode]?.readOnly ?? false
 
   const [activeActionId, setActiveActionId] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
