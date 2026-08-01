@@ -233,20 +233,6 @@ func (s *Server) MountUI(fsys fs.FS) {
 	s.mux.Handle("/", s.requireUIAuth(fileServer))
 }
 
-// requireAgentToken protects API routes with the agent shared secret.
-func (s *Server) requireAgentToken(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.agentToken != "" {
-			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+s.agentToken {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		next(w, r)
-	}
-}
-
 // requireUIOrAgentToken protects API routes readable by both the dashboard
 // (UI token via cookie/query) and agents/automation (bearer token). When both
 // tokens are configured, either grants access; a route stays open only if
