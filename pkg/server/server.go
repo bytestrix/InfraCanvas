@@ -156,6 +156,10 @@ type Server struct {
 
 	localMu      sync.RWMutex
 	localSession *Session
+
+	joinMu      sync.RWMutex
+	joinURL     string // reachable address other VMs should dial; "" hides Add machine
+	joinCaveat  string // human note, e.g. quick-tunnel URLs change on restart
 }
 
 // New creates a Server using environment-based config (legacy SaaS-style).
@@ -222,6 +226,7 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/ws/canvas", s.handleBrowserWS)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/sessions", s.requireUIOrAgentToken(s.handleSessions))
+	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
 	return s
 }
 
@@ -350,6 +355,31 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":   "ok",
 		"sessions": s.sessions.ActiveCount(),
 		"time":     time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// SetJoinInfo publishes the address other VMs should use to join this hub.
+// The dashboard's "Add machine" flow reads it via /api/join-info. An empty
+// url hides the flow (e.g. --private with no reachable address). Safe to call
+// again when the address changes (tunnel restarts with a new hostname).
+func (s *Server) SetJoinInfo(url, caveat string) {
+	s.joinMu.Lock()
+	s.joinURL, s.joinCaveat = url, caveat
+	s.joinMu.Unlock()
+}
+
+// handleJoinInfo returns everything the dashboard needs to render a
+// copy-paste join command. Gated by the same auth as /api/sessions: the
+// join token must never be readable without the UI token.
+func (s *Server) handleJoinInfo(w http.ResponseWriter, r *http.Request) {
+	s.joinMu.RLock()
+	url, caveat := s.joinURL, s.joinCaveat
+	s.joinMu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"joinUrl": url,
+		"token":   s.agentToken,
+		"caveat":  caveat,
 	})
 }
 

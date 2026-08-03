@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM } from '@/lib/wsManager'
-import { fetchSessions } from '@/lib/api'
+import { fetchSessions, fetchJoinInfo, type JoinInfo } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
@@ -87,22 +87,117 @@ export default function App() {
     setActiveKey(key)
   }
 
+  const [showAddMachine, setShowAddMachine] = useState(false)
+
   return (
     <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', height:'100vh', background:T.bg, fontFamily:SANS, overflow:'hidden' }}>
       <Sidebar vm={vm} view={view} onViewChange={setView}
-        machines={machines} activeKey={activeKey} onSelectMachine={selectMachine} />
+        machines={machines} activeKey={activeKey} onSelectMachine={selectMachine}
+        onAddMachine={() => setShowAddMachine(true)} />
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
         <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
       </main>
+      {showAddMachine && <AddMachineModal onClose={() => setShowAddMachine(false)} />}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     </div>
   )
 }
 
+/* ── Add machine modal ── */
+function AddMachineModal({ onClose }: { onClose: () => void }) {
+  const [info, setInfo] = useState<JoinInfo | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    fetchJoinInfo().then(setInfo).catch(() => setFailed(true))
+  }, [])
+
+  const reachable = !!info?.joinUrl
+  const cmd = reachable
+    ? `curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | sudo bash -s -- --join ${info!.joinUrl} --token ${info!.token}`
+    : ''
+
+  const copy = () => {
+    navigator.clipboard?.writeText(cmd).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    })
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'var(--overlay, rgba(0,0,0,0.55))', zIndex:100,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        maxWidth:560, width:'100%', background:T.surface, border:`1px solid ${T.line}`,
+        borderRadius:14, padding:'22px 24px 20px', display:'flex', flexDirection:'column', gap:14,
+      }}>
+        <div>
+          <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Add a machine</div>
+          <div style={{ fontSize:12.5, color:T.ink3, marginTop:4, lineHeight:1.5 }}>
+            Run this on the VM you want on the canvas. It connects <strong>outbound-only</strong> to
+            this dashboard — no port is opened on that VM.
+          </div>
+        </div>
+
+        {failed && (
+          <div style={{ fontSize:12.5, color:T.ink2, padding:'10px 12px', borderRadius:8, background:T.bg, border:`1px solid ${T.line}` }}>
+            Couldn&apos;t load join info — the server may be an older version. Run{' '}
+            <code style={{ fontFamily:MONO }}>infracanvas url</code> on the hub VM to see the join command.
+          </div>
+        )}
+
+        {info && !reachable && (
+          <div style={{ fontSize:12.5, color:T.ink2, padding:'10px 12px', borderRadius:8, background:T.bg, border:`1px solid ${T.line}`, lineHeight:1.6 }}>
+            This dashboard isn&apos;t reachable from other machines (it&apos;s bound privately).
+            Restart without <code style={{ fontFamily:MONO }}>--private</code>, or put a reverse proxy
+            in front, then on each VM run:{' '}
+            <code style={{ fontFamily:MONO }}>infracanvas start --backend &lt;this-hub-url&gt; --token {info.token}</code>
+          </div>
+        )}
+
+        {reachable && (
+          <>
+            <div style={{ position:'relative' }}>
+              <pre style={{
+                margin:0, padding:'12px 14px', borderRadius:9, background:T.bg,
+                border:`1px solid ${T.line}`, fontSize:11.5, fontFamily:MONO, color:T.ink2,
+                whiteSpace:'pre-wrap', wordBreak:'break-all', lineHeight:1.6,
+              }}>{cmd}</pre>
+              <button onClick={copy} style={{
+                position:'absolute', top:8, right:8, fontSize:11, fontFamily:MONO,
+                padding:'3px 9px', borderRadius:6, cursor:'pointer',
+                border:`1px solid ${T.line2}`, background:T.surface, color: copied ? H.healthy : T.ink2,
+              }}>{copied ? 'copied ✓' : 'copy'}</button>
+            </div>
+            {info!.caveat && (
+              <div style={{ fontSize:11.5, color:T.ink4, lineHeight:1.5 }}>Note: {info!.caveat}</div>
+            )}
+            <div style={{ fontSize:11.5, color:T.ink4, lineHeight:1.5 }}>
+              Binary already installed on that VM? Run{' '}
+              <code style={{ fontFamily:MONO }}>infracanvas start --backend {info!.joinUrl} --token {info!.token}</code>
+            </div>
+          </>
+        )}
+
+        <div style={{ display:'flex', justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={{
+            fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor:'pointer',
+            border:`1px solid ${T.line2}`, background:'transparent', color:T.ink2, fontFamily:SANS,
+          }}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Sidebar ── */
-function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine }: {
+function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine, onAddMachine }: {
   vm: any; view: View; onViewChange: (v: View) => void
   machines: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
+  onAddMachine: () => void
 }) {
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
@@ -150,8 +245,17 @@ function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine 
       {/* Machines — hub mode: hidden until the server reports sessions */}
       {machines.length > 0 && (
         <div style={{ marginTop:18 }}>
-          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:T.ink4, padding:'0 8px 6px', fontFamily:MONO }}>
-            Machines
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 8px 6px' }}>
+            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:T.ink4, fontFamily:MONO }}>
+              Machines
+            </div>
+            <button onClick={onAddMachine} title="Add a VM to this dashboard" style={{
+              border:'none', background:'transparent', cursor:'pointer', color:T.ink3,
+              fontSize:14, lineHeight:1, padding:'2px 4px', borderRadius:5, fontFamily:MONO,
+            }}
+              onMouseEnter={e=>{ (e.currentTarget as any).style.color=T.ink; (e.currentTarget as any).style.background=T.surface }}
+              onMouseLeave={e=>{ (e.currentTarget as any).style.color=T.ink3; (e.currentTarget as any).style.background='transparent' }}
+            >+</button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
             {machines.map((m) => {

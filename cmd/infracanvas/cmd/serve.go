@@ -138,6 +138,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 			if err := runstate.Update(func(s *runstate.State) { s.TunnelURL = u }); err != nil {
 				log.Printf("[state] write tunnel url: %v", err)
 			}
+			// Tunnel cycled to a new hostname — keep the dashboard's
+			// Add-machine command pointing at the live address.
+			srv.SetJoinInfo(joinAddress(chosenPort, "", u))
 		}
 		tnl, err = tunnel.Start(ctx, fmt.Sprintf("http://127.0.0.1:%d", chosenPort), onURL)
 		if err != nil {
@@ -165,6 +168,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}); err != nil {
 		log.Printf("[state] write: %v", err)
 	}
+
+	srv.SetJoinInfo(joinAddress(chosenPort, publicIP, tunnelURL))
 
 	printServeBanner(host, chosenPort, token, publicIP, tunnelURL)
 	printJoinBanner(chosenPort, agentToken, publicIP, tunnelURL)
@@ -429,32 +434,40 @@ func printServeBanner(host string, port int, token, publicIP, tunnelURL string) 
 	fmt.Println()
 }
 
+// joinAddress picks the most stable address other VMs can use to reach this
+// hub, plus a human caveat for the dashboard. Empty url means unreachable
+// (--private with no tunnel) and hides the Add-machine flow in the UI.
+func joinAddress(port int, publicIP, tunnelURL string) (url, caveat string) {
+	if tunnelURL == "" && servePrivate {
+		return "", ""
+	}
+	switch {
+	case publicIP != "":
+		return fmt.Sprintf("http://%s:%d", publicIP, port), ""
+	case tunnelURL != "":
+		return tunnelURL, "quick-tunnel URLs change on restart — fine for a trial; use --no-tunnel or your own domain for a permanent setup"
+	default:
+		if internal := detectInternalIP(); internal != "" {
+			return fmt.Sprintf("http://%s:%d", internal, port), "this address is only reachable from the same network"
+		}
+		return "", ""
+	}
+}
+
 // printJoinBanner shows how to add more VMs to this dashboard.
 func printJoinBanner(port int, agentToken, publicIP, tunnelURL string) {
-	// Bound to loopback with no tunnel: other VMs can't reach us directly.
-	if tunnelURL == "" && servePrivate {
+	joinURL, note := joinAddress(port, publicIP, tunnelURL)
+
+	// No reachable address: other VMs can't dial us directly.
+	if joinURL == "" {
 		fmt.Println("  Add more VMs to this dashboard: expose this port (drop --private,")
 		fmt.Println("  or put a reverse proxy in front), then on each VM run:")
 		fmt.Printf("    infracanvas start --backend <this-hub-url> --token %s\n", agentToken)
 		fmt.Println()
 		return
 	}
-
-	// Pick the most stable address other VMs can reach.
-	joinURL := ""
-	note := ""
-	switch {
-	case publicIP != "":
-		joinURL = fmt.Sprintf("http://%s:%d", publicIP, port)
-	case tunnelURL != "":
-		joinURL = tunnelURL
-		note = "  (quick-tunnel URLs change on restart — fine for a trial;\n   use --no-tunnel or your own domain for a permanent setup)"
-	default:
-		if internal := detectInternalIP(); internal != "" {
-			joinURL = fmt.Sprintf("http://%s:%d", internal, port)
-		} else {
-			joinURL = fmt.Sprintf("http://<this-host>:%d", port)
-		}
+	if note != "" {
+		note = "  (" + note + ")"
 	}
 
 	fmt.Println("  Add another VM to this dashboard — run on the other VM:")
