@@ -22,23 +22,13 @@
 
 ---
 
-<p align="center">
-  <img src="docs/screenshots/canvas-overview.png" alt="InfraCanvas — infrastructure overview tiles" width="960" />
-</p>
-
----
-
 ## What is it?
 
 You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
 InfraCanvas replaces that ritual with one binary you run yourself. It automatically discovers every container, pod, service, volume and network on the host — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. You can open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) and they all land in one dashboard.
 
-It is not another list. It is a **map** — what runs where, what talks to what, and what's broken — in one glance. It is self-hosted end to end: your infrastructure data never leaves your machines.
-
-<p align="center">
-  <img src="docs/screenshots/canvas-view.png" alt="InfraCanvas — live topology canvas" width="960" />
-</p>
+You get a **map**, not a list: what runs where, what talks to what, and what's broken, at a glance. Self-hosted end to end — your infrastructure data never leaves your machines.
 
 ---
 
