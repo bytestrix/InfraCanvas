@@ -34,11 +34,61 @@ You get a **map**, not a list: what runs where, what talks to what, and what's b
 
 ## 🚀 Quick start
 
-Everything runs on **your** machine — discovery, relay, and dashboard are one process, one binary. Nothing is sent to us; there is no backend, no account, no telemetry ([details](#-can-i-trust-this-on-my-vm)). Pick the path that matches how you like to run software:
+If you've got a VM (or three) and you're tired of SSHing in to piece together what's running, here's what actually happens depending on what you do next.
 
-### Option A — Build from source, keep it fully private
+### Just want to look at one VM right now?
 
-You compile it, you read it, nothing enters your VM that you didn't build. Requires Go 1.21+ and Node 20+:
+Run this on it:
+
+```bash
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
+```
+
+30 seconds later it prints a link. Open it, and you're looking at that VM's live topology — containers, pods, services, whatever's running — with a terminal and logs built in.
+
+```
+✓ InfraCanvas installed and running
+
+  Open in your browser:
+    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
+
+  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
+```
+
+That's it — nothing else to configure. This covers **one VM**. If that's genuinely all you have, you're done; skip to [Features](#-features). If you've got more, read on.
+
+### Got several VMs and want them all in one dashboard?
+
+You have two ways to get there — both give you the exact same dashboard and features, the only difference is who runs the relay:
+
+**1. Self-host it yourself (free, stays on your infra)**
+
+Run the dashboard once — on your laptop, or on one of the VMs — then add the rest to it from the browser:
+
+```bash
+git clone https://github.com/bytestrix/InfraCanvas.git
+cd InfraCanvas && make all
+./bin/infracanvas serve
+```
+
+This prints a link. Open it — you now have a live dashboard, initially showing whatever's running on the machine you're on. In the sidebar, click **+ Add machine**: it hands you a ready-to-paste install command with a join token already baked in. Paste that command into your second VM, and within seconds its containers/pods/services show up as a new entry in the same dashboard. Repeat for VM #3.
+
+That's the whole workflow — one dashboard, every VM you've added to it, all self-hosted. See [Install your own way](#-self-hosting-without-cloudflare) below if you'd rather build from source or run a release binary instead of the one-liner above (same result, different level of "I want to read the code first").
+
+**2. Skip hosting it yourself — use InfraCanvas Cloud**
+
+Same "paste a command per VM" flow, except we run the dashboard for you: no server to keep up, plus team logins, RBAC, and alerts if you need them later. First 3 VMs are free, no credit card. → [cloud.infracanvas.app](https://cloud.infracanvas.app)
+
+---
+
+### Install your own way
+
+Prefer more control over how you self-host than the one-liner above gives you? Same binary, different levels of trust/control:
+
+<details>
+<summary><strong>Build from source — you compile it, you read it</strong></summary>
+
+Requires Go 1.21+ and Node 20+:
 
 ```bash
 git clone https://github.com/bytestrix/InfraCanvas.git
@@ -50,9 +100,12 @@ cd InfraCanvas && make all
 
 Reach it from your laptop over SSH (`ssh -L 7777:127.0.0.1:7777 user@vm`), open your own port with `--no-tunnel`, or put [Nginx or Caddy in front](#-self-hosting-without-cloudflare) with your own domain and TLS. Your network rules, your call.
 
-### Option B — Release binary, your own network rules
+</details>
 
-Grab a prebuilt binary from [Releases](https://github.com/bytestrix/InfraCanvas/releases/latest), make it executable, run it the same way:
+<details>
+<summary><strong>Release binary — no installer, no systemd</strong></summary>
+
+Grab a prebuilt binary from [Releases](https://github.com/bytestrix/InfraCanvas/releases/latest), make it executable, run it:
 
 ```bash
 curl -fsSLO https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-linux-amd64
@@ -62,29 +115,14 @@ chmod +x infracanvas-linux-amd64
 ./infracanvas-linux-amd64 serve --no-tunnel             # bind 0.0.0.0:7777, open the port yourself
 ```
 
-No installer, no systemd, no firewall changes made on your behalf — just a static binary you can delete when done.
+Just a static binary you can delete when done — no firewall changes made on your behalf.
 
-### Option C — One-command install (fastest way to try it)
-
-If you'd rather have it running in 30 seconds — installer, systemd unit, and a free outbound-only [Cloudflare quick-tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) URL included ([read the script first](install-agent.sh) — it's one file of plain bash):
-
-```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
-```
-
-```
-✓ InfraCanvas installed and running
-
-  Open in your browser:
-    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
-
-  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
-```
-
-The tunnel is optional even here — every private-by-default flag works through the installer too:
+</details>
 
 <details>
-<summary><strong>Install options</strong></summary>
+<summary><strong>One-liner install options</strong></summary>
+
+The tunnel is optional even with the curl installer — every private-by-default flag works through it too ([read the script first](install-agent.sh) — it's one file of plain bash):
 
 ```bash
 # Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly
@@ -109,9 +147,9 @@ curl -fsSL .../install.sh | bash -s -- --version v0.12.1
 </details>
 
 <details>
-<summary><strong>Run on your laptop</strong></summary>
+<summary><strong>Run it on your laptop instead of a VM</strong></summary>
 
-Build from source (Option A), then:
+Build from source (above), then:
 
 ```bash
 infracanvas serve
@@ -140,7 +178,7 @@ Full details in the [Security model](#-security-model) and [SECURITY.md](SECURIT
 
 ## 💻 Multiple VMs — one dashboard
 
-One VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket — no ports opened, nothing installed beyond the agent.
+The mechanics behind the self-host path in [Quick start](#-quick-start): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket — no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token — this is what to run if you'd rather do it by hand.
 
 ```bash
 # On the hub VM:
