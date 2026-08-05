@@ -165,6 +165,8 @@ Prefer fully isolated dashboards instead? Just install normally on each VM — e
 ### Live topology map
 Every container, pod, service, volume and network drawn as connected nodes with edges showing what talks to what. Not a list — a map. Updates every 30 seconds, diff-only.
 
+Starts minimal — just the host. Click **•••** on any node to drill into what's inside it (Kubernetes → Deployments → a specific pod, for example), so a box running a full cluster doesn't dump hundreds of nodes on you at once.
+
 ### Works on any VM — even without Docker or Kubernetes
 Plain VMs running nginx, postgres, node via systemd or PM2 get real workload nodes on the canvas. Listening ports and established connections are mapped from `/proc/net/tcp` — so you get real `CONNECTS_TO` edges (e.g. `next-server → postgres :5432`) without any config.
 
