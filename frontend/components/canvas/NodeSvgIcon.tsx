@@ -9,9 +9,20 @@ const INK3 = 'var(--ink3)'
 
 interface Props { type: string; size?: number }
 
+// Category-summary nodes ("Kubernetes ×82") reuse the FilterKey itself as
+// groupType so the canvas zone layout can position them — alias each to a
+// representative resource icon rather than duplicating an SVG definition.
+const CATEGORY_ALIAS: Record<string, string> = {
+  k8s: 'cluster',
+  docker: 'container_runtime',
+  pods: 'pod',
+  services: 'service',
+  storage: 'pvc',
+}
+
 export default function NodeSvgIcon({ type, size = 16 }: Props) {
   const s = size
-  switch (type) {
+  switch (CATEGORY_ALIAS[type] ?? type) {
     case 'cluster': return (
       <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
         <circle cx="16" cy="16" r="13" fill={K8S} fillOpacity="0.15"/>

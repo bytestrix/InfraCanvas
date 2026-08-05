@@ -29,11 +29,14 @@ import {
   type GroupInfo,
   type GroupNodeData,
   isCriticalGroup,
+  countHealth,
+  getGroupLabel,
 } from '@/lib/graphPreprocess'
 import InfraNode, { type InfraNodeData } from './InfraNode'
 import NamespaceGroupNode from './NamespaceGroupNode'
 import GroupNode from './GroupNode'
 import GroupDrawer from './GroupDrawer'
+import NodePickerMenu from './NodePickerMenu'
 import NodeDetailPanel from './NodeDetailPanel'
 import LogsPanel from './LogsPanel'
 import TerminalPanel from './TerminalPanel'
@@ -97,6 +100,20 @@ const FILTER_GROUPS = {
 
 type FilterKey = keyof typeof FILTER_GROUPS
 
+/** category-summary node id, distinct from a type-level `group:${type}` id */
+function categoryNodeId(key: FilterKey) {
+  return `category:${key}`
+}
+
+/** raw type → its FilterKey category, e.g. 'deployment' → 'k8s' */
+const TYPE_TO_CATEGORY: Record<string, FilterKey> = (() => {
+  const map: Record<string, FilterKey> = {}
+  for (const key of Object.keys(FILTER_GROUPS) as FilterKey[]) {
+    for (const t of FILTER_GROUPS[key].types) map[t] = key
+  }
+  return map
+})()
+
 // ─── Flat mode builder ────────────────────────────────────────────────────────
 
 function buildFlatFlowElements(
@@ -157,10 +174,31 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped')
+  // Toolbar chips (Kubernetes / Docker / Host / ...) — unchanged, existing
+  // behaviour: toggling one on immediately shows every type in that category.
+  // Kept separate from the "•••" picker tree below on purpose.
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
-    new Set<FilterKey>(['k8s', 'docker', 'host', 'services'])
+    new Set<FilterKey>(['host'])
   )
   const [expandedGroups] = useState<Set<string>>(new Set())
+
+  // ── "•••" drill-down tree: host → category → type → individual ────────────
+  // Tier 1: categories with a single summary node on canvas (e.g. "Kubernetes
+  // ×82"), revealed from the host's "•••" menu. Does NOT explode into types.
+  const [revealedCategories, setRevealedCategories] = useState<Set<FilterKey>>(new Set())
+  // Tier 2: raw types pulled out of a category's summary into their own
+  // type-level group node (e.g. "Deployments ×17"), via that summary's "•••".
+  const [revealedTypes, setRevealedTypes] = useState<Set<string>>(new Set())
+  // Tier 3: specific raw node IDs pulled out of a type-level group node
+  // individually via its "•••" (pick 2 of 11 pods → only those 2 pop out).
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set())
+  // The open "•••" picker popup, if any.
+  const [pickerFor, setPickerFor] = useState<
+    | { kind: 'host'; x: number; y: number }
+    | { kind: 'category'; category: FilterKey; x: number; y: number }
+    | { kind: 'group'; groupType: string; x: number; y: number }
+    | null
+  >(null)
   const [drawerGroup, setDrawerGroup] = useState<GroupInfo | null>(null)
   const [drawerInitialFilter, setDrawerInitialFilter] = useState<string | undefined>(undefined)
   const [groupsMap, setGroupsMap] = useState<Map<string, GroupInfo>>(new Map())
@@ -184,10 +222,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   useEffect(() => {
     if (!vm.graph) return
 
-    const visibleTypes = new Set<string>()
+    // Toolbar-driven types (unchanged, existing behaviour) + types drilled
+    // into individually via the "•••" tree. Types still folded inside an
+    // unexpanded category summary are deliberately excluded here — they're
+    // rendered as ONE summary node below, not as their own type groups.
+    const toolbarTypes = new Set<string>()
     for (const key of activeFilters) {
-      for (const t of FILTER_GROUPS[key].types) visibleTypes.add(t)
+      for (const t of FILTER_GROUPS[key].types) toolbarTypes.add(t)
     }
+    const visibleTypes = new Set<string>(['host', ...toolbarTypes, ...revealedTypes])
 
     let flowNodes: Node[]
     let flowEdges: Edge[]
@@ -198,9 +241,103 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         vm.graph.edges,
         visibleTypes,
         expandedGroups,
+        expandedNodeIds,
       )
-      flowNodes = gn
-      flowEdges = ge
+
+      // Category-summary nodes: one per revealed-but-not-fully-drilled
+      // category (e.g. "Kubernetes ×82"), sitting between host and the
+      // type-level groups that appear once you drill into that summary.
+      const hostNode = vm.graph.nodes.find((n) => n.type === 'host')
+      const categoryNodes: Node[] = []
+      const categoryEdges: Edge[] = []
+      for (const key of revealedCategories) {
+        if (activeFilters.has(key)) continue // toolbar already fully expanded it
+        const catTypes = FILTER_GROUPS[key].types
+        const remainingTypes = catTypes.filter((t) => !revealedTypes.has(t))
+        if (remainingTypes.length === 0) continue // fully drilled, nothing left to summarize
+        const remainingNodes = vm.graph.nodes.filter((n) => remainingTypes.includes(n.type as any))
+        if (remainingNodes.length === 0) continue
+        const hc = countHealth(remainingNodes)
+        const cid = categoryNodeId(key)
+        categoryNodes.push({
+          id: cid,
+          type: 'groupNode',
+          position: { x: 0, y: 0 },
+          data: {
+            groupType: key,
+            label: FILTER_GROUPS[key].label,
+            count: remainingNodes.length,
+            healthCounts: hc,
+            color: FILTER_GROUPS[key].color,
+            icon: '',
+            isCritical: isCriticalGroup(hc, remainingNodes.length),
+          } as GroupNodeData,
+          width: 260,
+          height: 90,
+        })
+        if (hostNode) {
+          categoryEdges.push({
+            id: `${hostNode.id}→${cid}→RUNS_ON`,
+            source: hostNode.id,
+            target: cid,
+            label: 'RUNS_ON',
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
+            style: { stroke: '#2d2d52', strokeWidth: 1.5 },
+            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
+            labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.9 },
+          })
+        }
+      }
+
+      flowNodes = [...gn, ...categoryNodes]
+      flowEdges = [...ge, ...categoryEdges]
+
+      // Attach orphans: some raw relationships only point DOWNWARD from a
+      // hidden node (e.g. Namespace → Deployment exists, but nothing points
+      // INTO Namespace — there is no Cluster → Namespace edge in the data at
+      // all). When such a hidden node is skipped, its children have no path
+      // to bridge through and would float with zero connections. Give every
+      // still-unconnected node a sensible fallback parent instead of leaving
+      // it visibly detached.
+      const flowNodeIds = new Set(flowNodes.map((n) => n.id))
+      const hasIncoming = new Set(flowEdges.map((e) => e.target))
+      const findIndividualByType = (t: string) =>
+        flowNodes.find((n) => n.type === 'infraNode' && (n.data as InfraNodeData).nodeType === t)?.id
+
+      for (const n of flowNodes) {
+        if (hostNode && n.id === hostNode.id) continue
+        if (hasIncoming.has(n.id)) continue
+
+        const category = n.id.startsWith('category:')
+          ? ((n.data as GroupNodeData).groupType as FilterKey)
+          : n.type === 'groupNode'
+            ? TYPE_TO_CATEGORY[(n.data as GroupNodeData).groupType]
+            : n.type === 'infraNode'
+              ? TYPE_TO_CATEGORY[(n.data as InfraNodeData).nodeType]
+              : undefined
+
+        let anchorId: string | undefined
+        if (category === 'k8s') anchorId = findIndividualByType('cluster') ?? categoryNodeId('k8s')
+        else if (category === 'docker') anchorId = findIndividualByType('container_runtime') ?? categoryNodeId('docker')
+        if (!anchorId || anchorId === n.id || !flowNodeIds.has(anchorId)) anchorId = hostNode?.id
+
+        if (anchorId && anchorId !== n.id) {
+          flowEdges.push({
+            id: `${anchorId}→${n.id}→CONTAINS`,
+            source: anchorId,
+            target: n.id,
+            label: 'CONTAINS',
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
+            style: { stroke: '#2d2d52', strokeWidth: 1.5, strokeDasharray: '3 3' },
+            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
+            labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.9 },
+          })
+          hasIncoming.add(n.id)
+        }
+      }
+
       setGroupsMap(groups)
     } else {
       const { nodes: fn, edges: fe } = buildFlatFlowElements(
@@ -231,9 +368,44 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     }
 
     const finalNodes = applySpotlight(ln, spotlightKey, viewMode)
-    setNodes(finalNodes)
+
+    // Wire the "•••" picker onto the host node and every group node. Defined
+    // fresh each rebuild so it always closes over the current groupsMap/state.
+    const withPickers = finalNodes.map((n) => {
+      if (n.type === 'infraNode' && (n.data as InfraNodeData).nodeType === 'host') {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            onOpenPicker: (_nodeId: string, e: React.MouseEvent) => {
+              setPickerFor({ kind: 'host', x: e.clientX, y: e.clientY })
+            },
+          },
+        }
+      }
+      if (n.type === 'groupNode') {
+        const gdata = n.data as GroupNodeData
+        const isCategory = n.id.startsWith('category:')
+        return {
+          ...n,
+          data: {
+            ...gdata,
+            onOpenPicker: (_nodeId: string, e: React.MouseEvent) => {
+              if (isCategory) {
+                setPickerFor({ kind: 'category', category: gdata.groupType as FilterKey, x: e.clientX, y: e.clientY })
+              } else {
+                setPickerFor({ kind: 'group', groupType: gdata.groupType, x: e.clientX, y: e.clientY })
+              }
+            },
+          },
+        }
+      }
+      return n
+    })
+
+    setNodes(withPickers)
     setEdges(le)
-  }, [vm.graph, activeFilters, viewMode, expandedGroups])
+  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes])
 
   // ── Re-apply spotlight without re-running layout ───────────────────────────
   useEffect(() => {
@@ -660,6 +832,74 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             initialHealthFilter={drawerInitialFilter}
             onClose={() => { setDrawerGroup(null); setDrawerInitialFilter(undefined) }}
             onSelectNode={handleSelectNodeFromDrawer}
+          />
+        )}
+
+        {pickerFor && pickerFor.kind === 'host' && (
+          <NodePickerMenu
+            title="Show on canvas"
+            x={pickerFor.x}
+            y={pickerFor.y}
+            items={(Object.keys(FILTER_GROUPS) as FilterKey[])
+              .filter((key) => key !== 'host')
+              .map((key) => {
+                const types = new Set<string>(FILTER_GROUPS[key].types)
+                const count = vm.graph?.nodes.filter((n) => types.has(n.type)).length ?? 0
+                return { key, label: FILTER_GROUPS[key].label, count, checked: revealedCategories.has(key) }
+              })
+              .filter((item) => item.count > 0)}
+            onClose={() => setPickerFor(null)}
+            onConfirm={(selected) => {
+              // Each checked category gets exactly ONE summary node — it does
+              // not explode into its internal types. Drilling further happens
+              // from that summary's own "•••".
+              setRevealedCategories(new Set(selected as FilterKey[]))
+              setPickerFor(null)
+            }}
+          />
+        )}
+
+        {pickerFor && pickerFor.kind === 'category' && (
+          <NodePickerMenu
+            title={FILTER_GROUPS[pickerFor.category].label}
+            x={pickerFor.x}
+            y={pickerFor.y}
+            items={FILTER_GROUPS[pickerFor.category].types
+              .map((t) => {
+                const count = vm.graph?.nodes.filter((n) => n.type === t).length ?? 0
+                // Already-revealed types stay in the list, checked — so
+                // reopening the menu never makes an item silently vanish.
+                return { key: t, label: getGroupLabel(t), count, checked: revealedTypes.has(t) }
+              })
+              .filter((item) => item.count > 0)}
+            onClose={() => setPickerFor(null)}
+            onConfirm={(selectedTypes) => {
+              setRevealedTypes((prev) => new Set([...prev, ...selectedTypes]))
+              setPickerFor(null)
+            }}
+          />
+        )}
+
+        {pickerFor && pickerFor.kind === 'group' && (
+          <NodePickerMenu
+            title={FILTER_GROUPS[
+              (Object.keys(FILTER_GROUPS) as FilterKey[]).find((k) =>
+                (FILTER_GROUPS[k].types as readonly string[]).includes(pickerFor.groupType)
+              ) ?? 'k8s'
+            ].label + ' — pick individual nodes'}
+            x={pickerFor.x}
+            y={pickerFor.y}
+            items={(groupsMap.get(pickerFor.groupType)?.nodes ?? []).map((n) => ({
+              key: n.id,
+              label: n.label,
+              checked: false,
+              health: n.health as any,
+            }))}
+            onClose={() => setPickerFor(null)}
+            onConfirm={(selectedIds) => {
+              setExpandedNodeIds((prev) => new Set([...prev, ...selectedIds]))
+              setPickerFor(null)
+            }}
           />
         )}
 

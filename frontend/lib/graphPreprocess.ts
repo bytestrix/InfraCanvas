@@ -41,6 +41,8 @@ export interface GroupNodeData {
   color: string
   icon: string
   isCritical: boolean  // >50% degraded/unhealthy → pulse dot
+  /** Opens the "•••" drill-down menu listing this group's individual members. */
+  onOpenPicker?: (nodeId: string, e: React.MouseEvent) => void
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -152,6 +154,11 @@ export function buildGroupedGraph(
   rawEdges: GraphEdge[],
   visibleTypes: Set<string>,
   expandedGroups: Set<string>,
+  /** Specific raw node IDs to always render individually, even when their
+   *  type as a whole is still collapsed. Powers the per-member "•••" picker
+   *  on GroupNode — pick 2 of 11 pods, only those 2 pop out, the other 9
+   *  stay bundled under a smaller group node. */
+  expandedNodeIds: Set<string> = new Set(),
 ): {
   nodes: Node[]
   edges: Edge[]
@@ -159,7 +166,6 @@ export function buildGroupedGraph(
 } {
   // 1. Filter to visible types
   const filtered = rawNodes.filter((n) => visibleTypes.has(n.type))
-  const filteredIdSet = new Set(filtered.map((n) => n.id))
 
   // 2. Bucket by type
   const byType = new Map<string, GraphNode[]>()
@@ -176,19 +182,28 @@ export function buildGroupedGraph(
   for (const [type, nodes] of byType) {
     const gid = `group:${type}`
     const singleton = SINGLETON_TYPES.has(type) || nodes.length === 1
-    const expanded = expandedGroups.has(gid)
+    const wholeTypeExpanded = expandedGroups.has(gid)
 
-    if (singleton || expanded) {
+    if (singleton || wholeTypeExpanded) {
       for (const n of nodes) individualIds.add(n.id)
-    } else {
-      const hc = countHealth(nodes)
+      continue
+    }
+
+    // Partial expansion: specific members picked via the group's "•••" menu
+    // pop out individually; the rest stay bundled under a (smaller) group node.
+    const picked = nodes.filter((n) => expandedNodeIds.has(n.id))
+    const remaining = nodes.filter((n) => !expandedNodeIds.has(n.id))
+    for (const n of picked) individualIds.add(n.id)
+
+    if (remaining.length > 0) {
+      const hc = countHealth(remaining)
       groups.set(type, {
         id: gid,
         type,
         label: getGroupLabel(type),
-        count: nodes.length,
+        count: remaining.length,
         healthCounts: hc,
-        nodes,
+        nodes: remaining,
       })
     }
   }
@@ -243,7 +258,44 @@ export function buildGroupedGraph(
 
   const canvasIds = new Set(flowNodes.map((n) => n.id))
 
-  // 6. Build bundled edges
+  // 6. Build bundled edges — bridging THROUGH hidden nodes to the nearest
+  // visible one, instead of dropping the edge outright.
+  //
+  // Only revealing "cluster" + "deployment" (skipping "namespace") used to
+  // sever every edge, because the raw chain is
+  // cluster --CONTAINS--> namespace --CONTAINS--> deployment
+  // and namespace has no canvas node once its type isn't revealed. We walk
+  // past invisible nodes along the raw edge graph (forward for a hidden
+  // target, backward for a hidden source) until we reach something that
+  // does have a canvas id, so "Deployments" still lands under "kubernetes"
+  // even with namespaces folded away.
+  const outAdj = new Map<string, { target: string; type: string }[]>()
+  const inAdj = new Map<string, { source: string; type: string }[]>()
+  for (const e of rawEdges) {
+    ;(outAdj.get(e.source) ?? outAdj.set(e.source, []).get(e.source)!).push({ target: e.target, type: e.type })
+    ;(inAdj.get(e.target) ?? inAdj.set(e.target, []).get(e.target)!).push({ source: e.source, type: e.type })
+  }
+
+  function resolveForward(id: string, visited = new Set<string>()): string[] {
+    const canvas = toCanvas.get(id)
+    if (canvas) return [canvas]
+    if (visited.has(id)) return []
+    visited.add(id)
+    const out: string[] = []
+    for (const { target } of outAdj.get(id) ?? []) out.push(...resolveForward(target, visited))
+    return [...new Set(out)]
+  }
+
+  function resolveBackward(id: string, visited = new Set<string>()): string[] {
+    const canvas = toCanvas.get(id)
+    if (canvas) return [canvas]
+    if (visited.has(id)) return []
+    visited.add(id)
+    const out: string[] = []
+    for (const { source } of inAdj.get(id) ?? []) out.push(...resolveBackward(source, visited))
+    return [...new Set(out)]
+  }
+
   // Key: "src→tgt→edgeType"  → accumulate count
   const bundle = new Map<
     string,
@@ -251,18 +303,19 @@ export function buildGroupedGraph(
   >()
 
   for (const e of rawEdges) {
-    // Skip if EITHER endpoint is not visible
-    if (!filteredIdSet.has(e.source) || !filteredIdSet.has(e.target)) continue
-    const src = toCanvas.get(e.source)
-    const tgt = toCanvas.get(e.target)
-    if (!src || !tgt || src === tgt) continue
-    if (!canvasIds.has(src) || !canvasIds.has(tgt)) continue
-
-    const key = `${src}→${tgt}→${e.type}`
-    if (bundle.has(key)) {
-      bundle.get(key)!.count++
-    } else {
-      bundle.set(key, { source: src, target: tgt, edgeType: e.type, count: 1 })
+    const srcIds = toCanvas.has(e.source) ? [toCanvas.get(e.source)!] : resolveBackward(e.source)
+    const tgtIds = toCanvas.has(e.target) ? [toCanvas.get(e.target)!] : resolveForward(e.target)
+    for (const src of srcIds) {
+      for (const tgt of tgtIds) {
+        if (!src || !tgt || src === tgt) continue
+        if (!canvasIds.has(src) || !canvasIds.has(tgt)) continue
+        const key = `${src}→${tgt}→${e.type}`
+        if (bundle.has(key)) {
+          bundle.get(key)!.count++
+        } else {
+          bundle.set(key, { source: src, target: tgt, edgeType: e.type, count: 1 })
+        }
+      }
     }
   }
 

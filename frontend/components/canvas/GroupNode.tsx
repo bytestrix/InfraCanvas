@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
+import { MoreVertical } from 'lucide-react'
 import { type GroupNodeData } from '@/lib/graphPreprocess'
 import NodeSvgIcon from './NodeSvgIcon'
 
@@ -9,8 +10,8 @@ import NodeSvgIcon from './NodeSvgIcon'
  * GroupNode — renders a collapsed type-group on the canvas.
  * Clicking opens a GroupDrawer (handled in InfraCanvas via onNodeClick).
  */
-const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
-  const { groupType, label, count, healthCounts, isCritical } = data
+const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
+  const { groupType, label, count, healthCounts, isCritical, onOpenPicker } = data
 
   const total = Math.max(count, 1)
   const pHealthy   = (healthCounts.healthy   / total) * 100
@@ -66,6 +67,21 @@ const GroupNode = memo(({ data, selected }: NodeProps<GroupNodeData>) => {
             borderRadius: 20, padding: '1px 8px', flexShrink: 0,
             fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
           }}>×{count}</span>
+          {onOpenPicker && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenPicker(id, e) }}
+              title="Show individual members"
+              style={{
+                width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                background: 'transparent', border: 'none', color: 'var(--ink4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink4)' }}
+            >
+              <MoreVertical size={13} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
 
         {/* Row 2: health summary */}

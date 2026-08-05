@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
+import { MoreVertical } from 'lucide-react'
 import { NodeHealth } from '@/types'
 import NodeSvgIcon from './NodeSvgIcon'
 
@@ -11,6 +12,8 @@ export interface InfraNodeData {
   health: NodeHealth
   metadata: Record<string, any>
   selected?: boolean
+  /** Present only on nodes that have a "•••" drill-down menu (currently: host). */
+  onOpenPicker?: (nodeId: string, e: React.MouseEvent) => void
 }
 
 const HEALTH_DOT: Record<NodeHealth, string> = {
@@ -131,8 +134,8 @@ function getKeyMeta(nodeType: string, metadata: Record<string, any>): string[] {
   return lines.slice(0, 2)
 }
 
-const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
-  const { nodeType, label, health, metadata } = data
+const InfraNode = memo(({ id, data, selected }: NodeProps<InfraNodeData>) => {
+  const { nodeType, label, health, metadata, onOpenPicker } = data
   const keyMeta = getKeyMeta(nodeType, metadata)
   const meters = getMeters(nodeType, metadata)
   const dotColor = HEALTH_DOT[health] ?? 'var(--ink4)'
@@ -168,6 +171,21 @@ const InfraNode = memo(({ data, selected }: NodeProps<InfraNodeData>) => {
             {label.length > 22 ? label.slice(0, 20) + '…' : label}
           </span>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} title={health} />
+          {onOpenPicker && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenPicker(id, e) }}
+              title="Show more"
+              style={{
+                width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                background: 'transparent', border: 'none', color: 'var(--ink4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink4)' }}
+            >
+              <MoreVertical size={13} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
 
         {/* Row 2: type badge */}

@@ -170,6 +170,14 @@ const TYPE_ZONE: Record<string, { tier: number; zone: 'left' | 'right' | 'center
   // Tier 1
   cluster:           { tier: 1, zone: 'left'   },
   container_runtime: { tier: 1, zone: 'right'  },
+  // Tier 1 — category-summary nodes from the host's "•••" picker
+  // (groupType is the FilterKey itself, e.g. "k8s", not a raw resource type)
+  k8s:               { tier: 1, zone: 'left'   },
+  docker:            { tier: 1, zone: 'right'  },
+  pods:              { tier: 1, zone: 'center' },
+  services:          { tier: 1, zone: 'center' },
+  storage:           { tier: 1, zone: 'center' },
+  events:            { tier: 1, zone: 'center' },
   // Tier 2 left — K8s structural
   namespace:         { tier: 2, zone: 'left'   },
   node:              { tier: 2, zone: 'left'   },
