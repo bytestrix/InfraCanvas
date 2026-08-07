@@ -30,9 +30,24 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
   const termRef    = useRef<any>(null)
   const fitRef     = useRef<any>(null)
   const sessionID  = useRef<string>('')
+  const lastSize   = useRef<{ rows: number; cols: number }>({ rows: 0, cols: 0 })
   const [status, setStatus] = useState<'connecting' | 'connected' | 'closed'>('connecting')
 
   const containerID = node.id
+
+  // Fit, then only tell the PTY about it if rows/cols actually changed.
+  // A no-op SIGWINCH makes readline redraw the current line, which duplicates
+  // the prompt/command on the same line — the garble we're fixing.
+  const refit = useCallback(() => {
+    const fit = fitRef.current
+    const term = termRef.current
+    if (!fit || !term || !sessionID.current) return
+    fit.fit()
+    const { rows, cols } = term
+    if (rows === lastSize.current.rows && cols === lastSize.current.cols) return
+    lastSize.current = { rows, cols }
+    sendExecResize(vmCode, sessionID.current, rows, cols)
+  }, [vmCode])
 
   const cleanup = useCallback(() => {
     if (sessionID.current) {
@@ -103,12 +118,6 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       const fit = new FitAddon()
       term.loadAddon(fit)
       term.open(termDivRef.current)
-      // Delay fit to let fonts render, then focus so keyboard works immediately
-      requestAnimationFrame(() => {
-        if (!active) return
-        fit.fit()
-        term.focus()
-      })
 
       termRef.current = term
       fitRef.current  = fit
@@ -140,14 +149,35 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
         pod_name: node.label,
         container: '',
       } : undefined
-      sendExecStart(vmCode, sid, containerID, shellCmd, term.rows, term.cols, layer, k8sParams)
-      setStatus('connected')
 
+      // Fit BEFORE starting the PTY so it opens at the correct dimensions, and
+      // wait for the monospace web font to finish loading first — xterm measures
+      // the character cell from the rendered font, so fitting against a fallback
+      // font computes the wrong column count. Starting the PTY at the wrong size
+      // and resizing after triggers a readline redraw that duplicates the
+      // prompt/command on the same line (progress bars bleeding into the prompt).
+      const startPty = () => {
+        if (!active) return
+        fit.fit()
+        term.focus()
+        lastSize.current = { rows: term.rows, cols: term.cols }
+        sendExecStart(vmCode, sid, containerID, shellCmd, term.rows, term.cols, layer, k8sParams)
+        setStatus('connected')
+      }
+      const fontsReady = (typeof document !== 'undefined' && (document as any).fonts?.ready)
+        ? (document as any).fonts.ready as Promise<unknown>
+        : Promise.resolve()
+      fontsReady.then(() => {
+        if (!active) return
+        requestAnimationFrame(startPty)
+      })
+
+      // Debounce resizes — layout settles before we SIGWINCH the shell,
+      // and refit() no-ops when dimensions are unchanged.
+      let roTimer: ReturnType<typeof setTimeout> | null = null
       ro = new ResizeObserver(() => {
-        if (fitRef.current && termRef.current) {
-          fitRef.current.fit()
-          sendExecResize(vmCode, sid, termRef.current.rows, termRef.current.cols)
-        }
+        if (roTimer) clearTimeout(roTimer)
+        roTimer = setTimeout(() => { if (active) refit() }, 80)
       })
       ro.observe(termDivRef.current)
     }).catch((err) => {
@@ -161,6 +191,7 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       ro?.disconnect()
       cleanup()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerID, vmCode, cleanup, layer])
 
   const focusTerm = () => { termRef.current?.focus() }
