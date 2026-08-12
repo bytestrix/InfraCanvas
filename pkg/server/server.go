@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"infracanvas/pkg/clustermgr"
 )
 
 // Message type constants — shared with agent and browser clients.
@@ -160,6 +163,15 @@ type Server struct {
 	joinMu      sync.RWMutex
 	joinURL     string // reachable address other VMs should dial; "" hides Add machine
 	joinCaveat  string // human note, e.g. quick-tunnel URLs change on restart
+
+	clusterMgr *clustermgr.Manager // nil until SetClusterManager is called (local-mode only)
+}
+
+// SetClusterManager wires up the Clusters (kubeconfig direct-connect) REST
+// endpoints. Called once by `infracanvas serve` after the manager is created
+// (it needs the server's own chosen port to self-dial).
+func (s *Server) SetClusterManager(mgr *clustermgr.Manager) {
+	s.clusterMgr = mgr
 }
 
 // New creates a Server using environment-based config (legacy SaaS-style).
@@ -227,6 +239,8 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/sessions", s.requireUIOrAgentToken(s.handleSessions))
 	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
+	s.mux.HandleFunc("/api/clusters", s.requireUIOrAgentToken(s.handleClusters))
+	s.mux.HandleFunc("/api/clusters/", s.requireUIOrAgentToken(s.handleClusterByID))
 	return s
 }
 
@@ -407,6 +421,92 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return info[a].ID < info[b].ID
 	})
 	_ = json.NewEncoder(w).Encode(info)
+}
+
+// ── Clusters (kubeconfig direct-connect) ──────────────────────────────────────
+
+type addClusterRequest struct {
+	Kubeconfig string `json:"kubeconfig"` // raw kubeconfig YAML/JSON text
+	Name       string `json:"name,omitempty"`
+	Context    string `json:"context,omitempty"` // omit to get the context picker back instead of creating
+}
+
+// handleClusters serves GET (list) and POST (add) on /api/clusters.
+func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
+	if s.clusterMgr == nil {
+		http.Error(w, "clusters not available", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		entries, err := s.clusterMgr.List()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(entries)
+
+	case http.MethodPost:
+		body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20)) // 8MB cap
+		if err != nil {
+			http.Error(w, "failed to read body", http.StatusBadRequest)
+			return
+		}
+		var req addClusterRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Kubeconfig) == "" {
+			http.Error(w, "kubeconfig is required", http.StatusBadRequest)
+			return
+		}
+
+		if req.Context == "" {
+			contexts, err := clustermgr.ParseContexts([]byte(req.Kubeconfig))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"contexts": contexts})
+			return
+		}
+
+		entry, err := s.clusterMgr.Add(req.Name, []byte(req.Kubeconfig), req.Context)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(entry)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleClusterByID serves DELETE on /api/clusters/{id}.
+func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
+	if s.clusterMgr == nil {
+		http.Error(w, "clusters not available", http.StatusServiceUnavailable)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/clusters/")
+	if id == "" {
+		http.Error(w, "missing cluster id", http.StatusBadRequest)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := s.clusterMgr.Remove(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Agent WebSocket handler ───────────────────────────────────────────────────

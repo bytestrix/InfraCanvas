@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM } from '@/lib/wsManager'
-import { fetchSessions, fetchJoinInfo, type JoinInfo } from '@/lib/api'
+import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, type ClusterContextOption } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
@@ -50,6 +50,12 @@ const IcCanvas = () => (
     <path d="M5 7h6M8 5v4" strokeLinecap="round"/>
   </svg>
 )
+const IcClusters = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <path d="M8 1.5l6 3.2v6.6L8 14.5l-6-3.2V4.7z"/>
+    <path d="M8 8v6.5M8 8L2 4.8M8 8l6-3.2" strokeLinecap="round"/>
+  </svg>
+)
 const IcSun = () => (
   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <circle cx="8" cy="8" r="3"/>
@@ -88,16 +94,21 @@ export default function App() {
   }
 
   const [showAddMachine, setShowAddMachine] = useState(false)
+  const [showAddCluster, setShowAddCluster] = useState(false)
+
+  const machineList = machines.filter(m => m.kind !== 'cluster')
+  const clusterList = machines.filter(m => m.kind === 'cluster')
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', height:'100vh', background:T.bg, fontFamily:SANS, overflow:'hidden' }}>
       <Sidebar vm={vm} view={view} onViewChange={setView}
-        machines={machines} activeKey={activeKey} onSelectMachine={selectMachine}
-        onAddMachine={() => setShowAddMachine(true)} />
+        machines={machineList} clusters={clusterList} activeKey={activeKey} onSelectMachine={selectMachine}
+        onAddMachine={() => setShowAddMachine(true)} onAddCluster={() => setShowAddCluster(true)} />
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
         <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
       </main>
       {showAddMachine && <AddMachineModal onClose={() => setShowAddMachine(false)} />}
+      {showAddCluster && <AddClusterModal onClose={() => setShowAddCluster(false)} />}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     </div>
   )
@@ -193,11 +204,149 @@ function AddMachineModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+/* ── Add cluster modal ── */
+function AddClusterModal({ onClose }: { onClose: () => void }) {
+  const [kubeconfig, setKubeconfig] = useState('')
+  const [contexts, setContexts] = useState<ClusterContextOption[] | null>(null)
+  const [selected, setSelected] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const onFile = async (file: File) => {
+    setKubeconfig(await file.text())
+    setError('')
+  }
+
+  const listContexts = async () => {
+    if (!kubeconfig.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await addCluster(kubeconfig)
+      if ('contexts' in res) {
+        setContexts(res.contexts)
+        setSelected(res.contexts.find(c => c.current)?.name ?? res.contexts[0]?.name ?? '')
+      } else {
+        onClose() // shouldn't happen (server always returns contexts first), but handle gracefully
+      }
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to parse kubeconfig')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const connect = async () => {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    try {
+      await addCluster(kubeconfig, selected, selected)
+      onClose()
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to connect cluster')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'var(--overlay, rgba(0,0,0,0.55))', zIndex:100,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        maxWidth:560, width:'100%', background:T.surface, border:`1px solid ${T.line}`,
+        borderRadius:14, padding:'22px 24px 20px', display:'flex', flexDirection:'column', gap:14,
+      }}>
+        <div>
+          <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Connect a cluster</div>
+          <div style={{ fontSize:12.5, color:T.ink3, marginTop:4, lineHeight:1.5 }}>
+            Drop or paste a kubeconfig. It stays on this machine and is never sent
+            anywhere — the dashboard talks to your cluster&apos;s API server directly,
+            the same way <code style={{ fontFamily:MONO }}>kubectl</code> does.
+          </div>
+        </div>
+
+        {!contexts && (
+          <>
+            <label style={{
+              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6,
+              padding:'22px 14px', borderRadius:10, border:`1.5px dashed ${T.line2}`, cursor:'pointer',
+              background:T.bg, textAlign:'center',
+            }}>
+              <span style={{ fontSize:12.5, color:T.ink2 }}>Click to choose a kubeconfig file</span>
+              <span style={{ fontSize:11, color:T.ink4 }}>or paste its contents below</span>
+              <input type="file" accept=".yaml,.yml,text/yaml,text/plain" style={{ display:'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
+            </label>
+            <textarea
+              value={kubeconfig}
+              onChange={e => setKubeconfig(e.target.value)}
+              placeholder="apiVersion: v1&#10;kind: Config&#10;clusters: ..."
+              rows={6}
+              style={{
+                width:'100%', padding:'10px 12px', borderRadius:9, background:T.bg,
+                border:`1px solid ${T.line}`, fontSize:11.5, fontFamily:MONO, color:T.ink2,
+                resize:'vertical', boxSizing:'border-box',
+              }}
+            />
+          </>
+        )}
+
+        {contexts && (
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div style={{ fontSize:12, color:T.ink3 }}>
+              {contexts.length > 1 ? 'This kubeconfig has multiple contexts — pick the one to connect:' : 'Confirm the cluster to connect:'}
+            </div>
+            {contexts.map(c => (
+              <label key={c.name} style={{
+                display:'flex', alignItems:'center', gap:9, padding:'8px 10px', borderRadius:8,
+                border:`1px solid ${selected === c.name ? T.line2 : T.line}`,
+                background: selected === c.name ? T.bg : 'transparent', cursor:'pointer',
+              }}>
+                <input type="radio" name="context" checked={selected === c.name} onChange={() => setSelected(c.name)} />
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:12.5, color:T.ink, fontFamily:MONO }}>{c.name}</div>
+                  <div style={{ fontSize:11, color:T.ink4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.serverUrl}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div style={{ fontSize:12, color:'#ef4444', padding:'8px 10px', borderRadius:8, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)' }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <button onClick={onClose} style={{
+            fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor:'pointer',
+            border:`1px solid ${T.line2}`, background:'transparent', color:T.ink2, fontFamily:SANS,
+          }}>Cancel</button>
+          {!contexts ? (
+            <button onClick={listContexts} disabled={!kubeconfig.trim() || busy} style={{
+              fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor: kubeconfig.trim() ? 'pointer' : 'default',
+              border:'none', background:T.ink, color:T.bg, fontFamily:SANS, opacity: busy ? 0.6 : 1,
+            }}>{busy ? 'Reading…' : 'Continue'}</button>
+          ) : (
+            <button onClick={connect} disabled={!selected || busy} style={{
+              fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor: selected ? 'pointer' : 'default',
+              border:'none', background:T.ink, color:T.bg, fontFamily:SANS, opacity: busy ? 0.6 : 1,
+            }}>{busy ? 'Connecting…' : 'Connect'}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Sidebar ── */
-function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine, onAddMachine }: {
+function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSelectMachine, onAddMachine, onAddCluster }: {
   vm: any; view: View; onViewChange: (v: View) => void
-  machines: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
-  onAddMachine: () => void
+  machines: SessionInfo[]; clusters: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
+  onAddMachine: () => void; onAddCluster: () => void
 }) {
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
@@ -282,6 +431,63 @@ function Sidebar({ vm, view, onViewChange, machines, activeKey, onSelectMachine,
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Clusters — kubeconfig direct-connect / relay pod, no VM agent needed */}
+      {clusters.length > 0 && (
+        <div style={{ marginTop:18 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 8px 6px' }}>
+            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:T.ink4, fontFamily:MONO }}>
+              Clusters
+            </div>
+            <button onClick={onAddCluster} title="Connect a Kubernetes cluster via kubeconfig" style={{
+              border:'none', background:'transparent', cursor:'pointer', color:T.ink3,
+              fontSize:14, lineHeight:1, padding:'2px 4px', borderRadius:5, fontFamily:MONO,
+            }}
+              onMouseEnter={e=>{ (e.currentTarget as any).style.color=T.ink; (e.currentTarget as any).style.background=T.surface }}
+              onMouseLeave={e=>{ (e.currentTarget as any).style.color=T.ink3; (e.currentTarget as any).style.background='transparent' }}
+            >+</button>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
+            {clusters.map((m) => {
+              const key = machineKey(m)
+              const active = key === activeKey
+              return (
+                <button key={m.id} onClick={() => onSelectMachine(m)} title={m.hostname} style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  height:28, padding:'0 8px', borderRadius:7,
+                  fontSize:12.5, border:'none', cursor:'pointer', width:'100%', textAlign:'left',
+                  color: active ? T.ink : T.ink2,
+                  background: active ? T.surface : 'transparent',
+                  fontFamily: SANS, transition:'all 0.1s',
+                }}
+                  onMouseEnter={e=>{ if(!active){(e.currentTarget as any).style.color=T.ink;(e.currentTarget as any).style.background=T.surface} }}
+                  onMouseLeave={e=>{ if(!active){(e.currentTarget as any).style.color=T.ink2;(e.currentTarget as any).style.background='transparent'} }}
+                >
+                  <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: m.online ? H.healthy : T.ink4 }} />
+                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                    {m.hostname || m.id}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {clusters.length === 0 && (
+        <div style={{ marginTop:18, padding:'0 8px' }}>
+          <button onClick={onAddCluster} title="Connect a Kubernetes cluster via kubeconfig" style={{
+            display:'flex', alignItems:'center', gap:8, width:'100%',
+            height:28, padding:'0 8px', borderRadius:7, border:'none', cursor:'pointer',
+            fontSize:12, color:T.ink3, background:'transparent', fontFamily:SANS,
+          }}
+            onMouseEnter={e=>{ (e.currentTarget as any).style.color=T.ink; (e.currentTarget as any).style.background=T.surface }}
+            onMouseLeave={e=>{ (e.currentTarget as any).style.color=T.ink3; (e.currentTarget as any).style.background='transparent' }}
+          >
+            <IcClusters />
+            <span>Connect a cluster</span>
+          </button>
         </div>
       )}
 

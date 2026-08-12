@@ -22,3 +22,37 @@ export async function fetchJoinInfo(): Promise<JoinInfo> {
   if (!res.ok) throw new Error(`join-info: HTTP ${res.status}`)
   return res.json()
 }
+
+export interface ClusterContextOption {
+  name: string
+  serverUrl: string
+  current: boolean
+}
+
+export interface ClusterEntry {
+  id: string
+  name: string
+  context_name: string
+  server_url?: string
+  added_at: string
+  online: boolean
+}
+
+// Uploads a kubeconfig. Omit `context` on the first call to get back the
+// list of contexts found in the file for a picker; call again with a chosen
+// `context` to actually create the cluster connection.
+export async function addCluster(kubeconfig: string, name?: string, context?: string):
+  Promise<{ contexts: ClusterContextOption[] } | ClusterEntry> {
+  const res = await fetch('/api/clusters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kubeconfig, name, context }),
+  })
+  if (!res.ok) throw new Error((await res.text()) || `clusters: HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function removeCluster(id: string): Promise<void> {
+  const res = await fetch(`/api/clusters/${id}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error(`clusters: HTTP ${res.status}`)
+}

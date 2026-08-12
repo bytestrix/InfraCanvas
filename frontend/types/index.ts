@@ -189,6 +189,7 @@ export interface SessionInfo {
   machineId?: string
   hostname: string
   scope: string[]
+  kind: 'machine' | 'cluster'
   online: boolean
   nodeCount: number
   browserCount: number

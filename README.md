@@ -198,6 +198,16 @@ Prefer fully isolated dashboards instead? Just install normally on each VM — e
 
 ---
 
+## ☸️ Clusters — Kubernetes with zero install
+
+If you already run Kubernetes, you don't need to put an agent anywhere. Click **+** next to **Clusters** in the sidebar and drop a kubeconfig — the dashboard talks to your cluster's API server directly, the same way `kubectl` does, running from the same machine as `infracanvas serve`.
+
+The kubeconfig **never leaves your machine**: it's read straight into memory by the same process serving your dashboard, saved locally at `0600` permissions next to your other InfraCanvas state, and never transmitted anywhere. If the cluster's API server is reachable from wherever `infracanvas serve` is running, this is the whole setup — no pod to deploy, no RBAC to review, no trust given to anything beyond your own kubeconfig's existing permissions.
+
+A kubeconfig with several contexts shows a picker so you connect exactly the cluster(s) you mean to — nothing gets added silently. Add as many as you like; each shows up as its own entry under **Clusters**.
+
+---
+
 ## ✨ Features
 
 ### Live topology map
@@ -228,6 +238,9 @@ One static Go binary with the dashboard embedded. Works with Docker, Kubernetes,
 
 ### Many VMs, one canvas
 Run the dashboard on one VM and join the rest as outbound-only agents — no inbound ports on the joined machines. Switch between them from the sidebar. See [Multiple VMs](#-multiple-vms--one-dashboard).
+
+### Kubernetes clusters — no agent required
+Drop a kubeconfig and see/control that cluster immediately — no install anywhere, kubeconfig never leaves your machine. See [Clusters](#️-clusters--kubernetes-with-zero-install).
 
 ### Secure by default
 Binds localhost. Tunnel is optional and outbound-only. Random per-install auth token, separate token for joining agents. Secret redaction before data leaves the discovery layer. Runs as your user, not root. Optional `--read-only` mode for public dashboards.

@@ -177,9 +177,14 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   // Toolbar chips (Kubernetes / Docker / Host / ...) — unchanged, existing
   // behaviour: toggling one on immediately shows every type in that category.
   // Kept separate from the "•••" picker tree below on purpose.
-  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
-    new Set<FilterKey>(['host'])
-  )
+  // Default to 'host' for Machines (VM agents always report one), but
+  // Clusters connections (kubeconfig direct-connect) report no host node at
+  // all — defaulting to 'host' there hides everything on first load ("No
+  // nodes to display"). Fall back to 'k8s' when there's no host.
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(() => {
+    const hasHost = vm.graph?.nodes?.some((n) => n.type === 'host')
+    return new Set<FilterKey>([hasHost ? 'host' : 'k8s'])
+  })
   const [expandedGroups] = useState<Set<string>>(new Set())
 
   // ── "•••" drill-down tree: host → category → type → individual ────────────
@@ -248,6 +253,10 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // category (e.g. "Kubernetes ×82"), sitting between host and the
       // type-level groups that appear once you drill into that summary.
       const hostNode = vm.graph.nodes.find((n) => n.type === 'host')
+      // Clusters connections (kubeconfig direct-connect) report no host node —
+      // fall back to the cluster node as the canvas root anchor so category
+      // summaries and orphans still attach to something instead of floating.
+      const rootAnchor = hostNode ?? vm.graph.nodes.find((n) => n.type === 'cluster')
       const categoryNodes: Node[] = []
       const categoryEdges: Edge[] = []
       for (const key of revealedCategories) {
@@ -275,10 +284,10 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           width: 260,
           height: 90,
         })
-        if (hostNode) {
+        if (rootAnchor) {
           categoryEdges.push({
-            id: `${hostNode.id}→${cid}→RUNS_ON`,
-            source: hostNode.id,
+            id: `${rootAnchor.id}→${cid}→RUNS_ON`,
+            source: rootAnchor.id,
             target: cid,
             label: 'RUNS_ON',
             type: 'smoothstep',
@@ -306,7 +315,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         flowNodes.find((n) => n.type === 'infraNode' && (n.data as InfraNodeData).nodeType === t)?.id
 
       for (const n of flowNodes) {
-        if (hostNode && n.id === hostNode.id) continue
+        if (rootAnchor && n.id === rootAnchor.id) continue
         if (hasIncoming.has(n.id)) continue
 
         const category = n.id.startsWith('category:')

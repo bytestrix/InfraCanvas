@@ -17,11 +17,25 @@ import (
 
 // State is the on-disk snapshot. Fields are optional; readers tolerate zero values.
 type State struct {
-	TunnelURL  string    `json:"tunnel_url,omitempty"`
-	Port       int       `json:"port,omitempty"`
-	Token      string    `json:"token,omitempty"`
-	AgentToken string    `json:"agent_token,omitempty"`
-	UpdatedAt  time.Time `json:"updated_at,omitempty"`
+	TunnelURL  string         `json:"tunnel_url,omitempty"`
+	Port       int            `json:"port,omitempty"`
+	Token      string         `json:"token,omitempty"`
+	AgentToken string         `json:"agent_token,omitempty"`
+	Clusters   []ClusterEntry `json:"clusters,omitempty"`
+	UpdatedAt  time.Time      `json:"updated_at,omitempty"`
+}
+
+// ClusterEntry records a Clusters connection (an uploaded kubeconfig context)
+// persisted across `infracanvas serve` restarts. Only metadata lives here —
+// the actual kubeconfig bytes are copied to KubeconfigPath (0600), never
+// inlined in state.json.
+type ClusterEntry struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	ContextName    string    `json:"context_name"`
+	ServerURL      string    `json:"server_url,omitempty"`
+	KubeconfigPath string    `json:"kubeconfig_path"`
+	AddedAt        time.Time `json:"added_at"`
 }
 
 // Dir returns the directory used to hold runtime state.

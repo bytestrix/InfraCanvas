@@ -21,13 +21,23 @@ type Discovery struct {
 	cache     *Cache
 }
 
-// NewDiscovery creates a new Kubernetes discovery instance
+// NewDiscovery creates a new Kubernetes discovery instance, resolving the
+// kubeconfig from the local host (in-cluster config, $KUBECONFIG, or
+// ~/.kube/config).
 func NewDiscovery() (*Discovery, error) {
 	config, err := getKubeConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
+	return NewDiscoveryFromConfig(config)
+}
 
+// NewDiscoveryFromConfig creates a Discovery against an explicit *rest.Config
+// instead of resolving one from the local host. Used for Clusters connections
+// (an uploaded kubeconfig, parsed via clientcmd.RESTConfigFromKubeConfig) —
+// the target cluster may have nothing to do with the machine this process
+// runs on.
+func NewDiscoveryFromConfig(config *rest.Config) (*Discovery, error) {
 	// Suppress "v1 Endpoints is deprecated" and similar API server warnings
 	// that flood the logs on every discovery cycle.
 	config.WarningHandler = rest.NoWarnings{}

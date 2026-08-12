@@ -49,6 +49,14 @@ func NewActionExecutor() (*ActionExecutor, error) {
 	}, nil
 }
 
+// NewActionExecutorForKubernetes wraps an already-constructed KubernetesExecutor
+// with no host/docker executors. Used for Clusters connections (a virtual
+// agent backed by an uploaded kubeconfig) where host/docker actions never
+// apply — only Kubernetes actions and pod exec are meaningful.
+func NewActionExecutorForKubernetes(k8sExec *KubernetesExecutor) *ActionExecutor {
+	return &ActionExecutor{kubernetesExecutor: k8sExec}
+}
+
 // ValidateAction validates that an action is well-formed and can be executed
 func (e *ActionExecutor) ValidateAction(action *Action) error {
 	if action == nil {

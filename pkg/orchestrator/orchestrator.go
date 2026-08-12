@@ -14,6 +14,7 @@ import (
 	"infracanvas/pkg/discovery/lxd"
 	"infracanvas/pkg/health"
 	"infracanvas/pkg/relationships"
+	"k8s.io/client-go/rest"
 )
 
 // Orchestrator coordinates discovery across multiple layers
@@ -35,6 +36,25 @@ func NewOrchestrator(enableRedaction bool) *Orchestrator {
 		healthCalculator:    health.NewCalculator(),
 		redactor:            redactor.NewRedactor(enableRedaction),
 	}
+}
+
+// NewKubernetesOnlyOrchestrator creates an Orchestrator scoped to a single
+// Kubernetes cluster reached via an explicit *rest.Config (e.g. built from an
+// uploaded kubeconfig) rather than the local host's own cluster access. Used
+// for Clusters connections — the caller should pass scope=["kubernetes"] to
+// Discover so host/docker/lxd discovery never runs against this process's
+// own machine.
+func NewKubernetesOnlyOrchestrator(enableRedaction bool, kubeCfg *rest.Config) (*Orchestrator, error) {
+	kd, err := kubernetes.NewDiscoveryFromConfig(kubeCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Kubernetes discovery: %w", err)
+	}
+	return &Orchestrator{
+		kubernetesDiscovery: kd,
+		relationshipBuilder: relationships.NewBuilder(),
+		healthCalculator:    health.NewCalculator(),
+		redactor:            redactor.NewRedactor(enableRedaction),
+	}, nil
 }
 
 // Discover performs discovery across the specified scope

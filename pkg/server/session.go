@@ -184,6 +184,7 @@ type SessionInfo struct {
 	MachineID    string    `json:"machineId,omitempty"`
 	Hostname     string    `json:"hostname"`
 	Scope        []string  `json:"scope"`
+	Kind         string    `json:"kind"` // "machine" | "cluster" — derived from Scope
 	Online       bool      `json:"online"`
 	NodeCount    int       `json:"nodeCount"`
 	BrowserCount int       `json:"browserCount"`
@@ -191,6 +192,18 @@ type SessionInfo struct {
 	PairedAt     time.Time `json:"pairedAt"`
 	LastSeen     time.Time `json:"lastSeen"`
 	Local        bool      `json:"local"`
+}
+
+// sessionKind derives whether a session is a VM Machine or a Clusters
+// connection purely from its reported scope — a session with kubernetes as
+// its only scope is a Clusters connection (kubeconfig direct-connect or an
+// in-cluster relay pod); anything with host/docker is a Machine. No separate
+// wire concept is needed for this.
+func sessionKind(scope []string) string {
+	if len(scope) == 1 && scope[0] == "kubernetes" {
+		return "cluster"
+	}
+	return "machine"
 }
 
 // List snapshots all sessions. The caller marks the local session.
@@ -206,6 +219,7 @@ func (s *SessionStore) List() []SessionInfo {
 			MachineID:    sess.MachineID,
 			Hostname:     sess.Hostname,
 			Scope:        sess.Scope,
+			Kind:         sessionKind(sess.Scope),
 			Online:       sess.Online,
 			NodeCount:    sess.NodeCount,
 			BrowserCount: len(sess.Browsers),

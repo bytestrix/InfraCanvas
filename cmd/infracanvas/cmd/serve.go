@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
+	"infracanvas/pkg/clustermgr"
 	"infracanvas/pkg/runstate"
 	"infracanvas/pkg/server"
 	"infracanvas/pkg/tunnel"
@@ -114,6 +115,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Clusters (kubeconfig direct-connect): each connected cluster runs as an
+	// in-process virtual agent that self-dials this same server, exactly like
+	// the host agent below. Loaded after the port is known since the manager
+	// needs a real ws:// address to dial.
+	clusterMgr := clustermgr.NewManager(
+		fmt.Sprintf("ws://127.0.0.1:%d", chosenPort),
+		agentToken,
+		serveRefresh,
+	)
+	srv.SetClusterManager(clusterMgr)
+
 	httpSrv := &http.Server{Handler: srv.Handler()}
 	serverErrCh := make(chan error, 1)
 	go func() {
@@ -124,6 +136,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	clusterMgr.LoadPersisted(ctx)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)

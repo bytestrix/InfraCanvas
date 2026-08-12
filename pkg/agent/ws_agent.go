@@ -19,6 +19,7 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
+	"k8s.io/client-go/rest"
 
 	"infracanvas/internal/models"
 	"infracanvas/pkg/actions"
@@ -38,6 +39,16 @@ type WSConfig struct {
 	// the agent runs in-process under `infracanvas serve`, where pair codes
 	// are irrelevant (local auto-pair).
 	QuietPairBanner bool
+
+	// KubeConfig, when set, makes this a Clusters virtual agent: discovery and
+	// actions run against this explicit cluster (an uploaded kubeconfig)
+	// instead of the local host's own kubeconfig/in-cluster access. Scope is
+	// forced to ["kubernetes"] — host/docker/lxd discovery never applies here.
+	KubeConfig *rest.Config
+	// MachineIDOverride, when set, is used instead of the local machine-id
+	// file. Clusters virtual agents use a per-cluster stable ID so the relay
+	// can resume their session across restarts, same as a real VM agent.
+	MachineIDOverride string
 }
 
 // DefaultWSConfig returns sensible defaults.
@@ -93,11 +104,31 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 	if cfg.BackendURL == "" {
 		return nil, fmt.Errorf("BackendURL is required")
 	}
-	if len(cfg.Scope) == 0 {
-		cfg.Scope = []string{"host", "docker"}
-	}
 	if cfg.RefreshSeconds < 5 {
 		cfg.RefreshSeconds = 5
+	}
+
+	if cfg.KubeConfig != nil {
+		// Clusters virtual agent: kubernetes-only, against an explicit cluster.
+		cfg.Scope = []string{"kubernetes"}
+
+		orch, err := orchestrator.NewKubernetesOnlyOrchestrator(cfg.EnableRedaction, cfg.KubeConfig)
+		if err != nil {
+			return nil, fmt.Errorf("kubernetes orchestrator: %w", err)
+		}
+		k8sExec, err := actions.NewKubernetesExecutorFromConfig(cfg.KubeConfig)
+		if err != nil {
+			return nil, fmt.Errorf("kubernetes executor: %w", err)
+		}
+		return &WSAgent{
+			cfg:            cfg,
+			orch:           orch,
+			actionExecutor: actions.NewActionExecutorForKubernetes(k8sExec),
+		}, nil
+	}
+
+	if len(cfg.Scope) == 0 {
+		cfg.Scope = []string{"host", "docker"}
 	}
 
 	orch := orchestrator.NewOrchestrator(cfg.EnableRedaction)
@@ -140,11 +171,15 @@ func (a *WSAgent) Run(ctx context.Context) error {
 
 	// Send HELLO.
 	hostname, _ := os.Hostname()
+	machineID := a.cfg.MachineIDOverride
+	if machineID == "" {
+		machineID = MachineID()
+	}
 	if err := a.send("HELLO", map[string]interface{}{
 		"hostname":  hostname,
 		"scope":     a.cfg.Scope,
 		"version":   "1.0.0",
-		"machineId": MachineID(),
+		"machineId": machineID,
 	}); err != nil {
 		return fmt.Errorf("failed to send HELLO: %w", err)
 	}

@@ -23,13 +23,20 @@ type KubernetesExecutor struct {
 	config        *rest.Config
 }
 
-// NewKubernetesExecutor creates a new Kubernetes executor
+// NewKubernetesExecutor creates a new Kubernetes executor, resolving the
+// kubeconfig from the local host.
 func NewKubernetesExecutor() (*KubernetesExecutor, error) {
 	config, err := getKubeConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
+	return NewKubernetesExecutorFromConfig(config)
+}
 
+// NewKubernetesExecutorFromConfig creates a KubernetesExecutor against an
+// explicit *rest.Config — used for Clusters connections (an uploaded
+// kubeconfig) rather than the local host's own cluster access.
+func NewKubernetesExecutorFromConfig(config *rest.Config) (*KubernetesExecutor, error) {
 	config.WarningHandler = rest.NoWarnings{}
 
 	clientset, err := kubernetes.NewForConfig(config)
