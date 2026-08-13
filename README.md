@@ -57,6 +57,35 @@ chmod +x infracanvas-*
 
 Open the link it prints, click **+** next to **Clusters** in the sidebar, and drop a kubeconfig. That's it — no agent installed anywhere, nothing added to the cluster, and the kubeconfig never leaves this machine. Multiple contexts in the file? You'll get a picker so you connect exactly the cluster(s) you mean to. Full details: [Clusters](#-clusters--kubernetes-with-zero-install).
 
+<details>
+<summary>Don't have a kubeconfig handy?</summary>
+
+If `kubectl` already works on this machine, you already have one — it's whatever `$KUBECONFIG` points to, or `~/.kube/config` by default:
+
+```bash
+cat ~/.kube/config
+```
+
+You can paste that whole file in. If it has clusters/contexts you don't want to hand over, trim it to just the one you're connecting first:
+
+```bash
+kubectl config view --minify --flatten > this-cluster-only.yaml
+```
+
+`--flatten` matters — it inlines any certs the file references by path, so the copy is self-contained.
+
+No local kubeconfig yet? Generate one from your cloud provider, then drop that file in instead:
+
+```bash
+aws eks update-kubeconfig --name <cluster> --region <region>          # EKS
+gcloud container clusters get-credentials <cluster> --zone <zone>     # GKE
+az aks get-credentials --resource-group <rg> --name <cluster>         # AKS
+```
+
+One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exec:` plugin (`aws`, `gcloud`, `az`) rather than an embedded token — that CLI needs to be installed and logged in on whichever machine runs `infracanvas serve`. This is automatically true if you're running it wherever `kubectl` already works for you, as above; it can bite you if you copy the file to a different machine that doesn't have that CLI.
+
+</details>
+
 ### Just want to look at one VM right now?
 
 Run this on it:
