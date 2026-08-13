@@ -249,40 +249,13 @@ Binds localhost. Tunnel is optional and outbound-only. Random per-install auth t
 
 ## ⚙️ How it works
 
-```
-       ┌─────────────────────────────────────────┐
-       │  your-vm                                │
-       │                                         │
-       │   ┌────────────────────────────────┐    │
-       │   │  infracanvas (single binary)   │    │
-       │   │   ├── discovery agent          │    │
-       │   │   ├── WebSocket relay          │    │
-       │   │   └── embedded dashboard UI    │    │
-       │   └────────────────────────────────┘    │
-       │            ▲ 127.0.0.1:7777             │
-       │            │                            │
-       │   ┌────────┴───────┐                    │
-       │   │  cloudflared   │  outbound only     │
-       │   └────────┬───────┘                    │
-       └────────────┼────────────────────────────┘
-                    │  Cloudflare quick-tunnel
-                    ▼
-              ┌──────────┐
-              │  browser │  →  https://xyz.trycloudflare.com
-              └──────────┘
-```
+<p align="center"><img src="docs/architecture.png" alt="Architecture diagram: infracanvas serve runs the relay, dashboard, and discovery in one process; your browser reaches it directly or through an optional outbound-only Cloudflare tunnel; other VMs join as outbound agents; Kubernetes clusters connect directly via kubeconfig with no agent installed" width="820"></p>
 
-One binary, one URL. The dashboard, relay and agent all run in the same process on the machine you're inspecting. Your browser is just a client. The tunnel above is optional — with `--no-tunnel` or `--private` the diagram loses its `cloudflared` box entirely and nothing leaves your network.
+One binary, one URL. The dashboard, relay and discovery agent all run in the same process on the machine you're inspecting. Your browser is just a client. The tunnel is optional — with `--no-tunnel` or `--private` it drops out entirely and nothing leaves your network.
 
-Adding more VMs keeps the same shape: the hub's relay accepts extra agents, each connecting **outbound** to the hub.
+Adding more VMs keeps the same shape: the hub's relay accepts extra agents, each connecting **outbound** to the hub — joined VMs open no inbound port and serve no UI, they only push their graph to the hub.
 
-```
-   other-vm-1 ──┐  outbound WS
-   other-vm-2 ──┤─────────────▶  hub-vm  ◀── browser
-   other-vm-3 ──┘  (agent only)   (relay + dashboard)
-```
-
-Joined VMs open no inbound port and serve no UI — they only push their graph to the hub.
+Kubernetes clusters connect a third way, with no agent at all: drop a kubeconfig and the hub talks to that cluster's API server directly, the same way `kubectl` does. See [Clusters](#️-clusters--kubernetes-with-zero-install).
 
 ---
 
