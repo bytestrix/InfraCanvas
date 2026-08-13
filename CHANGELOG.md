@@ -7,6 +7,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.17.0] — 2026-08-12
+
+### Added
+- **Clusters — connect Kubernetes via kubeconfig, zero agent install.** Drop a kubeconfig and InfraCanvas talks to your cluster's API server directly, the same way `kubectl` does — nothing installed anywhere, nothing added to the cluster, and the kubeconfig never leaves this machine. Multiple contexts in one file get a picker so you connect exactly the cluster(s) you mean to. See the [Clusters](README.md#-clusters--kubernetes-with-zero-install) section.
+
+### Fixed
+- **Terminal output no longer garbles on connect.** A PTY resize race meant the terminal could send its first `exec_start` before the initial `fit()` ran, and every subsequent resize fired unconditionally with no debounce — both are now sequenced and debounced correctly.
+
+---
+
+## [0.16.0] — 2026-08-05
+
+### Added
+- **Progressive disclosure on the canvas.** Large graphs now drill down host → category → type → instance instead of dumping every node at once, keeping dense clusters and multi-host views readable.
+
+---
+
+## [0.15.0] — 2026-08-03
+
+### Added
+- **Add machine flow, without leaving the browser.** The dashboard now generates a ready-to-run join command inline, instead of sending you to the README for the install one-liner.
+
+---
+
+## [0.14.0] — 2026-07-31
+
+### Added
+- **Multi-VM hub mode.** One dashboard, many VMs — agents connect outbound to a hub instance, so you can watch a whole fleet from a single `infracanvas serve` without exposing anything inbound on the boxes themselves.
+- **LXD/Incus wired into the continuous agent.** The cloud agent (`infracanvas start`) now keeps LXD/Incus instances live via a dedicated collection tick and auto-appends the `lxd` scope when a socket is present, matching the one-shot discovery shipped in v0.13.0.
+
+---
+
 ## [0.13.0] — 2026-07-07
 
 ### Added

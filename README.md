@@ -13,10 +13,10 @@
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-can-i-trust-this-on-my-vm">Trust</a> ·
-  <a href="#-clusters--kubernetes-with-zero-install">Clusters</a> ·
+  <a href="#️-clusters--kubernetes-with-zero-install">Clusters</a> ·
   <a href="#-multiple-vms--one-dashboard">Multiple VMs</a> ·
   <a href="#-features">Features</a> ·
-  <a href="#-how-it-works">How it works</a> ·
+  <a href="#️-how-it-works">How it works</a> ·
   <a href="#-security-model">Security</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
@@ -25,7 +25,7 @@
 
 ### Two ways in — pick yours
 
-- **☸️ Already run Kubernetes?** [Drop a kubeconfig.](#-clusters--kubernetes-with-zero-install) No agent installed anywhere, nothing added to the cluster, the kubeconfig never leaves your machine.
+- **☸️ Already run Kubernetes?** [Drop a kubeconfig.](#️-clusters--kubernetes-with-zero-install) No agent installed anywhere, nothing added to the cluster, the kubeconfig never leaves your machine.
 - **🖥️ Running plain VMs?** [One install command.](#-quick-start) 30 seconds later you're looking at that VM's live topology.
 
 ---
@@ -34,7 +34,7 @@
 
 You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-InfraCanvas replaces that ritual with one binary you run yourself. It discovers every container, pod, service, volume and network — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. Open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) or [several clusters](#-clusters--kubernetes-with-zero-install) and they all land in one dashboard.
+InfraCanvas replaces that ritual with one binary you run yourself. It discovers every container, pod, service, volume and network — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. Open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) or [several clusters](#️-clusters--kubernetes-with-zero-install) and they all land in one dashboard.
 
 You get a **map**, not a list: what runs where, what talks to what, and what's broken, at a glance. Self-hosted end to end — your infrastructure data never leaves your machines.
 
@@ -49,13 +49,13 @@ Two different starting points — pick whichever matches what you actually have.
 Run this wherever `kubectl` already works for you — your laptop, a bastion, anywhere with network access to the cluster. It doesn't need to run near the cluster, or on Linux:
 
 ```bash
-curl -fsSLO https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-darwin-arm64   # Apple Silicon Mac
-# or infracanvas-darwin-amd64 (Intel Mac) / infracanvas-linux-amd64 / infracanvas-linux-arm64
+os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+curl -fsSLO "https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-$os-$arch"
 chmod +x infracanvas-*
 ./infracanvas-* serve --no-tunnel --private
 ```
 
-Open the link it prints, click **+** next to **Clusters** in the sidebar, and drop a kubeconfig. That's it — no agent installed anywhere, nothing added to the cluster, and the kubeconfig never leaves this machine. Multiple contexts in the file? You'll get a picker so you connect exactly the cluster(s) you mean to. Full details: [Clusters](#-clusters--kubernetes-with-zero-install).
+Open the link it prints, click **+** next to **Clusters** in the sidebar, and drop a kubeconfig. That's it — no agent installed anywhere, nothing added to the cluster, and the kubeconfig never leaves this machine. Multiple contexts in the file? You'll get a picker so you connect exactly the cluster(s) you mean to. Full details: [Clusters](#️-clusters--kubernetes-with-zero-install).
 
 <details>
 <summary>Don't have a kubeconfig handy?</summary>
@@ -176,22 +176,22 @@ The tunnel is optional even with the curl installer — every private-by-default
 
 ```bash
 # Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly
-curl -fsSL .../install.sh | bash -s -- --no-tunnel
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --no-tunnel
 
 # Bind 127.0.0.1 only; reach via SSH tunnel (implies --no-tunnel)
-curl -fsSL .../install.sh | bash -s -- --private
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --private
 
 # Custom port (default 7777) — only matters with --no-tunnel
-curl -fsSL .../install.sh | bash -s -- --port 8888
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --port 8888
 
 # Read-only: viewers can look, not touch — public demos and dashboards on a TV
-curl -fsSL .../install.sh | bash -s -- --read-only
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --read-only
 
 # Agent-only: join this VM to an existing hub (see Multiple VMs below)
-curl -fsSL .../install.sh | bash -s -- --join <hub-url> --token <join-token>
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --join <hub-url> --token <join-token>
 
 # Pin a specific version
-curl -fsSL .../install.sh | bash -s -- --version v0.12.1
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --version v0.12.1
 ```
 
 </details>

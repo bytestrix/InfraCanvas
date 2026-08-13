@@ -80,7 +80,7 @@ case "$ARCH" in
   aarch64|arm64) ARCH="arm64" ;;
   *) error "Unsupported architecture: $ARCH" ;;
 esac
-[[ "$OS" != "linux" ]] && error "This installer is Linux-only. On macOS use: brew install bytestrix/tap/infracanvas"
+[[ "$OS" != "linux" ]] && error "This installer is Linux-only. On macOS, download the darwin binary directly: https://github.com/bytestrix/InfraCanvas/releases/latest"
 
 info "Detected platform: $OS/$ARCH"
 
