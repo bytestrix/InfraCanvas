@@ -84,7 +84,14 @@ type Manager struct {
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
-	rootCtx context.Context // long-lived; never an inbound request's context
+	// lastError tracks each cluster's most recent discovery outcome (nil =
+	// last attempt succeeded). Online in List() used to mean only "the
+	// goroutine is still alive," which stays true forever for a cluster
+	// pointed at an unreachable/misconfigured API server — the WS handshake
+	// to the local server always succeeds regardless of whether the cluster
+	// itself is reachable. This tracks the thing that actually matters.
+	lastError map[string]error
+	rootCtx   context.Context // long-lived; never an inbound request's context
 }
 
 // NewManager creates a Manager. backendURL is the local server's own
@@ -97,6 +104,7 @@ func NewManager(backendURL, agentToken string, refreshSeconds int) *Manager {
 		refreshSeconds: refreshSeconds,
 		enableRedact:   true,
 		cancels:        make(map[string]context.CancelFunc),
+		lastError:      make(map[string]error),
 	}
 }
 
@@ -133,7 +141,8 @@ func (m *Manager) List() ([]Entry, error) {
 	out := make([]Entry, 0, len(s.Clusters))
 	for _, e := range s.Clusters {
 		_, running := m.cancels[e.ID]
-		out = append(out, Entry{ClusterEntry: e, Online: running})
+		online := running && m.lastError[e.ID] == nil
+		out = append(out, Entry{ClusterEntry: e, Online: online})
 	}
 	return out, nil
 }
@@ -208,6 +217,7 @@ func (m *Manager) Remove(id string) error {
 		cancel()
 		delete(m.cancels, id)
 	}
+	delete(m.lastError, id)
 	m.mu.Unlock()
 
 	var path string
@@ -267,6 +277,11 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 				QuietPairBanner:   true,
 				KubeConfig:        restCfg,
 				MachineIDOverride: "cluster-" + entry.ID,
+				OnDiscoveryResult: func(discErr error) {
+					m.mu.Lock()
+					m.lastError[entry.ID] = discErr
+					m.mu.Unlock()
+				},
 			}
 			ag, err := agent.NewWSAgent(wsCfg)
 			if err != nil {

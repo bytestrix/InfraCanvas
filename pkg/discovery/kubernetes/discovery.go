@@ -38,9 +38,27 @@ func NewDiscovery() (*Discovery, error) {
 // the target cluster may have nothing to do with the machine this process
 // runs on.
 func NewDiscoveryFromConfig(config *rest.Config) (*Discovery, error) {
+	// Clusters virtual agents share this *rest.Config pointer with the action
+	// executor (used for pods/exec terminal sessions and log streaming, which
+	// legitimately need to stay open well past any discovery-sized timeout) —
+	// copy before mutating so Timeout below only ever applies to discovery's
+	// own clientset, never leaks into exec/logs through the shared pointer.
+	config = rest.CopyConfig(config)
+
 	// Suppress "v1 Endpoints is deprecated" and similar API server warnings
 	// that flood the logs on every discovery cycle.
 	config.WarningHandler = rest.NoWarnings{}
+
+	// A per-request context timeout isn't reliably honored during the dial
+	// phase across every client-go transport path, so an unreachable API
+	// server (wrong endpoint, dropped packets, no route) can hang each
+	// discovery call far longer than IsAvailable's own short context ever
+	// intends. rest.Config.Timeout is a hard http.Client-level bound
+	// client-go always applies, so set one here regardless of the caller's
+	// context.
+	if config.Timeout == 0 {
+		config.Timeout = 10 * time.Second
+	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {

@@ -49,6 +49,17 @@ type WSConfig struct {
 	// file. Clusters virtual agents use a per-cluster stable ID so the relay
 	// can resume their session across restarts, same as a real VM agent.
 	MachineIDOverride string
+
+	// OnDiscoveryResult, if set, is called after every discovery attempt with
+	// the resulting error (nil on success). The WS session itself stays
+	// connected either way — a transient discovery failure shouldn't drop a
+	// real VM agent's connection — but callers that need to know whether
+	// discovery is actually succeeding (Clusters: the WS handshake can
+	// succeed with an unreachable/misconfigured API server, since it never
+	// touches the cluster) can use this to surface real connectivity health
+	// instead of just "the socket is open." Unset by default; a nil callback
+	// is a no-op, so this changes nothing for existing callers.
+	OnDiscoveryResult func(err error)
 }
 
 // DefaultWSConfig returns sensible defaults.
@@ -201,6 +212,9 @@ func (a *WSAgent) Run(ctx context.Context) error {
 
 	// Run the first full snapshot.
 	snap, graph, err := a.collectAndFormatGraph(ctx)
+	if a.cfg.OnDiscoveryResult != nil {
+		a.cfg.OnDiscoveryResult(discoveryResult(snap, err))
+	}
 	if err != nil {
 		log.Printf("initial discovery error: %v", err)
 	} else {
@@ -229,6 +243,9 @@ func (a *WSAgent) Run(ctx context.Context) error {
 
 		case <-ticker.C:
 			snap, graph, err := a.collectAndFormatGraph(ctx)
+			if a.cfg.OnDiscoveryResult != nil {
+				a.cfg.OnDiscoveryResult(discoveryResult(snap, err))
+			}
 			if err != nil {
 				log.Printf("discovery error: %v", err)
 				continue
@@ -439,6 +456,29 @@ func (a *WSAgent) handleServerCommand(ctx context.Context, env wsEnvelope) {
 }
 
 // ── discovery & graph ─────────────────────────────────────────────────────────
+
+// discoveryResult folds a snapshot's per-layer Metadata.Errors into the
+// top-level error OnDiscoveryResult sees. Discover() intentionally never
+// fails the whole call just because one scoped layer errored — a real VM
+// agent with scope=[host,docker,kubernetes] should still ship the two
+// layers that worked — so a passing top-level err here is not proof
+// discovery actually succeeded. For a Clusters virtual agent, scope is
+// always exactly ["kubernetes"]: any entry in Metadata.Errors there means
+// the cluster is 100% unreachable, not "partially degraded", so treat it
+// as a failure.
+func discoveryResult(snap *models.InfraSnapshot, err error) error {
+	if err != nil {
+		return err
+	}
+	if snap != nil && len(snap.Metadata.Errors) > 0 {
+		msgs := make([]string, len(snap.Metadata.Errors))
+		for i, e := range snap.Metadata.Errors {
+			msgs[i] = e.Layer + ": " + e.Message
+		}
+		return fmt.Errorf("discovery layer errors: %s", strings.Join(msgs, "; "))
+	}
+	return nil
+}
 
 func (a *WSAgent) collectAndFormatGraph(ctx context.Context) (*models.InfraSnapshot, *output.GraphOutput, error) {
 	snap, err := a.orch.Discover(ctx, a.cfg.Scope)
