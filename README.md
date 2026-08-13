@@ -23,11 +23,18 @@
 
 ---
 
+### Two ways in — pick yours
+
+- **☸️ Already run Kubernetes?** [Drop a kubeconfig.](#-clusters--kubernetes-with-zero-install) No agent installed anywhere, nothing added to the cluster, the kubeconfig never leaves your machine.
+- **🖥️ Running plain VMs?** [One install command.](#-quick-start) 30 seconds later you're looking at that VM's live topology.
+
+---
+
 ## What is it?
 
 You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-InfraCanvas replaces that ritual with one binary you run yourself. Already run Kubernetes? [Drop a kubeconfig](#-clusters--kubernetes-with-zero-install) and see that cluster live — no agent installed anywhere, nothing added to the cluster, the kubeconfig never leaves your machine. Running plain VMs instead? It automatically discovers every container, pod, service, volume and network on the host — plus systemd services and processes — and serves a **live, interactive topology map** in your browser either way. Nodes are green when healthy, red when not. You can open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) and they all land in one dashboard.
+InfraCanvas replaces that ritual with one binary you run yourself. It discovers every container, pod, service, volume and network — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. Open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) or [several clusters](#-clusters--kubernetes-with-zero-install) and they all land in one dashboard.
 
 You get a **map**, not a list: what runs where, what talks to what, and what's broken, at a glance. Self-hosted end to end — your infrastructure data never leaves your machines.
 
