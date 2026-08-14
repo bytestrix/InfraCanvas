@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.18.0] — 2026-08-14
+
+### Fixed
+- **Mobile-responsive dashboard.** The 200px sidebar had no responsive handling at all, consuming over half a 375px viewport with no scroll fallback — now an off-canvas drawer below 720px. The canvas toolbar, side panels, terminal/logs panels, and overview tile grid all had the same class of issue (fixed widths/heights and hard column minimums with no narrower fallback) and are fixed to match.
+
+---
+
 ## [0.17.0] — 2026-08-12
 
 ### Added
