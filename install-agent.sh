@@ -276,11 +276,14 @@ UNIT_USER=""
 UNIT_GROUP=""
 UNIT_SUPP_GROUPS=""
 UNIT_KUBECONFIG=""
-UNIT_HOME=""
+# HOME must be set for every run user, not just non-root — a root service
+# with no HOME makes os.UserCacheDir() fail in the agent, which falls back
+# to /tmp/infracanvas: a world-writable path any local user can pre-create
+# and plant a binary in before the service ever starts.
+UNIT_HOME="Environment=HOME=${RUN_HOME}"
 if [[ "$RUN_USER" != "root" ]]; then
   UNIT_USER="User=${RUN_USER}"
   UNIT_GROUP="Group=${RUN_USER}"
-  UNIT_HOME="Environment=HOME=${RUN_HOME}"
   if id -nG "$RUN_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
     UNIT_SUPP_GROUPS="SupplementaryGroups=docker"
   else

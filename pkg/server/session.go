@@ -19,9 +19,17 @@ var pairWords = []string{
 
 // Session represents a paired agent↔browser session.
 type Session struct {
-	ID           string
-	PairCode     string
-	MachineID    string // stable agent identity; empty for legacy agents
+	ID        string
+	PairCode  string
+	MachineID string // stable agent identity; empty for legacy agents
+	// ResumeSecret is issued the first time this MachineID connects and must
+	// be presented on every later HELLO claiming the same MachineID before
+	// UpsertByMachine will swap that connection in. Without this, the shared
+	// hub join token alone "authenticates" any agent to claim any other
+	// machine's MachineID and hijack its session — including the browsers
+	// already attached to it. Empty for non-machine-identified (legacy)
+	// sessions, which never resume by MachineID at all.
+	ResumeSecret string
 	AgentConn    *SafeConn
 	Browsers     []*SafeConn
 	Hostname     string
@@ -82,25 +90,46 @@ func (s *SessionStore) createLocked(conn *SafeConn) *Session {
 }
 
 // UpsertByMachine resumes the session owned by machineID (swapping in the new
-// connection, keeping attached browsers) or creates a fresh one. The second
-// return value reports whether an existing session was resumed.
-func (s *SessionStore) UpsertByMachine(conn *SafeConn, machineID string) (*Session, bool) {
+// connection, keeping attached browsers) or creates a fresh one issuing a new
+// ResumeSecret. The second return value reports whether an existing session
+// was found for this machineID; the third reports whether the caller is
+// authorized to use it — false means an existing session was found but
+// presentedSecret didn't match its ResumeSecret, and the caller must reject
+// the connection rather than use the returned Session (which is the real,
+// still-attached victim session — returned only so the caller can log which
+// machine was targeted, never so it can be connected to).
+func (s *SessionStore) UpsertByMachine(conn *SafeConn, machineID, presentedSecret string) (sess *Session, found bool, authorized bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if sess, ok := s.byMachine[machineID]; ok {
-		sess.mu.Lock()
-		sess.AgentConn = conn
-		sess.Online = true
-		sess.LastSeen = time.Now()
-		sess.mu.Unlock()
-		return sess, true
+	if existing, ok := s.byMachine[machineID]; ok {
+		if existing.ResumeSecret != "" && existing.ResumeSecret != presentedSecret {
+			return existing, true, false
+		}
+		existing.mu.Lock()
+		existing.AgentConn = conn
+		existing.Online = true
+		existing.LastSeen = time.Now()
+		existing.mu.Unlock()
+		return existing, true, true
 	}
 
-	sess := s.createLocked(conn)
+	sess = s.createLocked(conn)
 	sess.MachineID = machineID
+	sess.ResumeSecret = generateResumeSecret()
 	s.byMachine[machineID] = sess
-	return sess, false
+	return sess, false, true
+}
+
+func generateResumeSecret() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failing is effectively unrecoverable on any real system;
+		// an empty secret would disable the check entirely, so panic instead
+		// of silently downgrading to "any machine can claim any session."
+		panic("resume secret generation failed: " + err.Error())
+	}
+	return fmt.Sprintf("%x", b)
 }
 
 // FindByAny resolves a browser-supplied key against session ID, machine ID,

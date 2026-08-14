@@ -108,6 +108,15 @@ type WSAgent struct {
 	lastGraphMu    sync.RWMutex
 	execSessions   sync.Map // sessionID → *execSession
 	pfSessions     sync.Map // key (ns/pod:local) → *actions.PortForwardSession
+
+	// resumeSecret proves ownership of this agent's MachineID on reconnect —
+	// required since the shared hub join token alone doesn't distinguish one
+	// machine from another. Loaded from disk at startup for a real VM agent
+	// (persists across process restarts, e.g. a reboot); in-memory only for
+	// Clusters virtual agents (MachineIDOverride set), which only ever
+	// reconnect within one server process's lifetime anyway.
+	resumeSecretMu sync.Mutex
+	resumeSecret   string
 }
 
 // NewWSAgent creates a new WebSocket agent.
@@ -117,6 +126,11 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 	}
 	if cfg.RefreshSeconds < 5 {
 		cfg.RefreshSeconds = 5
+	}
+
+	agentResumeSecret := ""
+	if cfg.MachineIDOverride == "" {
+		agentResumeSecret = loadResumeSecret()
 	}
 
 	if cfg.KubeConfig != nil {
@@ -135,6 +149,7 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 			cfg:            cfg,
 			orch:           orch,
 			actionExecutor: actions.NewActionExecutorForKubernetes(k8sExec),
+			resumeSecret:   agentResumeSecret,
 		}, nil
 	}
 
@@ -153,7 +168,25 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 		cfg:            cfg,
 		orch:           orch,
 		actionExecutor: executor,
+		resumeSecret:   agentResumeSecret,
 	}, nil
+}
+
+func (a *WSAgent) getResumeSecret() string {
+	a.resumeSecretMu.Lock()
+	defer a.resumeSecretMu.Unlock()
+	return a.resumeSecret
+}
+
+// setResumeSecret stores a newly issued secret and persists it to disk for
+// a real VM agent (MachineIDOverride unset) so it survives process restarts.
+func (a *WSAgent) setResumeSecret(secret string) {
+	a.resumeSecretMu.Lock()
+	a.resumeSecret = secret
+	a.resumeSecretMu.Unlock()
+	if a.cfg.MachineIDOverride == "" {
+		saveResumeSecret(secret)
+	}
 }
 
 // Run connects to the backend, prints the pair code, and streams graph data
@@ -187,10 +220,11 @@ func (a *WSAgent) Run(ctx context.Context) error {
 		machineID = MachineID()
 	}
 	if err := a.send("HELLO", map[string]interface{}{
-		"hostname":  hostname,
-		"scope":     a.cfg.Scope,
-		"version":   "1.0.0",
-		"machineId": machineID,
+		"hostname":     hostname,
+		"scope":        a.cfg.Scope,
+		"version":      "1.0.0",
+		"machineId":    machineID,
+		"resumeSecret": a.getResumeSecret(),
 	}); err != nil {
 		return fmt.Errorf("failed to send HELLO: %w", err)
 	}
@@ -386,9 +420,13 @@ func (a *WSAgent) waitForPairCode(ctx context.Context, ch <-chan wsEnvelope) (st
 		case env := <-ch:
 			if env.Type == "PAIR_CODE" {
 				var d struct {
-					Code string `json:"code"`
+					Code         string `json:"code"`
+					ResumeSecret string `json:"resumeSecret"`
 				}
 				if err := json.Unmarshal(env.Data, &d); err == nil && d.Code != "" {
+					if d.ResumeSecret != "" {
+						a.setResumeSecret(d.ResumeSecret)
+					}
 					return d.Code, nil
 				}
 			}

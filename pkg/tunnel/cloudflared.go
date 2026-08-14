@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -272,14 +273,23 @@ func ensureCloudflared() (string, error) {
 	}
 	cacheDir := cacheDir()
 	binPath := filepath.Join(cacheDir, "cloudflared")
-	if info, err := os.Stat(binPath); err == nil && info.Mode()&0o111 != 0 {
+	if info, err := os.Stat(binPath); err == nil && info.Mode()&0o111 != 0 && ownedByUs(info) {
 		return binPath, nil
 	}
 
 	if runtime.GOOS != "linux" {
 		return "", fmt.Errorf("cloudflared not on PATH; install it (`brew install cloudflared` on macOS) and retry")
 	}
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+	// os.MkdirAll silently succeeds on an already-existing directory without
+	// touching its ownership or permissions — if HOME was ever unset (e.g. a
+	// root systemd service missing Environment=HOME=, see install-agent.sh)
+	// this falls back to the world-writable /tmp/infracanvas, and MkdirAll
+	// alone does nothing to stop another local user from having pre-created
+	// that directory (and owning it) before this process ever ran. Refuse to
+	// reuse a cache directory we don't own — better to fail loudly (or
+	// re-download into our own directory) than to execute a binary someone
+	// else placed on this system.
+	if err := ensureOwnCacheDir(cacheDir); err != nil {
 		return "", err
 	}
 
@@ -303,6 +313,38 @@ func cacheDir() string {
 	return "/tmp/infracanvas"
 }
 
+// ownedByUs reports whether info's owning UID matches this process's UID.
+// On non-Unix platforms (no syscall.Stat_t) it fails open — this path is
+// Linux-only anyway (see the runtime.GOOS check right after it's called).
+func ownedByUs(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return true
+	}
+	return int(stat.Uid) == os.Getuid()
+}
+
+// ensureOwnCacheDir creates dir (mode 0700 — no reason for any other local
+// user to even list it) if it doesn't exist, or verifies we already own it.
+// Refuses to reuse a directory owned by someone else instead of silently
+// trusting whatever another local user may have placed inside it.
+func ensureOwnCacheDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(dir, 0o700)
+		}
+		return err
+	}
+	if !ownedByUs(info) {
+		return fmt.Errorf(
+			"cache directory %s exists but isn't owned by this process (uid %d) — "+
+				"remove it and retry, or set $HOME so a private cache dir is used instead",
+			dir, os.Getuid())
+	}
+	return os.Chmod(dir, 0o700)
+}
+
 func download(url, dest string) error {
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Get(url)
@@ -313,7 +355,7 @@ func download(url, dest string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %s", resp.Status)
 	}
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
 	if err != nil {
 		return err
 	}

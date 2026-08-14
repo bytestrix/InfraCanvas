@@ -95,9 +95,14 @@ func Update(mut func(*State)) error {
 
 func write(s State) error {
 	dir := Dir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// 0700, not 0755: State.Token and State.AgentToken are live credentials
+	// (the UI token doubles as the SSH-equivalent dashboard key; AgentToken
+	// is the hub join secret) — no reason for any other local user to even
+	// list this directory, let alone read the file inside it.
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	_ = os.Chmod(dir, 0o700) // tighten if the dir pre-existed with looser perms from an older version
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -112,7 +117,7 @@ func write(s State) error {
 		_ = tmp.Close()
 		return err
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return err
 	}

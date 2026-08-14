@@ -92,11 +92,19 @@ type HelloData struct {
 	Scope     []string `json:"scope"`
 	Version   string   `json:"version"`
 	MachineID string   `json:"machineId,omitempty"`
+	// ResumeSecret proves this connection actually owns MachineID — required
+	// because the hub join token is shared across every VM, so it alone
+	// can't be used to tell agents apart. See Session.ResumeSecret.
+	ResumeSecret string `json:"resumeSecret,omitempty"`
 }
 
 // PairCodeData is sent to the agent after connection.
 type PairCodeData struct {
 	Code string `json:"code"`
+	// ResumeSecret is set only the first time a MachineID connects — the
+	// agent must persist it locally and present it on every future HELLO
+	// claiming this MachineID.
+	ResumeSecret string `json:"resumeSecret,omitempty"`
 }
 
 // PairedData is sent to the agent when a browser pairs.
@@ -237,7 +245,7 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/ws/agent", s.handleAgentWS)
 	s.mux.HandleFunc("/ws/canvas", s.handleBrowserWS)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
-	s.mux.HandleFunc("/api/sessions", s.requireUIOrAgentToken(s.handleSessions))
+	s.mux.HandleFunc("/api/sessions", s.requireUIToken(s.handleSessions))
 	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
 	s.mux.HandleFunc("/api/clusters", s.requireUIOrAgentToken(s.handleClusters))
 	s.mux.HandleFunc("/api/clusters/", s.requireUIOrAgentToken(s.handleClusterByID))
@@ -250,6 +258,23 @@ func NewWithOptions(opts Options) *Server {
 func (s *Server) MountUI(fsys fs.FS) {
 	fileServer := http.FileServer(http.FS(fsys))
 	s.mux.Handle("/", s.requireUIAuth(fileServer))
+}
+
+// requireUIToken protects routes meant for the dashboard only — never the
+// shared agent/hub token, which every VM in a hub holds identically and so
+// grants no real per-caller identity. Use this for anything that discloses
+// data about *other* machines (e.g. the session roster); agents have no
+// legitimate reason to enumerate each other.
+func (s *Server) requireUIToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uiOK := s.uiToken != "" && s.checkUIToken(r)
+		open := s.uiToken == ""
+		if uiOK || open {
+			next(w, r)
+			return
+		}
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}
 }
 
 // requireUIOrAgentToken protects API routes readable by both the dashboard
@@ -465,12 +490,23 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.Context == "" {
+			// Pure parse — clientcmd.Load never touches the network or runs an
+			// exec credential plugin, so this is safe to allow even read-only.
 			contexts, err := clustermgr.ParseContexts([]byte(req.Kubeconfig))
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"contexts": contexts})
+			return
+		}
+
+		// Actually connecting a cluster runs the kubeconfig's auth (including
+		// any `exec:` credential plugin client-go executes verbatim) — a
+		// mutating, code-executing action that read-only mode must block the
+		// same as any other write.
+		if s.readOnly {
+			http.Error(w, "read-only mode: adding clusters is disabled", http.StatusForbidden)
 			return
 		}
 
@@ -500,6 +536,10 @@ func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.readOnly {
+		http.Error(w, "read-only mode: removing clusters is disabled", http.StatusForbidden)
 		return
 	}
 	if err := s.clusterMgr.Remove(id); err != nil {
@@ -545,8 +585,16 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 
 	var sess *Session
 	resumed := false
+	newSecret := false
 	if hello.MachineID != "" {
-		sess, resumed = s.sessions.UpsertByMachine(conn, hello.MachineID)
+		var authorized bool
+		sess, resumed, authorized = s.sessions.UpsertByMachine(conn, hello.MachineID, hello.ResumeSecret)
+		if !authorized {
+			log.Printf("[agent] REJECTED machine=%s from %s: resume secret mismatch (possible session-hijack attempt)", hello.MachineID, r.RemoteAddr)
+			conn.Close()
+			return
+		}
+		newSecret = !resumed
 	} else {
 		sess = s.sessions.Create(conn)
 	}
@@ -572,7 +620,11 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send the pair code (still useful in shared-relay mode; harmless locally).
-	if err := writeMsg(conn, MsgPairCode, PairCodeData{Code: sess.PairCode}); err != nil {
+	pairCodeMsg := PairCodeData{Code: sess.PairCode}
+	if newSecret {
+		pairCodeMsg.ResumeSecret = sess.ResumeSecret
+	}
+	if err := writeMsg(conn, MsgPairCode, pairCodeMsg); err != nil {
 		log.Printf("[agent] failed to send PAIR_CODE: %v", err)
 		conn.Close()
 		s.dropAgentConn(sess, conn)

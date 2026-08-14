@@ -2,6 +2,8 @@ package actions
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,7 +119,7 @@ func (h *HostExecutor) ExecuteAction(ctx context.Context, action *Action) (*Acti
 		if svc == "" {
 			return h.runCommand(ctx, "systemctl list-units --type=service --state=running --no-pager --no-legend", startTime)
 		}
-		return h.runCommand(ctx, "systemctl status "+svc+" --no-pager", startTime)
+		return h.runArgv(ctx, startTime, "systemctl", "status", svc, "--no-pager")
 
 	case ActionHostJournalctl:
 		unit := action.Parameters["unit"]
@@ -125,10 +127,16 @@ func (h *HostExecutor) ExecuteAction(ctx context.Context, action *Action) (*Acti
 		if lines == "" {
 			lines = "200"
 		}
-		if unit != "" {
-			return h.runCommand(ctx, fmt.Sprintf("journalctl -u %s -n %s --no-pager", unit, lines), startTime)
+		if _, err := strconv.Atoi(lines); err != nil {
+			return &ActionResult{
+				Success: false, Message: "Invalid lines parameter", Error: "lines must be a number",
+				StartTime: startTime, EndTime: time.Now(),
+			}, nil
 		}
-		return h.runCommand(ctx, fmt.Sprintf("journalctl -n %s --no-pager", lines), startTime)
+		if unit != "" {
+			return h.runArgv(ctx, startTime, "journalctl", "-u", unit, "-n", lines, "--no-pager")
+		}
+		return h.runArgv(ctx, startTime, "journalctl", "-n", lines, "--no-pager")
 
 	default:
 		return &ActionResult{
@@ -241,13 +249,38 @@ func (h *HostExecutor) updateAgent(ctx context.Context, params map[string]string
 		}, err
 	}
 
-	// Determine download URL
+	// Determine download URL. A custom binary_url is a caller-supplied string
+	// with no restriction otherwise — reject anything that isn't https so a
+	// downgrade to plaintext http can't be used to tamper with the binary
+	// in transit even before the checksum check below.
+	const defaultBase = "https://github.com/bytestrix/InfraCanvas/releases/latest/download/"
 	binaryURL := params["binary_url"]
-	if binaryURL == "" {
-		binaryURL = fmt.Sprintf(
-			"https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-%s-%s",
-			runtime.GOOS, runtime.GOARCH,
-		)
+	usingDefault := binaryURL == ""
+	if usingDefault {
+		binaryURL = fmt.Sprintf(defaultBase+"infracanvas-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+	if !strings.HasPrefix(binaryURL, "https://") {
+		return fail("invalid binary_url", "must be an https:// URL")
+	}
+
+	// Resolve the expected sha256 before downloading anything. For the
+	// default GitHub path, fetch the release's own published checksums.txt
+	// (every release ships one — see CLAUDE.md release checklist). For a
+	// caller-supplied binary_url we have no co-located checksums file to
+	// trust, so the caller must supply the expected hash explicitly; refuse
+	// otherwise rather than silently skipping verification.
+	var wantSHA256 string
+	if usingDefault {
+		sum, err := fetchExpectedSHA256(ctx, defaultBase+"checksums.txt", fmt.Sprintf("infracanvas-%s-%s", runtime.GOOS, runtime.GOARCH))
+		if err != nil {
+			return fail("fetch checksums", err.Error())
+		}
+		wantSHA256 = sum
+	} else {
+		wantSHA256 = params["sha256"]
+		if wantSHA256 == "" {
+			return fail("missing sha256", "binary_url requires an explicit sha256 parameter to verify against")
+		}
 	}
 
 	// Find current executable (resolve symlinks)
@@ -262,7 +295,7 @@ func (h *HostExecutor) updateAgent(ctx context.Context, params map[string]string
 
 	// Download new binary alongside current one (same filesystem = rename works)
 	tmpPath := exe + ".update-tmp"
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
 	if err != nil {
 		return fail("create temp file", err.Error())
 	}
@@ -285,12 +318,23 @@ func (h *HostExecutor) updateAgent(ctx context.Context, params map[string]string
 		return fail("download", fmt.Sprintf("HTTP %d from %s", resp.StatusCode, binaryURL))
 	}
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(f, hasher), resp.Body); err != nil {
 		f.Close()
 		os.Remove(tmpPath)
 		return fail("write binary", err.Error())
 	}
 	f.Close()
+
+	gotSHA256 := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(gotSHA256, wantSHA256) {
+		os.Remove(tmpPath)
+		return fail("checksum mismatch", fmt.Sprintf("downloaded binary does not match expected sha256 (got %s, want %s) — refusing to install", gotSHA256, wantSHA256))
+	}
+	if err := os.Chmod(tmpPath, 0o700); err != nil {
+		os.Remove(tmpPath)
+		return fail("chmod binary", err.Error())
+	}
 
 	// Atomically replace (works on Linux even while old binary is running)
 	if err := os.Rename(tmpPath, exe); err != nil {
@@ -314,7 +358,69 @@ func (h *HostExecutor) updateAgent(ctx context.Context, params map[string]string
 	}, nil
 }
 
-// runCommand runs a shell command and returns its combined output.
+// fetchExpectedSHA256 downloads a sha256sum(1)-format checksums file (lines
+// of "<hex digest>  <filename>") and returns the digest for the given
+// filename, or an error if the file can't be fetched or has no matching
+// entry. Used so updateAgent never installs a binary whose hash it never
+// actually checked.
+func fetchExpectedSHA256(ctx context.Context, checksumsURL, filename string) (string, error) {
+	fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(fetchCtx, http.MethodGet, checksumsURL, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch %s: %w", checksumsURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fetch %s: HTTP %d", checksumsURL, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB cap — this is a tiny text file
+	if err != nil {
+		return "", fmt.Errorf("read checksums: %w", err)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		digest, name := fields[0], strings.TrimPrefix(fields[1], "*")
+		if name == filename {
+			return digest, nil
+		}
+	}
+	return "", fmt.Errorf("no checksum entry for %s in %s", filename, checksumsURL)
+}
+
+// runArgv runs a command directly (no shell involved), so caller-supplied
+// parameters interpolated into argv can never break out via shell
+// metacharacters (`;`, `|`, `#`, backticks, ...) — unlike runCommand below,
+// which is only safe for fixed, hardcoded strings with no user input.
+func (h *HostExecutor) runArgv(ctx context.Context, startTime time.Time, name string, args ...string) (*ActionResult, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &ActionResult{
+			Success:   false,
+			Message:   "Command failed",
+			Output:    string(output),
+			Error:     err.Error(),
+			StartTime: startTime,
+			EndTime:   time.Now(),
+		}, nil
+	}
+	return &ActionResult{
+		Success:   true,
+		Message:   "OK",
+		Output:    string(output),
+		StartTime: startTime,
+		EndTime:   time.Now(),
+	}, nil
+}
+
+// runCommand runs a shell command and returns its combined output. Only ever
+// call this with a fixed, hardcoded command string — never with anything
+// derived from caller-supplied parameters. Use runArgv for that.
 func (h *HostExecutor) runCommand(ctx context.Context, command string, startTime time.Time) (*ActionResult, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	output, err := cmd.CombinedOutput()

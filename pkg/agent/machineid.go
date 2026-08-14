@@ -29,7 +29,7 @@ func MachineID() string {
 	}
 	id := hex.EncodeToString(buf)
 
-	if err := os.MkdirAll(runstate.Dir(), 0o755); err != nil {
+	if err := os.MkdirAll(runstate.Dir(), 0o700); err != nil {
 		return ""
 	}
 	if err := os.WriteFile(path, []byte(id+"\n"), 0o600); err != nil {
