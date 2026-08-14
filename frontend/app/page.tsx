@@ -95,15 +95,29 @@ export default function App() {
 
   const [showAddMachine, setShowAddMachine] = useState(false)
   const [showAddCluster, setShowAddCluster] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const machineList = machines.filter(m => m.kind !== 'cluster')
   const clusterList = machines.filter(m => m.kind === 'cluster')
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', height:'100vh', background:T.bg, fontFamily:SANS, overflow:'hidden' }}>
-      <Sidebar vm={vm} view={view} onViewChange={setView}
-        machines={machineList} clusters={clusterList} activeKey={activeKey} onSelectMachine={selectMachine}
-        onAddMachine={() => setShowAddMachine(true)} onAddCluster={() => setShowAddCluster(true)} />
+    <div className="app-shell" style={{ display:'grid', gridTemplateColumns:'200px 1fr', height:'100vh', background:T.bg, fontFamily:SANS, overflow:'hidden', position:'relative' }}>
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarOpen(v => !v)}
+        aria-label="Toggle sidebar"
+        style={{ width:34, height:34, borderRadius:8, border:`1px solid ${T.line2}`, background:T.surface, color:T.ink2, alignItems:'center', justifyContent:'center', cursor:'pointer' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div className={`sidebar-backdrop${sidebarOpen ? ' sidebar-open' : ''}`} onClick={() => setSidebarOpen(false)} />
+      <div className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`} style={{ display:'flex', background:T.bg }}>
+        <Sidebar vm={vm} view={view} onViewChange={(v) => { setView(v); setSidebarOpen(false) }}
+          machines={machineList} clusters={clusterList} activeKey={activeKey}
+          onSelectMachine={(m) => { selectMachine(m); setSidebarOpen(false) }}
+          onAddMachine={() => { setShowAddMachine(true); setSidebarOpen(false) }}
+          onAddCluster={() => { setShowAddCluster(true); setSidebarOpen(false) }} />
+      </div>
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
         <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
       </main>

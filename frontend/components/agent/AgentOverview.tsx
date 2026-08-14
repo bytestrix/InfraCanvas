@@ -279,7 +279,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
                 <span style={{ fontFamily:MONO, fontSize:11, color:T.ink4 }}>{tier.count}</span>
                 <span style={{ flex:1, height:1, background:T.line }} />
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:`repeat(${Math.min(5,Math.max(2,tier.tiles.length))},1fr)`, gap:1, background:T.line, border:`1px solid ${T.line}`, borderRadius:10, overflow:'hidden' }}>
+              <div style={{ display:'grid', gridTemplateColumns:`repeat(auto-fit, minmax(min(150px, 100%), 1fr))`, gap:1, background:T.line, border:`1px solid ${T.line}`, borderRadius:10, overflow:'hidden' }}>
                 {tier.tiles.map((tile:any) => (
                   <TileCard key={tile.id} tile={tile} selected={selectedId===tile.id} onClick={() => tile.id===selectedId ? closeAll() : handleTileClick(tile.id)} />
                 ))}

@@ -111,7 +111,7 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
   return (
     <div style={{
       position: 'absolute', left: 0, right: 0, bottom: 0,
-      height: isWorkload ? 352 : 320,
+      height: `min(${isWorkload ? 352 : 320}px, 65vh)`,
       background: 'var(--bg)', borderTop: '1px solid var(--line)',
       display: 'flex', flexDirection: 'column', zIndex: 25,
       boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',

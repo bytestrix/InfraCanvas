@@ -555,7 +555,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
   const allMetaEntries                = Object.entries(node.metadata)
 
   return (
-    <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 340, background: 'var(--surface)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', zIndex: 30, boxShadow: '-8px 0 32px rgba(0,0,0,0.5)' }}>
+    <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 'min(340px, 100%)', background: 'var(--surface)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', zIndex: 30, boxShadow: '-8px 0 32px rgba(0,0,0,0.5)' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>

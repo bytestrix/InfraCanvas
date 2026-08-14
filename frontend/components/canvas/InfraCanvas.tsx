@@ -590,8 +590,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
       {/* ── Top bar ──────────────────────────────────────────────── */}
       <div style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0 14px', height: 50, zIndex: 10,
+        flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+        padding: '8px 14px', minHeight: 50, zIndex: 10,
         background: 'var(--surface)', borderBottom: '1px solid var(--line)',
         backdropFilter: 'blur(12px)',
       }}>

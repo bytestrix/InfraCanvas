@@ -168,7 +168,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
         right: 0,
         top: 0,
         bottom: 0,
-        width: 360,
+        width: 'min(360px, 100%)',
         background: 'var(--bg)',
         borderLeft: '1px solid var(--line)',
         display: 'flex',
