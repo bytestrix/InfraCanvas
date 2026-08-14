@@ -388,9 +388,9 @@ No public exposure, no domain, no TLS setup.
 
 **The auth token.** Every install generates a random 24-character token saved to `/etc/infracanvas/config.env`. The dashboard requires it on first visit (`?token=…`); after that it's in an HTTP-only cookie. Without the token, every request returns `401`. Treat the URL+token like an SSH key for the box.
 
-**Joining agents.** In hub mode the relay issues a separate join token; an agent that can't present it is rejected at the WebSocket handshake. Joined VMs connect outbound only — the hub never dials into them, so they need no open port.
+**Joining agents.** In hub mode the relay issues a separate join token; an agent that can't present it is rejected at the WebSocket handshake. Joined VMs connect outbound only — the hub never dials into them, so they need no open port. The join token alone doesn't prove *which* machine a connection is, though — each machine ID is issued its own resume secret on first connect, and a reconnect claiming that ID without it is rejected outright rather than silently taking over an existing session.
 
-**Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action and terminal request server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen.
+**Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action, terminal request, and cluster connect/disconnect server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen.
 
 **Secret redaction.** Env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer.
 
