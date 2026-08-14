@@ -24,6 +24,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
+	"infracanvas/internal/redactor"
+
 	"infracanvas/pkg/agent"
 	"infracanvas/pkg/runstate"
 )
@@ -181,6 +183,13 @@ func NewManager(backendURL, agentToken string, refreshSeconds int) *Manager {
 		lastError:      make(map[string]error),
 	}
 }
+
+// logRedactor scrubs kubeconfig-adjacent error text (which can embed raw
+// client-certificate-data/client-key-data/token bytes from a malformed
+// kubeconfig) before it reaches process logs. Applied defensively — normal
+// clientcmd parse errors don't embed key material, but we don't want to rely
+// on that as the only guarantee.
+var logRedactor = redactor.NewRedactor(true)
 
 func clusterDir() string {
 	return filepath.Join(runstate.Dir(), "clusters")
@@ -379,12 +388,12 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 			}
 			cfg, err := clientcmd.Load(kubeconfigBytes)
 			if err != nil {
-				log.Printf("[clustermgr] cluster %s (%s): parse kubeconfig: %v", entry.Name, entry.ID, err)
+				log.Printf("[clustermgr] cluster %s (%s): parse kubeconfig: %s", entry.Name, entry.ID, logRedactor.RedactCommandLine(err.Error()))
 				return
 			}
 			restCfg, err := restConfigForContext(cfg, entry.ContextName)
 			if err != nil {
-				log.Printf("[clustermgr] cluster %s (%s): %v", entry.Name, entry.ID, err)
+				log.Printf("[clustermgr] cluster %s (%s): %s", entry.Name, entry.ID, logRedactor.RedactCommandLine(err.Error()))
 				return
 			}
 
@@ -424,7 +433,7 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 func randomID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("c%d", time.Now().UnixNano())
+		panic(fmt.Sprintf("infracanvas: failed to generate secure random cluster id: %v", err))
 	}
 	return hex.EncodeToString(b)
 }

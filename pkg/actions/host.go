@@ -47,12 +47,6 @@ func (h *HostExecutor) ValidateAction(action *Action) error {
 	case ActionUpdateAgent:
 		return nil
 
-	case ActionHostRunCommand:
-		if action.Parameters["command"] == "" {
-			return fmt.Errorf("command is required")
-		}
-		return nil
-
 	case ActionHostDiskUsage, ActionHostTopProcesses, ActionHostJournalctl:
 		return nil
 
@@ -104,9 +98,6 @@ func (h *HostExecutor) ExecuteAction(ctx context.Context, action *Action) (*Acti
 
 	case ActionUpdateAgent:
 		return h.updateAgent(ctx, action.Parameters, startTime)
-
-	case ActionHostRunCommand:
-		return h.runCommand(ctx, action.Parameters["command"], startTime)
 
 	case ActionHostDiskUsage:
 		return h.runCommand(ctx, "df -h", startTime)

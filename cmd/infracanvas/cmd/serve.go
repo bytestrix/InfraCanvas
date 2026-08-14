@@ -263,7 +263,7 @@ func resolveAgentToken() string {
 func randomToken(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "infracanvas"
+		panic(fmt.Sprintf("infracanvas: failed to generate secure random token: %v", err))
 	}
 	return hex.EncodeToString(b)
 }

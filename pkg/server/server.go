@@ -1,11 +1,13 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -175,6 +177,59 @@ type Server struct {
 	joinCaveat string // human note, e.g. quick-tunnel URLs change on restart
 
 	clusterMgr *clustermgr.Manager // nil until SetClusterManager is called (local-mode only)
+
+	authLimiter *authRateLimiter
+}
+
+// authRateLimiter is a minimal per-IP sliding-window lockout for failed auth
+// attempts against the UI/agent token and resume-secret checks. Token/secret
+// entropy already makes brute force impractical over a real network, but
+// there's otherwise zero defense-in-depth against a fast local/LAN attacker
+// with unlimited guesses — this closes that gap cheaply.
+type authRateLimiter struct {
+	mu       sync.Mutex
+	failures map[string][]time.Time
+}
+
+func newAuthRateLimiter() *authRateLimiter {
+	return &authRateLimiter{failures: make(map[string][]time.Time)}
+}
+
+const (
+	authRateLimitWindow      = time.Minute
+	authRateLimitMaxFailures = 20
+)
+
+// allow reports whether ip is currently permitted to attempt auth. Call
+// recordFailure after every failed attempt, not on success.
+func (l *authRateLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	cutoff := time.Now().Add(-authRateLimitWindow)
+	recent := l.failures[ip][:0]
+	for _, t := range l.failures[ip] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	l.failures[ip] = recent
+	return len(recent) < authRateLimitMaxFailures
+}
+
+func (l *authRateLimiter) recordFailure(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.failures[ip] = append(l.failures[ip], time.Now())
+}
+
+// clientIP extracts the request's remote IP without the port, for rate-limit
+// bucketing. Not used for any security decision beyond throttling.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // SetClusterManager wires up the Clusters (kubeconfig direct-connect) REST
@@ -221,6 +276,7 @@ func NewWithOptions(opts Options) *Server {
 		localMachineID: opts.LocalMachineID,
 		readOnly:       opts.ReadOnly,
 		allowedOrigins: map[string]bool{},
+		authLimiter:    newAuthRateLimiter(),
 	}
 	for _, o := range opts.AllowedOrigins {
 		s.allowedOrigins[o] = true
@@ -271,12 +327,17 @@ func (s *Server) MountUI(fsys fs.FS) {
 // legitimate reason to enumerate each other.
 func (s *Server) requireUIToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.authLimiter.allow(clientIP(r)) {
+			http.Error(w, "too many failed auth attempts, slow down", http.StatusTooManyRequests)
+			return
+		}
 		uiOK := s.uiToken != "" && s.checkUIToken(r)
 		open := s.uiToken == ""
 		if uiOK || open {
 			next(w, r)
 			return
 		}
+		s.authLimiter.recordFailure(clientIP(r))
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
@@ -287,15 +348,25 @@ func (s *Server) requireUIToken(next http.HandlerFunc) http.HandlerFunc {
 // neither token is set (loopback-only deployments).
 func (s *Server) requireUIOrAgentToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.authLimiter.allow(clientIP(r)) {
+			http.Error(w, "too many failed auth attempts, slow down", http.StatusTooManyRequests)
+			return
+		}
 		uiOK := s.uiToken != "" && s.checkUIToken(r)
-		agentOK := s.agentToken != "" && r.Header.Get("Authorization") == "Bearer "+s.agentToken
+		agentOK := s.agentToken != "" && secureEquals(r.Header.Get("Authorization"), "Bearer "+s.agentToken)
 		open := s.uiToken == "" && s.agentToken == ""
 		if uiOK || agentOK || open {
 			next(w, r)
 			return
 		}
+		s.authLimiter.recordFailure(clientIP(r))
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
+}
+
+// secureEquals compares two secrets in constant time.
+func secureEquals(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // checkAgentToken validates the Authorization header on /ws/agent.
@@ -304,7 +375,7 @@ func (s *Server) checkAgentToken(r *http.Request) bool {
 		return true
 	}
 	auth := r.Header.Get("Authorization")
-	return auth == "Bearer "+s.agentToken
+	return secureEquals(auth, "Bearer "+s.agentToken)
 }
 
 // checkUIToken accepts the token from the cookie or ?token= query param.
@@ -312,10 +383,10 @@ func (s *Server) checkUIToken(r *http.Request) bool {
 	if s.uiToken == "" {
 		return true
 	}
-	if c, err := r.Cookie("infracanvas_token"); err == nil && c.Value == s.uiToken {
+	if c, err := r.Cookie("infracanvas_token"); err == nil && secureEquals(c.Value, s.uiToken) {
 		return true
 	}
-	return r.URL.Query().Get("token") == s.uiToken
+	return secureEquals(r.URL.Query().Get("token"), s.uiToken)
 }
 
 // requireUIAuth gates static-UI requests. On first visit with ?token=…
@@ -327,8 +398,12 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if !s.authLimiter.allow(clientIP(r)) {
+			http.Error(w, "too many failed auth attempts, slow down", http.StatusTooManyRequests)
+			return
+		}
 		if q := r.URL.Query().Get("token"); q != "" {
-			if q == s.uiToken {
+			if secureEquals(q, s.uiToken) {
 				http.SetCookie(w, &http.Cookie{
 					Name:     "infracanvas_token",
 					Value:    q,
@@ -352,13 +427,15 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 				http.Redirect(w, r, redirectPath, http.StatusSeeOther)
 				return
 			}
+			s.authLimiter.recordFailure(clientIP(r))
 			s.writeUnauthorizedHTML(w, "Invalid token.")
 			return
 		}
-		if c, err := r.Cookie("infracanvas_token"); err == nil && c.Value == s.uiToken {
+		if c, err := r.Cookie("infracanvas_token"); err == nil && secureEquals(c.Value, s.uiToken) {
 			next.ServeHTTP(w, r)
 			return
 		}
+		s.authLimiter.recordFailure(clientIP(r))
 		s.writeUnauthorizedHTML(w, "Auth token required.")
 	})
 }
@@ -376,9 +453,27 @@ func (s *Server) writeUnauthorizedHTML(w http.ResponseWriter, msg string) {
 		`</p><p>Append <code>?token=&lt;your-token&gt;</code> to the URL — the token was printed when InfraCanvas started.</p></div></body></html>`))
 }
 
+// securityHeaders sets baseline defense-in-depth headers on every response:
+// no framing (clickjacking), no MIME sniffing, no active-content CSP beyond
+// same-origin (the dashboard renders agent/cluster-supplied strings), and
+// HSTS when we know the request arrived over TLS.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'self'")
+		h.Set("Referrer-Policy", "same-origin")
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Handler returns the HTTP handler (useful for testing or custom listeners).
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return securityHeaders(s.mux)
 }
 
 // ListenAndServe starts the HTTP server.
@@ -387,7 +482,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	log.Printf("  Agent endpoint:   ws://%s/ws/agent", addr)
 	log.Printf("  Canvas endpoint:  ws://%s/ws/canvas", addr)
 	log.Printf("  Health:           http://%s/api/health", addr)
-	return http.ListenAndServe(addr, s.mux)
+	return http.ListenAndServe(addr, securityHeaders(s.mux))
 }
 
 // ── HTTP endpoints ────────────────────────────────────────────────────────────
@@ -652,7 +747,12 @@ func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 // ── Agent WebSocket handler ───────────────────────────────────────────────────
 
 func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
+	if !s.authLimiter.allow(clientIP(r)) {
+		http.Error(w, "too many failed auth attempts, slow down", http.StatusTooManyRequests)
+		return
+	}
 	if !s.checkAgentToken(r) {
+		s.authLimiter.recordFailure(clientIP(r))
 		log.Printf("[agent] rejected unauthorized connection from %s", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -663,6 +763,7 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("agent upgrade error: %v (remote: %s)", err, r.RemoteAddr)
 		return
 	}
+	raw.SetReadLimit(32 << 20) // 32MB — generous headroom for large topology snapshots
 	conn := newSafeConn(raw)
 
 	// The agent's first message is HELLO. Read it before creating the session
@@ -877,7 +978,12 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 // ── Browser WebSocket handler ─────────────────────────────────────────────────
 
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
+	if !s.authLimiter.allow(clientIP(r)) {
+		http.Error(w, "too many failed auth attempts, slow down", http.StatusTooManyRequests)
+		return
+	}
 	if !s.checkUIToken(r) {
+		s.authLimiter.recordFailure(clientIP(r))
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -886,6 +992,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("browser upgrade error: %v", err)
 		return
 	}
+	raw.SetReadLimit(4 << 20) // 4MB — plenty for any browser-originated action/exec payload
 	conn := newSafeConn(raw)
 	defer conn.Close()
 

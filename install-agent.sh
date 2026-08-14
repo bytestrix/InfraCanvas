@@ -129,15 +129,18 @@ fi
 # ── download binary ───────────────────────────────────────────────────────────
 BINARY_NAME="infracanvas-${OS}-${ARCH}"
 if [[ "$VERSION" == "latest" ]]; then
-  DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${BINARY_NAME}"
+  RELEASE_BASE="https://github.com/${GITHUB_REPO}/releases/latest/download"
 else
-  DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${BINARY_NAME}"
+  RELEASE_BASE="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
 fi
+DOWNLOAD_URL="${RELEASE_BASE}/${BINARY_NAME}"
+CHECKSUMS_URL="${RELEASE_BASE}/checksums.txt"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 info "Downloading InfraCanvas (${VERSION})..."
+USED_LOCAL_BUILD=0
 if ! curl -fsSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_DIR/infracanvas"; then
   # Local-build fallback for `./install-agent.sh` from a clone with bin/ populated.
   LOCAL_BIN="$(dirname "$0")/bin/release/${BINARY_NAME}"
@@ -145,8 +148,33 @@ if ! curl -fsSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_DIR/infracanvas"; then
   if [[ -x "$LOCAL_BIN" ]]; then
     info "Using local build at $LOCAL_BIN"
     cp "$LOCAL_BIN" "$TMP_DIR/infracanvas"
+    USED_LOCAL_BUILD=1
   else
     error "Could not download from $DOWNLOAD_URL — check the release exists, or build locally: make release"
+  fi
+fi
+
+# Verify integrity against the release's published checksums.txt. Skipped only
+# for the local-build fallback above (nothing to verify against — it's already
+# a binary the operator built themselves on this machine).
+if [[ "$USED_LOCAL_BUILD" -eq 0 ]]; then
+  info "Verifying checksum..."
+  if ! curl -fsSL "$CHECKSUMS_URL" -o "$TMP_DIR/checksums.txt"; then
+    error "Could not fetch $CHECKSUMS_URL to verify the download — refusing to install an unverified binary"
+  fi
+  EXPECTED_SHA256="$(grep -E "  ${BINARY_NAME}\$|  \./${BINARY_NAME}\$" "$TMP_DIR/checksums.txt" | awk '{print $1}' | head -n1)"
+  if [[ -z "$EXPECTED_SHA256" ]]; then
+    error "No checksum entry for ${BINARY_NAME} in checksums.txt — refusing to install an unverified binary"
+  fi
+  if command -v sha256sum >/dev/null; then
+    ACTUAL_SHA256="$(sha256sum "$TMP_DIR/infracanvas" | awk '{print $1}')"
+  elif command -v shasum >/dev/null; then
+    ACTUAL_SHA256="$(shasum -a 256 "$TMP_DIR/infracanvas" | awk '{print $1}')"
+  else
+    error "Neither sha256sum nor shasum found — cannot verify download integrity"
+  fi
+  if [[ "${ACTUAL_SHA256,,}" != "${EXPECTED_SHA256,,}" ]]; then
+    error "Checksum mismatch for ${BINARY_NAME} (got ${ACTUAL_SHA256}, want ${EXPECTED_SHA256}) — refusing to install"
   fi
 fi
 chmod +x "$TMP_DIR/infracanvas"

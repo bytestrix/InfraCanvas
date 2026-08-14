@@ -103,7 +103,7 @@ func (s *SessionStore) UpsertByMachine(conn *SafeConn, machineID, presentedSecre
 	defer s.mu.Unlock()
 
 	if existing, ok := s.byMachine[machineID]; ok {
-		if existing.ResumeSecret != "" && existing.ResumeSecret != presentedSecret {
+		if existing.ResumeSecret != "" && !secureEquals(existing.ResumeSecret, presentedSecret) {
 			return existing, true, false
 		}
 		existing.mu.Lock()

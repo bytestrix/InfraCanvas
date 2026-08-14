@@ -7,6 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.1] — 2026-08-15
+
+### Security
+Hardening pass from a full OWASP Top 10 self-review (no external report this time).
+
+- **Removed the unused, UI-unreferenced `host_run_command` action type** — arbitrary shell execution gated only by session auth, with no allowlist. Nothing in the dashboard used it.
+- **UI/agent token generation and cluster-ID generation now fail closed.** Both previously fell back to a hardcoded value (`"infracanvas"`) or a predictable timestamp if `crypto/rand` ever errored — now they refuse to start instead.
+- **Constant-time comparison** for every token/secret check (UI token, agent bearer token, hub resume secret) — closes a theoretical timing side-channel across 5 call sites.
+- **WebSocket frame size limits added** (32MB agent / 4MB browser) — an unbounded frame could previously exhaust memory.
+- **Security headers on every response** — CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and HSTS-when-TLS.
+- **Per-IP rate limiting on every auth-checking endpoint** (20 failed attempts/minute) — previously unlimited guesses were possible against the UI token, agent token, and resume secret.
+- **`install-agent.sh` now checksum-verifies its first download** against the release's published `checksums.txt`, matching the `update_agent` in-app path fixed in v0.18.1.
+- kubeconfig parse-error logging now routed through the existing secret redactor as defense-in-depth.
+
+---
+
 ## [0.19.0] — 2026-08-14
 
 ### Added
