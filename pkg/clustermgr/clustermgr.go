@@ -17,6 +17,9 @@ import (
 	"sync"
 	"time"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -57,6 +60,77 @@ func ParseContexts(kubeconfigBytes []byte) ([]ContextOption, error) {
 		})
 	}
 	return out, nil
+}
+
+// PermissionPreview summarizes what a kubeconfig context can actually do,
+// checked before the user commits to connecting — so "what will this
+// dashboard be able to see and change" is answered up front instead of
+// discovered by trial and error after the fact.
+type PermissionPreview struct {
+	CanView          bool     `json:"canView"`          // get/list/watch pods, deployments, services
+	CanViewSecrets   bool     `json:"canViewSecrets"`   // get/list secrets — InfraCanvas never reads values, but flag whether the credential itself could
+	CanExec          bool     `json:"canExec"`          // create pods/exec — terminal access into containers
+	CanRestartOrKill bool     `json:"canRestartOrKill"` // delete pods — restart/kill actions
+	CanScaleOrEdit   bool     `json:"canScaleOrEdit"`   // patch/update deployments — scale, manifest edit
+	Warnings         []string `json:"warnings,omitempty"`
+}
+
+// PreviewPermissions builds a rest.Config from kubeconfigBytes/contextName
+// (same as Add would) and runs a handful of SelfSubjectAccessReview checks
+// against it — a standard, self-describing Kubernetes API any authenticated
+// user can call about their own permissions, no special RBAC required. Runs
+// entirely read-only: nothing is persisted, no virtual agent is started.
+func PreviewPermissions(kubeconfigBytes []byte, contextName string) (PermissionPreview, error) {
+	cfg, err := clientcmd.Load(kubeconfigBytes)
+	if err != nil {
+		return PermissionPreview{}, fmt.Errorf("invalid kubeconfig: %w", err)
+	}
+	if contextName == "" {
+		contextName = cfg.CurrentContext
+	}
+	restCfg, err := restConfigForContext(cfg, contextName)
+	if err != nil {
+		return PermissionPreview{}, err
+	}
+	restCfg.Timeout = 8 * time.Second
+
+	clientset, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return PermissionPreview{}, fmt.Errorf("build client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	can := func(verb, group, resource, subresource string) bool {
+		review := &authorizationv1.SelfSubjectAccessReview{
+			Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+				ResourceAttributes: &authorizationv1.ResourceAttributes{
+					Verb: verb, Group: group, Resource: resource, Subresource: subresource,
+				},
+			},
+		}
+		result, err := clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
+		if err != nil {
+			return false
+		}
+		return result.Status.Allowed
+	}
+
+	preview := PermissionPreview{
+		CanView:          can("list", "", "pods", "") || can("list", "apps", "deployments", ""),
+		CanViewSecrets:   can("list", "", "secrets", "") || can("get", "", "secrets", ""),
+		CanExec:          can("create", "", "pods", "exec"),
+		CanRestartOrKill: can("delete", "", "pods", ""),
+		CanScaleOrEdit:   can("patch", "apps", "deployments", "") || can("update", "apps", "deployments", ""),
+	}
+	if !preview.CanView {
+		preview.Warnings = append(preview.Warnings, "This credential can't list pods or deployments — the canvas will likely show little or nothing.")
+	}
+	if preview.CanViewSecrets {
+		preview.Warnings = append(preview.Warnings, "This credential can read Secret contents. InfraCanvas never displays secret values, but the access itself exists — consider a narrower ClusterRole if you'd rather it didn't.")
+	}
+	return preview, nil
 }
 
 // restConfigForContext builds a *rest.Config for one named context within a
@@ -147,10 +221,54 @@ func (m *Manager) List() ([]Entry, error) {
 	return out, nil
 }
 
+// IsReadOnly reports whether the given cluster ID is currently marked
+// read-only. Unknown IDs report false (fail open on the lookup itself —
+// the caller is responsible for deciding what "unknown cluster" means for
+// its own enforcement, this just answers the flag question).
+func (m *Manager) IsReadOnly(id string) bool {
+	s, err := runstate.Read()
+	if err != nil {
+		return false
+	}
+	for _, e := range s.Clusters {
+		if e.ID == id {
+			return e.ReadOnly
+		}
+	}
+	return false
+}
+
+// SetReadOnly updates one cluster's read-only flag and returns its entry
+// (without live Online status — callers that need that should re-List).
+func (m *Manager) SetReadOnly(id string, readOnly bool) (runstate.ClusterEntry, error) {
+	var updated runstate.ClusterEntry
+	found := false
+	err := runstate.Update(func(s *runstate.State) {
+		for i := range s.Clusters {
+			if s.Clusters[i].ID == id {
+				s.Clusters[i].ReadOnly = readOnly
+				updated = s.Clusters[i]
+				found = true
+				return
+			}
+		}
+	})
+	if err != nil {
+		return runstate.ClusterEntry{}, err
+	}
+	if !found {
+		return runstate.ClusterEntry{}, fmt.Errorf("cluster %q not found", id)
+	}
+	return updated, nil
+}
+
 // Add parses kubeconfigBytes, validates contextName exists, persists it, and
 // starts its virtual agent (which runs for the process's lifetime, not tied
 // to the calling HTTP request). name defaults to contextName if empty.
-func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string) (Entry, error) {
+// readOnly, if true, blocks every write action and exec/terminal session
+// against this cluster specifically, independent of the server's global
+// --read-only flag.
+func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, readOnly bool) (Entry, error) {
 	cfg, err := clientcmd.Load(kubeconfigBytes)
 	if err != nil {
 		return Entry{}, fmt.Errorf("invalid kubeconfig: %w", err)
@@ -192,6 +310,7 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string) (
 		ServerURL:      serverURL,
 		KubeconfigPath: path,
 		AddedAt:        time.Now().UTC(),
+		ReadOnly:       readOnly,
 	}
 
 	if err := runstate.Update(func(s *runstate.State) {

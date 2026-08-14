@@ -390,7 +390,11 @@ No public exposure, no domain, no TLS setup.
 
 **Joining agents.** In hub mode the relay issues a separate join token; an agent that can't present it is rejected at the WebSocket handshake. Joined VMs connect outbound only — the hub never dials into them, so they need no open port. The join token alone doesn't prove *which* machine a connection is, though — each machine ID is issued its own resume secret on first connect, and a reconnect claiming that ID without it is rejected outright rather than silently taking over an existing session.
 
-**Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action, terminal request, and cluster connect/disconnect server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen.
+**Read-only mode.** Pass `--read-only` to turn the dashboard into a viewer — the relay rejects every action, terminal request, and cluster connect/disconnect server-side. Topology and logs still work. Use this for public demos or a wall-mounted status screen. Each connected cluster also has its own independent read-only toggle, so you can keep some clusters view-only without turning on global read-only mode.
+
+**Permission preview.** Before you commit to connecting a kubeconfig, the Add Cluster dialog shows what it can actually do — view, exec, restart/kill, scale/edit, read Secrets — checked live against the cluster, nothing persisted or connected until you confirm.
+
+**Audit log.** Every write action, terminal session, and read-only-blocked attempt is recorded locally and viewable from the dashboard's Audit tab. Attributed by machine, not by user — there's no per-user login in the self-hosted version.
 
 **Secret redaction.** Env vars whose names contain `SECRET`, `TOKEN`, `KEY`, `PASSWORD`, `CREDENTIAL`, `AUTH`, or `PASSWD` are replaced with `[REDACTED]` before they leave the discovery layer.
 

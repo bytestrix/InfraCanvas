@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM } from '@/lib/wsManager'
-import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, type ClusterContextOption } from '@/lib/api'
+import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
@@ -35,8 +35,14 @@ const H = { healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444' }
 const MONO = "var(--font-geist-mono,'Geist Mono','JetBrains Mono',ui-monospace,monospace)"
 const SANS = "var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)"
 
-type View = 'overview' | 'canvas'
+type View = 'overview' | 'canvas' | 'audit'
 
+const IcAudit = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/>
+    <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round"/>
+  </svg>
+)
 const IcOverview = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
     <rect x="1" y="1" width="6" height="6" rx="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.2"/>
@@ -223,8 +229,12 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
   const [kubeconfig, setKubeconfig] = useState('')
   const [contexts, setContexts] = useState<ClusterContextOption[] | null>(null)
   const [selected, setSelected] = useState('')
+  const [readOnly, setReadOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [preview, setPreview] = useState<PermissionPreview | null>(null)
+  const [previewFor, setPreviewFor] = useState('') // which context the current preview is for
+  const [previewBusy, setPreviewBusy] = useState(false)
 
   const onFile = async (file: File) => {
     setKubeconfig(await file.text())
@@ -250,18 +260,37 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const loadPreview = async (contextName: string) => {
+    setPreviewBusy(true)
+    setPreview(null)
+    try {
+      const p = await previewClusterPermissions(kubeconfig, contextName)
+      setPreview(p)
+      setPreviewFor(contextName)
+    } catch {
+      // Non-fatal — connecting still works without a preview, just skip showing one.
+    } finally {
+      setPreviewBusy(false)
+    }
+  }
+
   const connect = async () => {
     if (!selected) return
     setBusy(true)
     setError('')
     try {
-      await addCluster(kubeconfig, selected, selected)
+      await addCluster(kubeconfig, selected, selected, readOnly)
       onClose()
     } catch (e: any) {
       setError(e.message ?? 'Failed to connect cluster')
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (selected && selected !== previewFor) loadPreview(selected)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected])
 
   return (
     <div onClick={onClose} style={{
@@ -325,6 +354,39 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
                 </div>
               </label>
             ))}
+
+            {previewBusy && (
+              <div style={{ fontSize:11.5, color:T.ink4, padding:'6px 2px' }}>Checking what this credential can do…</div>
+            )}
+            {preview && previewFor === selected && (
+              <div style={{ borderRadius:9, border:`1px solid ${T.line}`, background:T.bg, padding:'10px 12px', display:'flex', flexDirection:'column', gap:6 }}>
+                <div style={{ fontSize:11, color:T.ink3, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>What this credential can do</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {[
+                    ['View pods/deployments', preview.canView],
+                    ['Open a terminal (exec)', preview.canExec],
+                    ['Restart / kill pods', preview.canRestartOrKill],
+                    ['Scale / edit deployments', preview.canScaleOrEdit],
+                    ['Read Secret contents', preview.canViewSecrets],
+                  ].map(([label, allowed]) => (
+                    <span key={label as string} style={{
+                      fontSize:10.5, fontFamily:MONO, padding:'2px 8px', borderRadius:20,
+                      background: allowed ? 'rgba(34,197,94,0.1)' : T.bg,
+                      border: `1px solid ${allowed ? 'rgba(34,197,94,0.3)' : T.line2}`,
+                      color: allowed ? '#22c55e' : T.ink4,
+                    }}>{allowed ? '✓' : '—'} {label}</span>
+                  ))}
+                </div>
+                {preview.warnings?.map(w => (
+                  <div key={w} style={{ fontSize:11, color:'#f59e0b', lineHeight:1.4 }}>⚠ {w}</div>
+                ))}
+              </div>
+            )}
+
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:T.ink2, cursor:'pointer', padding:'2px 2px' }}>
+              <input type="checkbox" checked={readOnly} onChange={e => setReadOnly(e.target.checked)} />
+              Connect as read-only — blocks every action and terminal session on this cluster, even outside global read-only mode. Can be changed later.
+            </label>
           </div>
         )}
 
@@ -369,6 +431,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
   const navItems: { id: View; label: string; Icon: () => JSX.Element }[] = [
     { id: 'overview', label: 'Overview', Icon: IcOverview },
     { id: 'canvas',   label: 'Canvas',   Icon: IcCanvas   },
+    { id: 'audit',    label: 'Audit',    Icon: IcAudit    },
   ]
 
   return (
@@ -483,6 +546,24 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                   <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
                     {m.hostname || m.id}
                   </span>
+                  {m.machineId?.startsWith('cluster-') && (
+                    <span
+                      role="button"
+                      title={m.readOnly ? 'Read-only — click to allow writes again' : 'Click to make this cluster read-only'}
+                      onClick={e => {
+                        e.stopPropagation()
+                        const clusterId = m.machineId!.slice('cluster-'.length)
+                        setClusterReadOnly(clusterId, !m.readOnly).catch(() => {})
+                      }}
+                      style={{
+                        fontSize:9, fontFamily:MONO, padding:'1px 5px', borderRadius:20, flexShrink:0, cursor:'pointer',
+                        background: m.readOnly ? T.bg : 'transparent',
+                        border:`1px solid ${m.readOnly ? T.line2 : 'transparent'}`,
+                        color: m.readOnly ? T.ink4 : T.ink4,
+                        opacity: m.readOnly ? 1 : 0.5,
+                      }}
+                    >{m.readOnly ? 'RO' : 'RW'}</span>
+                  )}
                 </button>
               )
             })}
@@ -568,6 +649,10 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
     return <ErrorContent message={vm.error ?? 'Connection failed'} />
   }
 
+  if (view === 'audit') {
+    return <AuditView />
+  }
+
   if (view === 'canvas') {
     if (isLoading) return <LoadingContent />
     return (
@@ -586,6 +671,82 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
       vmCode={vmKey}
       onSwitchToCanvas={onSwitchToCanvas}
     />
+  )
+}
+
+/* ── Audit log ──
+   Write actions and terminal sessions requested through this dashboard.
+   Entries are attributed by session/machine, not by user — OSS has one
+   shared UI token authenticating the whole dashboard, no per-user login,
+   so that's the real ceiling on what can be logged here. */
+function AuditView() {
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let stop = false
+    const poll = () => fetchAuditLog(300).then(e => { if (!stop) { setEntries(e); setError('') } }).catch(e => { if (!stop) setError(e.message ?? 'Failed to load audit log') })
+    poll()
+    const t = setInterval(poll, 5000)
+    return () => { stop = true; clearInterval(t) }
+  }, [])
+
+  const eventLabel = (e: AuditEntry) => {
+    if (e.event === 'exec_requested') return 'Terminal opened'
+    if (e.event === 'action_requested') return `Requested: ${e.type ?? 'action'}`
+    if (e.event === 'action_completed') return e.success ? 'Completed' : 'Failed'
+    return e.event
+  }
+
+  return (
+    <div style={{ flex:1, overflow:'auto', padding:'28px 36px' }}>
+      <div style={{ fontSize:20, fontWeight:600, color:T.ink, marginBottom:4 }}>Audit log</div>
+      <div style={{ fontSize:12.5, color:T.ink3, marginBottom:20, maxWidth:640, lineHeight:1.5 }}>
+        Every write action and terminal session requested through this dashboard, most recent first.
+        Attributed by machine, not by user — there&apos;s no per-user login in the self-hosted version,
+        just the one dashboard token.
+      </div>
+
+      {error && (
+        <div style={{ fontSize:12, color:'#ef4444', padding:'8px 10px', borderRadius:8, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:14 }}>{error}</div>
+      )}
+
+      {entries === null ? (
+        <div style={{ fontSize:12.5, color:T.ink4 }}>Loading…</div>
+      ) : entries.length === 0 ? (
+        <div style={{ fontSize:12.5, color:T.ink4 }}>No write actions or terminal sessions recorded yet.</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:1, border:`1px solid ${T.line}`, borderRadius:10, overflow:'hidden' }}>
+          {entries.map((e, i) => (
+            <div key={i} style={{
+              display:'flex', alignItems:'center', gap:12, padding:'9px 14px', fontSize:12, background:T.surface,
+              borderBottom: i === entries.length - 1 ? 'none' : `1px solid ${T.line}`,
+            }}>
+              <span style={{ fontFamily:MONO, fontSize:10.5, color:T.ink4, width:150, flexShrink:0 }}>
+                {new Date(e.timestamp).toLocaleString()}
+              </span>
+              <span style={{
+                fontSize:10, fontFamily:MONO, padding:'1px 7px', borderRadius:20, flexShrink:0, width:110, textAlign:'center',
+                background: e.event === 'action_completed' ? (e.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)') : T.bg,
+                border: `1px solid ${e.event === 'action_completed' ? (e.success ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)') : T.line2}`,
+                color: e.event === 'action_completed' ? (e.success ? '#22c55e' : '#ef4444') : T.ink3,
+              }}>{eventLabel(e)}</span>
+              <span style={{ color:T.ink2, flexShrink:0 }}>{e.hostname || e.machine_id || '—'}</span>
+              {e.entity_id && (
+                <span style={{ fontFamily:MONO, color:T.ink4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                  {e.namespace ? `${e.namespace}/` : ''}{e.entity_id}
+                </span>
+              )}
+              {e.message && (
+                <span style={{ color:T.ink4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex: e.entity_id ? 0 : 1, maxWidth:280 }} title={e.message}>
+                  {e.message}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -195,6 +195,7 @@ export interface SessionInfo {
   browserCount: number
   paired: boolean
   local: boolean
+  readOnly?: boolean
 }
 
 // ─── Node Color Map ───────────────────────────────────────────────────────────

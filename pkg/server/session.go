@@ -221,6 +221,7 @@ type SessionInfo struct {
 	PairedAt     time.Time `json:"pairedAt"`
 	LastSeen     time.Time `json:"lastSeen"`
 	Local        bool      `json:"local"`
+	ReadOnly     bool      `json:"readOnly,omitempty"`
 }
 
 // sessionKind derives whether a session is a VM Machine or a Clusters

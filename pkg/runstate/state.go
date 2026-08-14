@@ -36,6 +36,11 @@ type ClusterEntry struct {
 	ServerURL      string    `json:"server_url,omitempty"`
 	KubeconfigPath string    `json:"kubeconfig_path"`
 	AddedAt        time.Time `json:"added_at"`
+	// ReadOnly, when true, blocks every write action and exec/terminal
+	// session against this specific cluster — independent of the server's
+	// global --read-only flag, so you can run some clusters view-only while
+	// others stay fully interactive on the same dashboard.
+	ReadOnly bool `json:"read_only,omitempty"`
 }
 
 // Dir returns the directory used to hold runtime state.

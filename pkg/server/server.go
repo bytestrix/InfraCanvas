@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"infracanvas/pkg/audit"
 	"infracanvas/pkg/clustermgr"
 )
 
@@ -168,9 +170,9 @@ type Server struct {
 	localMu      sync.RWMutex
 	localSession *Session
 
-	joinMu      sync.RWMutex
-	joinURL     string // reachable address other VMs should dial; "" hides Add machine
-	joinCaveat  string // human note, e.g. quick-tunnel URLs change on restart
+	joinMu     sync.RWMutex
+	joinURL    string // reachable address other VMs should dial; "" hides Add machine
+	joinCaveat string // human note, e.g. quick-tunnel URLs change on restart
 
 	clusterMgr *clustermgr.Manager // nil until SetClusterManager is called (local-mode only)
 }
@@ -246,8 +248,10 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/ws/canvas", s.handleBrowserWS)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/sessions", s.requireUIToken(s.handleSessions))
+	s.mux.HandleFunc("/api/audit", s.requireUIToken(s.handleAudit))
 	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
 	s.mux.HandleFunc("/api/clusters", s.requireUIOrAgentToken(s.handleClusters))
+	s.mux.HandleFunc("/api/clusters/preview", s.requireUIOrAgentToken(s.handleClusterPreview))
 	s.mux.HandleFunc("/api/clusters/", s.requireUIOrAgentToken(s.handleClusterByID))
 	return s
 }
@@ -435,6 +439,13 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	info := s.sessions.List()
 	for i := range info {
 		info[i].Local = info[i].ID == localID
+		if s.readOnly {
+			info[i].ReadOnly = true
+		} else if s.clusterMgr != nil {
+			if id, ok := strings.CutPrefix(info[i].MachineID, "cluster-"); ok {
+				info[i].ReadOnly = s.clusterMgr.IsReadOnly(id)
+			}
+		}
 	}
 	sort.Slice(info, func(a, b int) bool {
 		if info[a].Local != info[b].Local {
@@ -448,12 +459,38 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(info)
 }
 
+// handleAudit serves GET /api/audit?limit=N — the most recent write-action
+// and terminal-session events, newest first. Entries are attributed by
+// session/machine, not by user identity: OSS has one shared UI token
+// authenticating the whole dashboard, no per-user login, so that's the real
+// ceiling on what can be logged here.
+func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 200
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(audit.Recent(limit))
+}
+
 // ── Clusters (kubeconfig direct-connect) ──────────────────────────────────────
 
 type addClusterRequest struct {
 	Kubeconfig string `json:"kubeconfig"` // raw kubeconfig YAML/JSON text
 	Name       string `json:"name,omitempty"`
 	Context    string `json:"context,omitempty"` // omit to get the context picker back instead of creating
+	ReadOnly   bool   `json:"readOnly,omitempty"`
+}
+
+// updateClusterRequest is the body for PATCH /api/clusters/{id}.
+type updateClusterRequest struct {
+	ReadOnly *bool `json:"readOnly,omitempty"` // pointer so "omitted" and "set to false" are distinguishable
 }
 
 // handleClusters serves GET (list) and POST (add) on /api/clusters.
@@ -510,7 +547,7 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		entry, err := s.clusterMgr.Add(req.Name, []byte(req.Kubeconfig), req.Context)
+		entry, err := s.clusterMgr.Add(req.Name, []byte(req.Kubeconfig), req.Context, req.ReadOnly)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -523,7 +560,40 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleClusterByID serves DELETE on /api/clusters/{id}.
+// handleClusterPreview serves POST /api/clusters/preview — checks what a
+// kubeconfig context can actually do (view, exec, restart, scale, read
+// secrets) before the user commits to connecting it. Read-only in every
+// sense: no cluster is added, no virtual agent starts, nothing is persisted,
+// so this is allowed even in --read-only mode.
+func (s *Server) handleClusterPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	var req addClusterRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Kubeconfig) == "" {
+		http.Error(w, "kubeconfig is required", http.StatusBadRequest)
+		return
+	}
+	preview, err := clustermgr.PreviewPermissions([]byte(req.Kubeconfig), req.Context)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(preview)
+}
+
+// handleClusterByID serves DELETE and PATCH on /api/clusters/{id}.
 func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 	if s.clusterMgr == nil {
 		http.Error(w, "clusters not available", http.StatusServiceUnavailable)
@@ -534,19 +604,49 @@ func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing cluster id", http.StatusBadRequest)
 		return
 	}
-	if r.Method != http.MethodDelete {
+
+	switch r.Method {
+	case http.MethodDelete:
+		if s.readOnly {
+			http.Error(w, "read-only mode: removing clusters is disabled", http.StatusForbidden)
+			return
+		}
+		if err := s.clusterMgr.Remove(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+
+	case http.MethodPatch:
+		if s.readOnly {
+			http.Error(w, "read-only mode: editing clusters is disabled", http.StatusForbidden)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		if err != nil {
+			http.Error(w, "failed to read body", http.StatusBadRequest)
+			return
+		}
+		var req updateClusterRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if req.ReadOnly == nil {
+			http.Error(w, "nothing to update", http.StatusBadRequest)
+			return
+		}
+		entry, err := s.clusterMgr.SetReadOnly(id, *req.ReadOnly)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(entry)
+
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-	if s.readOnly {
-		http.Error(w, "read-only mode: removing clusters is disabled", http.StatusForbidden)
-		return
-	}
-	if err := s.clusterMgr.Remove(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Agent WebSocket handler ───────────────────────────────────────────────────
@@ -707,7 +807,7 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		msg := mustMarshalEnvelope(MsgAgentConnected, AgentConnectedData{
 			Hostname: hello.Hostname,
 			Scope:    hello.Scope,
-			ReadOnly: s.readOnly,
+			ReadOnly: s.sessionReadOnly(sess),
 		})
 		broadcastToBrowsers(sess, msg)
 
@@ -735,6 +835,19 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 	case MsgActionResult:
 		broadcastToBrowsers(sess, raw)
 		log.Printf("[agent] ACTION_RESULT  → %d browsers", sess.BrowserCount())
+		var result struct {
+			ActionID string `json:"action_id"`
+			Success  bool   `json:"success"`
+			Message  string `json:"message"`
+			Error    string `json:"error"`
+		}
+		if json.Unmarshal(env.Data, &result) == nil && result.ActionID != "" {
+			msg := result.Message
+			if !result.Success && result.Error != "" {
+				msg = result.Error
+			}
+			audit.LogActionCompleted(result.ActionID, result.Success, msg)
+		}
 
 	case MsgActionProgress:
 		broadcastToBrowsers(sess, raw)
@@ -881,7 +994,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		_ = writeMsg(conn, MsgAgentConnected, AgentConnectedData{
 			Hostname: hostname,
 			Scope:    scope,
-			ReadOnly: s.readOnly,
+			ReadOnly: s.sessionReadOnly(sess),
 		})
 	}
 
@@ -919,24 +1032,74 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// sessionReadOnly reports whether writes should be blocked for this specific
+// session — either the server's global --read-only flag, or (for a Clusters
+// virtual agent session) that one cluster's own read-only flag, set
+// independently of the global one via POST/PATCH /api/clusters.
+func (s *Server) sessionReadOnly(sess *Session) bool {
+	if s.readOnly {
+		return true
+	}
+	if s.clusterMgr == nil {
+		return false
+	}
+	if id, ok := strings.CutPrefix(sess.MachineID, "cluster-"); ok {
+		return s.clusterMgr.IsReadOnly(id)
+	}
+	return false
+}
+
 // handleBrowserMessage forwards COMMAND and BROWSER_ACTION messages to the agent.
 func (s *Server) handleBrowserMessage(sess *Session, conn *SafeConn, env Envelope, payload []byte) {
 	switch env.Type {
 	case MsgBrowserAction:
-		if s.readOnly && !isReadOnlySafeAction(env.Data) {
-			s.rejectReadOnlyAction(conn, env.Data)
+		if s.sessionReadOnly(sess) && !isReadOnlySafeAction(env.Data) {
+			s.rejectReadOnlyAction(sess, conn, env.Data)
 			return
+		}
+		if !isReadOnlySafeAction(env.Data) {
+			var req struct {
+				ActionID string `json:"action_id"`
+				Type     string `json:"type"`
+				Target   struct {
+					EntityID  string `json:"entity_id"`
+					Namespace string `json:"namespace"`
+				} `json:"target"`
+			}
+			if json.Unmarshal(env.Data, &req) == nil {
+				sess.mu.RLock()
+				hostname, machineID := sess.Hostname, sess.MachineID
+				sess.mu.RUnlock()
+				audit.LogActionRequested(req.ActionID, req.Type, machineID, hostname, req.Target.EntityID, req.Target.Namespace)
+			}
 		}
 		// Translate BROWSER_ACTION → ACTION_REQUEST before forwarding
 		env.Type = MsgActionRequest
 		payload, _ = json.Marshal(env)
 		fallthrough
 	case MsgCommand, MsgExecStart, MsgExecInput, MsgExecResize, MsgExecEnd:
-		if s.readOnly && (env.Type == MsgExecStart || env.Type == MsgExecInput || env.Type == MsgExecResize) {
+		if s.sessionReadOnly(sess) && (env.Type == MsgExecStart || env.Type == MsgExecInput || env.Type == MsgExecResize) {
 			if env.Type == MsgExecStart {
-				s.rejectReadOnlyExec(conn, env.Data)
+				s.rejectReadOnlyExec(sess, conn, env.Data)
 			}
 			return
+		}
+		if env.Type == MsgExecStart {
+			var req struct {
+				ContainerID string `json:"container_id"`
+				PodName     string `json:"pod_name"`
+				Namespace   string `json:"namespace"`
+			}
+			if json.Unmarshal(env.Data, &req) == nil {
+				sess.mu.RLock()
+				hostname, machineID := sess.Hostname, sess.MachineID
+				sess.mu.RUnlock()
+				entity := req.PodName
+				if entity == "" {
+					entity = req.ContainerID
+				}
+				audit.LogExecRequested(machineID, hostname, entity, req.Namespace)
+			}
 		}
 		sess.mu.RLock()
 		agentConn := sess.AgentConn
@@ -969,13 +1132,17 @@ func isReadOnlySafeAction(data json.RawMessage) bool {
 // rejectReadOnlyAction answers a blocked BROWSER_ACTION with a failed
 // ACTION_RESULT in the same shape the agent would produce, so the UI
 // surfaces it as a normal action error.
-func (s *Server) rejectReadOnlyAction(conn *SafeConn, data json.RawMessage) {
+func (s *Server) rejectReadOnlyAction(sess *Session, conn *SafeConn, data json.RawMessage) {
 	var req struct {
 		ActionID string `json:"action_id"`
 		Type     string `json:"type"`
 	}
 	_ = json.Unmarshal(data, &req)
 	log.Printf("[browser] blocked action %q (read-only mode)", req.Type)
+	sess.mu.RLock()
+	hostname, machineID := sess.Hostname, sess.MachineID
+	sess.mu.RUnlock()
+	audit.LogActionBlocked("action_blocked", req.Type, machineID, hostname)
 	_ = writeMsg(conn, MsgActionResult, map[string]interface{}{
 		"action_id": req.ActionID,
 		"success":   false,
@@ -988,12 +1155,16 @@ func (s *Server) rejectReadOnlyAction(conn *SafeConn, data json.RawMessage) {
 
 // rejectReadOnlyExec answers a blocked EXEC_START with a short message on the
 // terminal stream followed by EXEC_END, so the terminal panel closes cleanly.
-func (s *Server) rejectReadOnlyExec(conn *SafeConn, data json.RawMessage) {
+func (s *Server) rejectReadOnlyExec(sess *Session, conn *SafeConn, data json.RawMessage) {
 	var req struct {
 		SessionID string `json:"session_id"`
 	}
 	_ = json.Unmarshal(data, &req)
 	log.Printf("[browser] blocked exec session (read-only mode)")
+	sess.mu.RLock()
+	hostname, machineID := sess.Hostname, sess.MachineID
+	sess.mu.RUnlock()
+	audit.LogActionBlocked("exec_blocked", "", machineID, hostname)
 	_ = writeMsg(conn, MsgExecData, map[string]interface{}{
 		"session_id": req.SessionID,
 		"data":       base64.StdEncoding.EncodeToString([]byte("This is a read-only demo — terminals are disabled.\r\n")),

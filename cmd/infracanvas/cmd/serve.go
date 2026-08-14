@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
+	"infracanvas/pkg/audit"
 	"infracanvas/pkg/clustermgr"
 	"infracanvas/pkg/runstate"
 	"infracanvas/pkg/server"
@@ -125,6 +126,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		serveRefresh,
 	)
 	srv.SetClusterManager(clusterMgr)
+
+	audit.Init()
 
 	httpSrv := &http.Server{Handler: srv.Handler()}
 	serverErrCh := make(chan error, 1)

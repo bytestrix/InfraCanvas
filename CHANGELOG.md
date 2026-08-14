@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.0] — 2026-08-14
+
+### Added
+- **Per-cluster read-only mode.** Independent of the global `--read-only` flag, each connected cluster now has its own read-only toggle — set it at connect time or flip it later — so some clusters can stay view-only while others remain fully interactive on the same dashboard.
+- **Permission preview before connecting.** The Add Cluster dialog now shows what a kubeconfig can actually do (view, exec, restart/kill, scale/edit, read Secrets) before you commit to connecting it, via a set of `SelfSubjectAccessReview` checks that persist nothing.
+- **Audit log.** Every write action, terminal session, and read-only-blocked attempt is recorded (append-only, local file) and viewable from a new Audit tab in the dashboard, or `GET /api/audit`. Attributed by session/machine, not by user — OSS has no per-user login.
+
+---
+
 ## [0.18.1] — 2026-08-14
 
 ### Security
