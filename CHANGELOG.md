@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.18.1] — 2026-08-14
+
+### Security
+Fixes six vulnerabilities responsibly disclosed via r/selfhosted. Every one was independently verified against the code before fixing.
+
+- **Critical.** `--read-only` demo mode was never enforced on `POST`/`DELETE /api/clusters`. A kubeconfig can contain an `exec:` credential plugin that client-go runs verbatim, so a read-only public demo could be turned into arbitrary command execution as the service user. Both routes now check read-only mode.
+- **High.** Hub mode's shared join token let any connected VM claim any other machine's session — `/api/sessions` (which discloses every machine ID) also accepted that same token, making the attack practical end-to-end. Fixed with a per-machine resume secret required on every reconnect; a mismatch is rejected outright instead of silently swapped in over a session with browsers already attached. `/api/sessions` now requires the UI token only.
+- **High.** Shell injection via the service/unit action parameters, string-interpolated into `sh -c`. Switched to direct argv execution (no shell involved).
+- **High.** The cloudflared tunnel binary was trusted from a `/tmp` fallback cache directory with no ownership check and no checksum — reachable because the installer only set `HOME` for non-root run users, so the default root install silently fell back to a world-writable path any local user could plant a binary in ahead of time. Installer now always sets `HOME`; a cached binary is only trusted if this process actually owns its directory.
+- **High.** `update_agent` downloaded and installed a binary from a caller-supplied URL with zero checksum verification, despite every release already publishing `checksums.txt`. Now requires `https://`, verifies sha256 against the release's own checksums, and refuses a custom URL without an explicit hash to check it against.
+- **High.** The dashboard/join token file was written world-readable (0644 in a 0755 directory), unlike every other credential file in the codebase.
+
+---
+
 ## [0.18.0] — 2026-08-14
 
 ### Fixed
