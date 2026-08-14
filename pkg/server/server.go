@@ -239,15 +239,18 @@ func clientIP(r *http.Request) string {
 	if err != nil {
 		host = r.RemoteAddr
 	}
+	// Cf-Connecting-Ip is set by Cloudflare's actual edge network on every
+	// real cloudflared quick-tunnel connection — this is a genuine external
+	// signal, not something the bundled cloudflared process fabricates or
+	// passes through unchecked. X-Forwarded-For is deliberately NOT used as
+	// a fallback here: for an arbitrary third-party reverse proxy a
+	// self-hoster might put in front instead, there's no guarantee it
+	// appends rather than passes the client's own value through untouched,
+	// and taking "the first entry" (or any fixed position) in an unknown
+	// proxy's XFF chain can just be reading back what the client sent.
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		if cf := r.Header.Get("Cf-Connecting-Ip"); cf != "" && net.ParseIP(cf) != nil {
 			return cf
-		}
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			first := strings.TrimSpace(strings.Split(xff, ",")[0])
-			if net.ParseIP(first) != nil {
-				return first
-			}
 		}
 	}
 	return host

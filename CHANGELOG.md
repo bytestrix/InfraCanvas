@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.3] — 2026-08-15
+
+### Fixed
+- The v0.19.2 rate-limiter IP detection took the *first* entry of a spoofed `X-Forwarded-For` header, which a client could still forge ahead of whatever a third-party reverse proxy appends — removed the `X-Forwarded-For` fallback entirely. `Cf-Connecting-Ip` (set by Cloudflare's real edge network on the default bundled tunnel) remains the sole trusted signal; anything else falls back to the direct peer address.
+
+---
+
 ## [0.19.2] — 2026-08-15
 
 ### Fixed
