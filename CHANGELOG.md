@@ -7,6 +7,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.2] — 2026-08-15
+
+### Fixed
+Regressions found by a follow-up re-audit of v0.19.1's own changes — this is why we test before shipping, and why we re-audit after.
+
+- **Critical.** The v0.19.1 CSP (`default-src 'self'` with no `script-src`/`style-src` override) blocked the dashboard's own Next.js hydration scripts and inline styles outright — the UI failed to render in any CSP-enforcing browser. `script-src`/`style-src` now explicitly allow `'unsafe-inline'` (the static-export dashboard has no nonce infrastructure to do better without a larger rewrite); framing protection and same-origin resource restriction are unaffected.
+- **Medium.** The v0.19.1 rate limiter bucketed every visitor behind the default bundled cloudflared tunnel into a single shared IP (`127.0.0.1`, since that's how requests arrive locally), meaning anyone with the tunnel URL could lock out the legitimate operator with ~20 bad requests. Now reads `Cf-Connecting-Ip` (only when the immediate peer is loopback, i.e. genuinely our own tunnel) so real visitors are rate-limited independently.
+- Failed auth attempts (bad UI token, bad agent token, bad `?token=`) are now logged with the source IP and route — previously silent until the rate limiter tripped into a 429, with no signal an attack was in progress.
+- Frontend Next.js bumped 14.2.29 → 14.2.35 for consistency with the hosted product (low practical risk here — OSS ships a static export with no server runtime, so most of what 14.2.30+ fixes doesn't apply, but no reason to stay behind).
+
+---
+
 ## [0.19.1] — 2026-08-15
 
 ### Security

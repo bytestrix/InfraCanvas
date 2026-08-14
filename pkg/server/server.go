@@ -216,18 +216,39 @@ func (l *authRateLimiter) allow(ip string) bool {
 	return len(recent) < authRateLimitMaxFailures
 }
 
-func (l *authRateLimiter) recordFailure(ip string) {
+func (l *authRateLimiter) recordFailure(ip, reason string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.failures[ip] = append(l.failures[ip], time.Now())
+	log.Printf("[auth] failed attempt from %s: %s", ip, reason)
 }
 
 // clientIP extracts the request's remote IP without the port, for rate-limit
 // bucketing. Not used for any security decision beyond throttling.
+// clientIP extracts the request's real IP for rate-limit bucketing. In the
+// default deployment mode (bundled cloudflared quick-tunnel), every request
+// arrives at this process via the local cloudflared connector, so
+// RemoteAddr is always 127.0.0.1 for every real visitor — bucketing the
+// rate limiter on that alone would lump every tunnel visitor into one
+// shared quota, letting anyone with the (documented "unguessable but not
+// secret") tunnel URL lock out the legitimate operator. Only when the
+// immediate peer is loopback (i.e. genuinely our own bundled cloudflared,
+// not an arbitrary client) do we trust the header it sets.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if cf := r.Header.Get("Cf-Connecting-Ip"); cf != "" && net.ParseIP(cf) != nil {
+			return cf
+		}
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			first := strings.TrimSpace(strings.Split(xff, ",")[0])
+			if net.ParseIP(first) != nil {
+				return first
+			}
+		}
 	}
 	return host
 }
@@ -337,7 +358,7 @@ func (s *Server) requireUIToken(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		s.authLimiter.recordFailure(clientIP(r))
+		s.authLimiter.recordFailure(clientIP(r), "invalid UI token on "+r.URL.Path)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
@@ -359,7 +380,7 @@ func (s *Server) requireUIOrAgentToken(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		s.authLimiter.recordFailure(clientIP(r))
+		s.authLimiter.recordFailure(clientIP(r), "invalid UI/agent token on "+r.URL.Path)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
@@ -427,7 +448,7 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 				http.Redirect(w, r, redirectPath, http.StatusSeeOther)
 				return
 			}
-			s.authLimiter.recordFailure(clientIP(r))
+			s.authLimiter.recordFailure(clientIP(r), "invalid ?token= on "+r.URL.Path)
 			s.writeUnauthorizedHTML(w, "Invalid token.")
 			return
 		}
@@ -435,7 +456,7 @@ func (s *Server) requireUIAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		s.authLimiter.recordFailure(clientIP(r))
+		s.authLimiter.recordFailure(clientIP(r), "missing/invalid auth cookie on "+r.URL.Path)
 		s.writeUnauthorizedHTML(w, "Auth token required.")
 	})
 }
@@ -457,12 +478,22 @@ func (s *Server) writeUnauthorizedHTML(w http.ResponseWriter, msg string) {
 // no framing (clickjacking), no MIME sniffing, no active-content CSP beyond
 // same-origin (the dashboard renders agent/cluster-supplied strings), and
 // HSTS when we know the request arrived over TLS.
+//
+// script-src/style-src need 'unsafe-inline': the embedded dashboard is a
+// Next.js static export, which boots via inline `self.__next_f.push(...)`
+// hydration script blocks and has no nonce infrastructure (there's no
+// per-request template rendering — index.html is a static file). A strict
+// default-src with no override blocks that hydration entirely, breaking the
+// dashboard outright. This still blocks framing, restricts every resource
+// type to same-origin, and stops third-party script/style injection — just
+// not inline-script injection, which is the tradeoff a static-export SPA
+// with no server-side templating has to make short of a much bigger rewrite.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'self'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'")
 		h.Set("Referrer-Policy", "same-origin")
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
@@ -752,8 +783,7 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.checkAgentToken(r) {
-		s.authLimiter.recordFailure(clientIP(r))
-		log.Printf("[agent] rejected unauthorized connection from %s", r.RemoteAddr)
+		s.authLimiter.recordFailure(clientIP(r), "invalid agent token on /ws/agent")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -983,7 +1013,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.checkUIToken(r) {
-		s.authLimiter.recordFailure(clientIP(r))
+		s.authLimiter.recordFailure(clientIP(r), "invalid UI token on /ws/canvas")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
