@@ -72,7 +72,8 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
     Promise.all([
       import('@xterm/xterm'),
       import('@xterm/addon-fit'),
-    ]).then(([{ Terminal }, { FitAddon }]) => {
+      import('@xterm/addon-webgl'),
+    ]).then(([{ Terminal }, { FitAddon }, { WebglAddon }]) => {
       if (!active || !termDivRef.current) return
 
       // xterm.js theme must use resolved hex colors — CSS variables are not valid here
@@ -118,6 +119,22 @@ export default function TerminalPanel({ node, vmCode, layer = 'docker', onClose 
       const fit = new FitAddon()
       term.loadAddon(fit)
       term.open(termDivRef.current)
+
+      // xterm.js's default renderer touches the DOM per glyph, which under
+      // heavy or fast output (progress bars, `ls -laR`) is measurably slower
+      // than a real terminal and is a common source of perceived input lag —
+      // every keystroke's round-trip echo has to wait behind whatever's
+      // still being painted. WebGL renders through a GPU texture atlas
+      // instead. It can fail to initialize (no GPU, disabled in sandboxed
+      // contexts) or lose its context later, so fall back to the default
+      // DOM renderer rather than leave the terminal broken.
+      try {
+        const webgl = new WebglAddon()
+        webgl.onContextLoss(() => { webgl.dispose() })
+        term.loadAddon(webgl)
+      } catch {
+        // WebGL unavailable — default renderer still works, just slower.
+      }
 
       termRef.current = term
       fitRef.current  = fit
