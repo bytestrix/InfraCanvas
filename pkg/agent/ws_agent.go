@@ -1060,22 +1060,82 @@ func (a *WSAgent) startHostExec(ctx context.Context, cancel context.CancelFunc, 
 			a.execSessions.Delete(sessionID)
 			a.sendExecEnd(sessionID)
 		}()
-		buf := make([]byte, 4096)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+		ch := make(chan []byte, 64)
+		go func() {
+			defer close(ch)
+			buf := make([]byte, 4096)
+			for {
+				n, err := ptmx.Read(buf)
+				if n > 0 {
+					chunk := make([]byte, n)
+					copy(chunk, buf[:n])
+					ch <- chunk
+				}
+				if err != nil {
+					return
+				}
 			}
-			n, err := ptmx.Read(buf)
-			if n > 0 {
-				a.sendExecData(sessionID, buf[:n], "")
-			}
-			if err != nil {
-				return
-			}
-		}
+		}()
+		a.coalesceExecOutput(ctx, sessionID, ch)
 	}()
+}
+
+// coalesceExecOutput drains raw output chunks from ch (fed by a dedicated
+// blocking-read goroutine at each exec call site) and forwards them to the
+// browser as batched EXEC_DATA messages, instead of one WS message per
+// underlying read syscall. A command that prints a lot of output quickly
+// (e.g. `ls -laR /`) can otherwise generate thousands of tiny WS messages
+// within milliseconds — each one costs a JSON parse + base64 decode +
+// xterm.js render call on the browser's single JS thread, which is what
+// shows up as terminal lag/stutter (input appears "stuck" because the JS
+// thread is busy processing a backlog, then catches up all at once). It
+// also reduces pressure on the relay's per-connection outbound queue.
+// Batching output for a few milliseconds is imperceptible to a human typing
+// or reading, but decisive for message count — the same technique other
+// browser-terminal relays (ttyd, gotty) use.
+func (a *WSAgent) coalesceExecOutput(ctx context.Context, sessionID string, ch <-chan []byte) {
+	const flushInterval = 8 * time.Millisecond
+	const flushSize = 32 * 1024
+
+	var pending []byte
+	timer := time.NewTimer(flushInterval)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	timerActive := false
+	flush := func() {
+		if len(pending) > 0 {
+			a.sendExecData(sessionID, pending, "")
+			pending = nil
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case chunk, ok := <-ch:
+			if !ok {
+				flush()
+				return
+			}
+			pending = append(pending, chunk...)
+			if len(pending) >= flushSize {
+				flush()
+				if timerActive {
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timerActive = false
+				}
+			} else if !timerActive {
+				timer.Reset(flushInterval)
+				timerActive = true
+			}
+		case <-timer.C:
+			timerActive = false
+			flush()
+		}
+	}
 }
 
 // startDockerExec opens an exec session inside a container.
@@ -1106,24 +1166,26 @@ func (a *WSAgent) startDockerExec(ctx context.Context, cancel context.CancelFunc
 			a.execSessions.Delete(sessionID)
 			a.sendExecEnd(sessionID)
 		}()
-		buf := make([]byte, 4096)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			n, err := sess.Attach.Reader.Read(buf)
-			if n > 0 {
-				a.sendExecData(sessionID, buf[:n], "")
-			}
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("[exec] docker read error session=%s: %v", sessionID, err)
+		ch := make(chan []byte, 64)
+		go func() {
+			defer close(ch)
+			buf := make([]byte, 4096)
+			for {
+				n, err := sess.Attach.Reader.Read(buf)
+				if n > 0 {
+					chunk := make([]byte, n)
+					copy(chunk, buf[:n])
+					ch <- chunk
 				}
-				return
+				if err != nil {
+					if err != io.EOF {
+						log.Printf("[exec] docker read error session=%s: %v", sessionID, err)
+					}
+					return
+				}
 			}
-		}
+		}()
+		a.coalesceExecOutput(ctx, sessionID, ch)
 	}()
 }
 
@@ -1156,16 +1218,23 @@ func (a *WSAgent) startK8sExec(ctx context.Context, cancel context.CancelFunc, s
 			a.execSessions.Delete(sessionID)
 			a.sendExecEnd(sessionID)
 		}()
-		buf := make([]byte, 4096)
-		for {
-			n, err := pr.Read(buf)
-			if n > 0 {
-				a.sendExecData(sessionID, buf[:n], "")
+		ch := make(chan []byte, 64)
+		go func() {
+			defer close(ch)
+			buf := make([]byte, 4096)
+			for {
+				n, err := pr.Read(buf)
+				if n > 0 {
+					chunk := make([]byte, n)
+					copy(chunk, buf[:n])
+					ch <- chunk
+				}
+				if err != nil {
+					return
+				}
 			}
-			if err != nil {
-				return
-			}
-		}
+		}()
+		a.coalesceExecOutput(ctx, sessionID, ch)
 	}()
 }
 

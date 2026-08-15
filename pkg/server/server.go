@@ -80,7 +80,7 @@ type wsFrame struct {
 func newSafeConn(c *websocket.Conn) *SafeConn {
 	sc := &SafeConn{
 		conn:   c,
-		outbox: make(chan wsFrame, 256),
+		outbox: make(chan wsFrame, 2048), // generous: EXEC_DATA is now coalesced (see coalesceExecOutput), so this only needs headroom for genuine bursts, not per-syscall message spam
 		closed: make(chan struct{}),
 	}
 	go sc.writeLoop()
