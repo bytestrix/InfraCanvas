@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -53,27 +54,80 @@ const (
 	MsgError             = "ERROR"
 )
 
-// SafeConn wraps a websocket.Conn with a write mutex.
-// gorilla/websocket allows concurrent reads but not concurrent writes.
+// SafeConn wraps a websocket.Conn with an ordered, single-writer outbound
+// queue. gorilla/websocket allows concurrent reads but not concurrent
+// writes, and a mutex alone only guarantees mutual exclusion — it does not
+// guarantee that writes land in the order callers issued them, since
+// multiple goroutines racing for the lock can be resumed in any order.
+// Terminal/log/diff streams are order-sensitive, so every write is enqueued
+// here and drained by a single dedicated goroutine per connection, which
+// guarantees FIFO delivery regardless of how many goroutines call
+// WriteMessage/WriteJSON concurrently.
 type SafeConn struct {
-	conn *websocket.Conn
-	wmu  sync.Mutex
+	conn      *websocket.Conn
+	wmu       sync.Mutex // guards the real conn write call itself
+	outbox    chan wsFrame
+	closed    chan struct{}
+	closeOnce sync.Once
+}
+
+type wsFrame struct {
+	msgType int
+	data    []byte
+	json    interface{}
 }
 
 func newSafeConn(c *websocket.Conn) *SafeConn {
-	return &SafeConn{conn: c}
+	sc := &SafeConn{
+		conn:   c,
+		outbox: make(chan wsFrame, 256),
+		closed: make(chan struct{}),
+	}
+	go sc.writeLoop()
+	return sc
+}
+
+func (sc *SafeConn) writeLoop() {
+	for {
+		select {
+		case f := <-sc.outbox:
+			sc.wmu.Lock()
+			if f.json != nil {
+				_ = sc.conn.WriteJSON(f.json)
+			} else {
+				_ = sc.conn.WriteMessage(f.msgType, f.data)
+			}
+			sc.wmu.Unlock()
+		case <-sc.closed:
+			return
+		}
+	}
+}
+
+// enqueue is non-blocking so a slow/stalled connection can never stall the
+// caller (e.g. the agent's single message-read loop, which calls
+// broadcastToBrowsers for every fan-out target in sequence — blocking on
+// one browser would delay delivery to every other browser on the same
+// session). If the outbox is saturated, the connection is behind and gets
+// closed rather than silently dropping or reordering messages.
+func (sc *SafeConn) enqueue(f wsFrame) error {
+	select {
+	case sc.outbox <- f:
+		return nil
+	case <-sc.closed:
+		return fmt.Errorf("connection closed")
+	default:
+		go sc.Close()
+		return fmt.Errorf("write queue full, closing slow connection")
+	}
 }
 
 func (sc *SafeConn) WriteJSON(v interface{}) error {
-	sc.wmu.Lock()
-	defer sc.wmu.Unlock()
-	return sc.conn.WriteJSON(v)
+	return sc.enqueue(wsFrame{json: v})
 }
 
 func (sc *SafeConn) WriteMessage(t int, data []byte) error {
-	sc.wmu.Lock()
-	defer sc.wmu.Unlock()
-	return sc.conn.WriteMessage(t, data)
+	return sc.enqueue(wsFrame{msgType: t, data: data})
 }
 
 func (sc *SafeConn) ReadMessage() (int, []byte, error) {
@@ -81,6 +135,7 @@ func (sc *SafeConn) ReadMessage() (int, []byte, error) {
 }
 
 func (sc *SafeConn) Close() error {
+	sc.closeOnce.Do(func() { close(sc.closed) })
 	return sc.conn.Close()
 }
 
@@ -1329,6 +1384,15 @@ func mustMarshalEnvelope(msgType string, data interface{}) []byte {
 	return out
 }
 
+// broadcastToBrowsers fans a message out to every browser attached to sess.
+// Enqueuing happens synchronously and in order here: SafeConn.WriteMessage
+// only enqueues onto that connection's own ordered outbox (a fast,
+// non-blocking channel send in the common case — see SafeConn.enqueue), and
+// a dedicated per-connection writer goroutine drains it FIFO. Spawning a
+// goroutine per message per browser here (as before) would let concurrent
+// enqueues race for channel-send order, defeating the FIFO guarantee for
+// exactly the order-sensitive streams (EXEC_DATA, LOG_DATA) this exists to
+// protect.
 func broadcastToBrowsers(sess *Session, msg []byte) {
 	sess.mu.RLock()
 	browsers := make([]*SafeConn, len(sess.Browsers))
@@ -1336,6 +1400,6 @@ func broadcastToBrowsers(sess *Session, msg []byte) {
 	sess.mu.RUnlock()
 
 	for _, c := range browsers {
-		go func(c *SafeConn) { _ = c.WriteMessage(websocket.TextMessage, msg) }(c)
+		_ = c.WriteMessage(websocket.TextMessage, msg)
 	}
 }

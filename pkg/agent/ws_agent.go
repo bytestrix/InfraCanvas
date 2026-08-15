@@ -1169,6 +1169,28 @@ func (a *WSAgent) startK8sExec(ctx context.Context, cancel context.CancelFunc, s
 	}()
 }
 
+// loadExecSession looks up an active exec session, retrying briefly instead
+// of failing immediately. EXEC_START is dispatched to its own goroutine to
+// spawn the PTY/docker/k8s session (so a slow spawn can't stall the WS read
+// loop), and EXEC_INPUT/RESIZE/END each arrive in their own goroutine too
+// (see the dispatch switch above) — so a fast-following EXEC_INPUT can win
+// the race and run before EXEC_START finishes registering the session,
+// silently dropping input typed or pasted right as a terminal opens. The
+// retry window is generous (PTY/exec spawn is normally sub-50ms) but bounded
+// so a genuinely unknown/already-ended session doesn't hang the goroutine.
+func (a *WSAgent) loadExecSession(sessionID string) (*execSession, bool) {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if val, ok := a.execSessions.Load(sessionID); ok {
+			return val.(*execSession), true
+		}
+		if time.Now().After(deadline) {
+			return nil, false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (a *WSAgent) handleExecInput(data json.RawMessage) {
 	var req struct {
 		SessionID string `json:"session_id"`
@@ -1177,11 +1199,10 @@ func (a *WSAgent) handleExecInput(data json.RawMessage) {
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
 	}
-	val, ok := a.execSessions.Load(req.SessionID)
+	es, ok := a.loadExecSession(req.SessionID)
 	if !ok {
 		return
 	}
-	es := val.(*execSession)
 	decoded, err := base64.StdEncoding.DecodeString(req.Data)
 	if err != nil {
 		return
@@ -1204,11 +1225,10 @@ func (a *WSAgent) handleExecResize(data json.RawMessage) {
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
 	}
-	val, ok := a.execSessions.Load(req.SessionID)
+	es, ok := a.loadExecSession(req.SessionID)
 	if !ok {
 		return
 	}
-	es := val.(*execSession)
 	if es.ptmx != nil {
 		_ = pty.Setsize(es.ptmx, &pty.Winsize{Rows: uint16(req.Rows), Cols: uint16(req.Cols)})
 	} else if es.dockerSess != nil && a.actionExecutor != nil {
@@ -1225,11 +1245,10 @@ func (a *WSAgent) handleExecEnd(data json.RawMessage) {
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
 	}
-	val, ok := a.execSessions.Load(req.SessionID)
+	es, ok := a.loadExecSession(req.SessionID)
 	if !ok {
 		return
 	}
-	es := val.(*execSession)
 	es.cancel()
 	if es.ptmx != nil {
 		es.ptmx.Close()
@@ -1345,11 +1364,19 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 }
 
 // normalizeEntityID strips type prefixes like "container/", "container:", "pod/", "deployment/" from entity IDs.
+// normalizeEntityID strips a graph-node ID down to the bare resource name a
+// backend API expects. Node IDs are "type/name" for most resources
+// (e.g. "container/abc123") but "pod/<namespace>/<name>" for pods — three
+// segments, not two. Stripping only up to the FIRST separator (as this used
+// to) leaves "<namespace>/<name>" for pods, which every k8s API call this
+// feeds (GetLogs, exec, port-forward) rejects outright since resource names
+// can't contain "/". Stripping through the LAST separator instead correctly
+// yields the bare name for both 2- and 3-segment ID formats.
 func normalizeEntityID(id string) string {
-	if i := strings.Index(id, "/"); i >= 0 {
+	if i := strings.LastIndex(id, "/"); i >= 0 {
 		return id[i+1:]
 	}
-	if i := strings.Index(id, ":"); i >= 0 {
+	if i := strings.LastIndex(id, ":"); i >= 0 {
 		return id[i+1:]
 	}
 	return id
