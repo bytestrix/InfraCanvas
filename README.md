@@ -529,9 +529,9 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 
 <a href="https://www.star-history.com/?repos=bytestrix%2FInfracanvas&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bytestrix/Infracanvas&type=date&theme=dark&legend=top-left&sealed_token=ukX_-O1xGLdCErEoXqj8P_2UdC2-7qiEbwH5xUqDjSXPhTWuMHSJs0jMVSX8fU1RV2nEZgZ3LjEr1N-WidHtwLhkVGBc6Evm5t5ZXWT1BW3fbP3tzYcuWQ" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bytestrix/Infracanvas&type=date&legend=top-left&sealed_token=ukX_-O1xGLdCErEoXqj8P_2UdC2-7qiEbwH5xUqDjSXPhTWuMHSJs0jMVSX8fU1RV2nEZgZ3LjEr1N-WidHtwLhkVGBc6Evm5t5ZXWT1BW3fbP3tzYcuWQ" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bytestrix/Infracanvas&type=date&legend=top-left&sealed_token=ukX_-O1xGLdCErEoXqj8P_2UdC2-7qiEbwH5xUqDjSXPhTWuMHSJs0jMVSX8fU1RV2nEZgZ3LjEr1N-WidHtwLhkVGBc6Evm5t5ZXWT1BW3fbP3tzYcuWQ" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&legend=top-left" />
  </picture>
 </a>
 
