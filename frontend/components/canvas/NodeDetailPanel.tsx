@@ -529,7 +529,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
       sendAction(vmCode, action.buildPayload(node, defaults))
       timeoutRef.current = setTimeout(() => {
         setActionStatus('error')
-        setActionMsg('No response from agent — check agent logs')
+        setActionMsg('No response from agent, check agent logs')
       }, 20_000)
     } else {
       setActionStatus(action.confirm ? 'confirming' : 'idle')
@@ -542,7 +542,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
     sendAction(vmCode, action.buildPayload(node, formValues))
     timeoutRef.current = setTimeout(() => {
       setActionStatus('error')
-      setActionMsg('No response from agent — check agent logs')
+      setActionMsg('No response from agent, check agent logs')
     }, 20_000)
   }
 
@@ -693,7 +693,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Actions</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 7, background: '#f59e0b14', border: '1px solid #f59e0b30' }}>
               <ShieldOff size={13} style={{ color: '#f59e0b', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'var(--ink3)' }}>Actions disabled — <span style={{ color: '#f59e0b', fontWeight: 600 }}>read-only demo</span>. Install on your own VM to get full control.</span>
+              <span style={{ fontSize: 12, color: 'var(--ink3)' }}>Actions disabled: <span style={{ color: '#f59e0b', fontWeight: 600 }}>read-only demo</span>. Install on your own VM to get full control.</span>
             </div>
           </div>
         )}

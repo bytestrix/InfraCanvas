@@ -238,7 +238,7 @@ export default function GroupDrawer({ group, vmCode, initialHealthFilter, onClos
         }}>
           {bulkStatus === 'done' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#22c55e' }}>
-              <span>✓ Deleted {deletedCount} {group.type}s — refreshing…</span>
+              <span>✓ Deleted {deletedCount} {group.type}s, refreshing…</span>
             </div>
           ) : bulkStatus === 'running' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink2)' }}>

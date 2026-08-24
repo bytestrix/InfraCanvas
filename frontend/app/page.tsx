@@ -169,13 +169,13 @@ function AddMachineModal({ onClose }: { onClose: () => void }) {
           <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Add a machine</div>
           <div style={{ fontSize:12.5, color:T.ink3, marginTop:4, lineHeight:1.5 }}>
             Run this on the VM you want on the canvas. It connects <strong>outbound-only</strong> to
-            this dashboard — no port is opened on that VM.
+            this dashboard, no port is opened on that VM.
           </div>
         </div>
 
         {failed && (
           <div style={{ fontSize:12.5, color:T.ink2, padding:'10px 12px', borderRadius:8, background:T.bg, border:`1px solid ${T.line}` }}>
-            Couldn&apos;t load join info — the server may be an older version. Run{' '}
+            Couldn&apos;t load join info. The server may be an older version. Run{' '}
             <code style={{ fontFamily:MONO }}>infracanvas url</code> on the hub VM to see the join command.
           </div>
         )}
@@ -305,7 +305,7 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
           <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Connect a cluster</div>
           <div style={{ fontSize:12.5, color:T.ink3, marginTop:4, lineHeight:1.5 }}>
             Drop or paste a kubeconfig. It stays on this machine and is never sent
-            anywhere — the dashboard talks to your cluster&apos;s API server directly,
+            anywhere. The dashboard talks to your cluster&apos;s API server directly,
             the same way <code style={{ fontFamily:MONO }}>kubectl</code> does.
           </div>
         </div>
@@ -339,7 +339,7 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
         {contexts && (
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             <div style={{ fontSize:12, color:T.ink3 }}>
-              {contexts.length > 1 ? 'This kubeconfig has multiple contexts — pick the one to connect:' : 'Confirm the cluster to connect:'}
+              {contexts.length > 1 ? 'This kubeconfig has multiple contexts, pick the one to connect:' : 'Confirm the cluster to connect:'}
             </div>
             {contexts.map(c => (
               <label key={c.name} style={{
@@ -385,7 +385,7 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
 
             <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:T.ink2, cursor:'pointer', padding:'2px 2px' }}>
               <input type="checkbox" checked={readOnly} onChange={e => setReadOnly(e.target.checked)} />
-              Connect as read-only — blocks every action and terminal session on this cluster, even outside global read-only mode. Can be changed later.
+              Connect as read-only: blocks every action and terminal session on this cluster, even outside global read-only mode. Can be changed later.
             </label>
           </div>
         )}
@@ -549,7 +549,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                   {m.machineId?.startsWith('cluster-') && (
                     <span
                       role="button"
-                      title={m.readOnly ? 'Read-only — click to allow writes again' : 'Click to make this cluster read-only'}
+                      title={m.readOnly ? 'Read-only, click to allow writes again' : 'Click to make this cluster read-only'}
                       onClick={e => {
                         e.stopPropagation()
                         const clusterId = m.machineId!.slice('cluster-'.length)
@@ -676,7 +676,7 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
 
 /* ── Audit log ──
    Write actions and terminal sessions requested through this dashboard.
-   Entries are attributed by session/machine, not by user — OSS has one
+   Entries are attributed by session/machine, not by user. OSS has one
    shared UI token authenticating the whole dashboard, no per-user login,
    so that's the real ceiling on what can be logged here. */
 function AuditView() {
@@ -703,7 +703,7 @@ function AuditView() {
       <div style={{ fontSize:20, fontWeight:600, color:T.ink, marginBottom:4 }}>Audit log</div>
       <div style={{ fontSize:12.5, color:T.ink3, marginBottom:20, maxWidth:640, lineHeight:1.5 }}>
         Every write action and terminal session requested through this dashboard, most recent first.
-        Attributed by machine, not by user — there&apos;s no per-user login in the self-hosted version,
+        Attributed by machine, not by user; there&apos;s no per-user login in the self-hosted version,
         just the one dashboard token.
       </div>
 
