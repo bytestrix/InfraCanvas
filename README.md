@@ -11,22 +11,15 @@
 <p align="center">
   <a href="https://infracanvas.app">Website</a> ·
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
-  <a href="#-quick-start">Quick start</a> ·
-  <a href="#-can-i-trust-this-on-my-vm">Trust</a> ·
-  <a href="#️-clusters--kubernetes-with-zero-install">Clusters</a> ·
-  <a href="#-multiple-vms--one-dashboard">Multiple VMs</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#️-how-it-works">How it works</a> ·
-  <a href="#-security-model">Security</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#can-i-trust-this-on-my-vm">Trust</a> ·
+  <a href="#clusters--kubernetes-with-zero-install">Clusters</a> ·
+  <a href="#multiple-vms--one-dashboard">Multiple VMs</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#security-model">Security</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
-
----
-
-### Two ways in — pick yours
-
-- **☸️ Already run Kubernetes?** [Drop a kubeconfig.](#️-clusters--kubernetes-with-zero-install) No agent installed anywhere, nothing added to the cluster, the kubeconfig never leaves your machine.
-- **🖥️ Running plain VMs?** [One install command.](#-quick-start) 30 seconds later you're looking at that VM's live topology.
 
 ---
 
@@ -34,19 +27,23 @@
 
 You SSH into a server and start piecing things together — `docker ps`, `kubectl get pods`, `ss -tlnp`, `systemctl list-units`, `df -h`... ten commands later you still have no real picture of **what's running and how it all connects**.
 
-InfraCanvas replaces that ritual with one binary you run yourself. It discovers every container, pod, service, volume and network — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. Open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#-multiple-vms--one-dashboard) or [several clusters](#️-clusters--kubernetes-with-zero-install) and they all land in one dashboard.
+InfraCanvas replaces that ritual with one binary you run yourself. It discovers every container, pod, service, volume and network — plus systemd services and processes on plain VMs — and serves a **live, interactive topology map** in your browser. Nodes are green when healthy, red when not. Open a terminal inside any container, tail logs, restart a service, or scale a deployment, all without leaving the page. Point it at [several VMs](#multiple-vms--one-dashboard) or [several clusters](#clusters--kubernetes-with-zero-install) and they all land in one dashboard.
 
 You get a **map**, not a list: what runs where, what talks to what, and what's broken, at a glance. Self-hosted end to end — your infrastructure data never leaves your machines.
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
-Two different starting points — pick whichever matches what you actually have. Same dashboard either way.
+**1. Install it**
 
-### Just want to see a Kubernetes cluster right now?
+One VM:
 
-Run this wherever `kubectl` already works for you — your laptop, a bastion, anywhere with network access to the cluster. It doesn't need to run near the cluster, or on Linux:
+```bash
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
+```
+
+A Kubernetes cluster — run this wherever `kubectl` already works for you (laptop, bastion, anywhere with network access to the cluster — doesn't need to run near it, or on Linux):
 
 ```bash
 os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
@@ -55,7 +52,27 @@ chmod +x infracanvas-*
 ./infracanvas-* serve --no-tunnel --private
 ```
 
-Open the link it prints, click **+** next to **Clusters** in the sidebar, and drop a kubeconfig. That's it — no agent installed anywhere, nothing added to the cluster, and the kubeconfig never leaves this machine. Multiple contexts in the file? You'll get a picker so you connect exactly the cluster(s) you mean to. Full details: [Clusters](#️-clusters--kubernetes-with-zero-install).
+**2. Open the link it prints**
+
+```
+✓ InfraCanvas installed and running
+
+  Open in your browser:
+    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
+
+  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
+```
+
+- **One VM** — you're already looking at its live topology: containers, pods, services, whatever's running, with a terminal and logs built in. Nothing else to configure.
+- **Kubernetes** — click **+** next to **Clusters** in the sidebar and drop a kubeconfig. Nothing gets installed on the cluster and the file never leaves this machine. A picker appears if it has multiple contexts. [Full details](#clusters--kubernetes-with-zero-install), or expand below if you don't have a kubeconfig handy.
+
+**3. Add more, if you have it**
+
+- **Another VM** — click **+ Add machine** in the sidebar; it hands you a ready-to-paste install command for that machine, join token included. [Details](#multiple-vms--one-dashboard)
+- **Another cluster** — click **+** next to **Clusters** again, once per kubeconfig.
+- **Don't want to run the dashboard yourself?** [InfraCanvas Cloud](https://cloud.infracanvas.app) does it for you — first 3 VMs free, no credit card.
+
+That's the whole flow. Next: [Features](#features) below, or [other ways to install](#other-ways-to-install) if you'd rather not use the one-liners above.
 
 <details>
 <summary>Don't have a kubeconfig handy?</summary>
@@ -86,54 +103,11 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
-### Just want to look at one VM right now?
-
-Run this on it:
-
-```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
-```
-
-30 seconds later it prints a link. Open it, and you're looking at that VM's live topology — containers, pods, services, whatever's running — with a terminal and logs built in.
-
-```
-✓ InfraCanvas installed and running
-
-  Open in your browser:
-    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
-
-  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
-```
-
-That's it — nothing else to configure. This covers **one VM**. If that's genuinely all you have, you're done; skip to [Features](#-features). If you've got more, read on.
-
-### Got several VMs and want them all in one dashboard?
-
-You have two ways to get there — both give you the exact same dashboard and features, the only difference is who runs the relay:
-
-**1. Self-host it yourself (free, stays on your infra)**
-
-Run the dashboard once — on your laptop, or on one of the VMs — then add the rest to it from the browser:
-
-```bash
-git clone https://github.com/bytestrix/InfraCanvas.git
-cd InfraCanvas && make all
-./bin/infracanvas serve
-```
-
-This prints a link. Open it — you now have a live dashboard, initially showing whatever's running on the machine you're on. In the sidebar, click **+ Add machine**: it hands you a ready-to-paste install command with a join token already baked in. Paste that command into your second VM, and within seconds its containers/pods/services show up as a new entry in the same dashboard. Repeat for VM #3.
-
-That's the whole workflow — one dashboard, every VM you've added to it, all self-hosted. See [Install your own way](#-self-hosting-without-cloudflare) below if you'd rather build from source or run a release binary instead of the one-liner above (same result, different level of "I want to read the code first").
-
-**2. Skip hosting it yourself — use InfraCanvas Cloud**
-
-Same "paste a command per VM" flow, except we run the dashboard for you: no server to keep up, plus team logins, RBAC, and alerts if you need them later. First 3 VMs are free, no credit card. → [cloud.infracanvas.app](https://cloud.infracanvas.app)
-
 ---
 
-### Install your own way
+### Other ways to install
 
-Prefer more control over how you self-host than the one-liner above gives you? Same binary, different levels of trust/control:
+Prefer more control than the one-liners above give you, or want several VMs on one self-hosted dashboard? Same binary, different levels of trust/control:
 
 <details>
 <summary><strong>Build from source — you compile it, you read it</strong></summary>
@@ -148,7 +122,7 @@ cd InfraCanvas && make all
 # → http://localhost:7777/?token=…
 ```
 
-Reach it from your laptop over SSH (`ssh -L 7777:127.0.0.1:7777 user@vm`), open your own port with `--no-tunnel`, or put [Nginx or Caddy in front](#-self-hosting-without-cloudflare) with your own domain and TLS. Your network rules, your call.
+Reach it from your laptop over SSH (`ssh -L 7777:127.0.0.1:7777 user@vm`), open your own port with `--no-tunnel`, or put [Nginx or Caddy in front](#self-hosting-without-cloudflare) with your own domain and TLS. Your network rules, your call.
 
 </details>
 
@@ -212,23 +186,23 @@ You'll see your laptop's Docker containers and Kubernetes context on the canvas.
 
 ---
 
-## 🔐 Can I trust this on my VM?
+## Can I trust this on my VM?
 
 You should ask that about anything you run on a production box. Here's the model, verifiable in this repo:
 
 - **Your data never leaves your machines.** Discovery, the relay, and the dashboard all run in one process on your VM. There is no cloud backend, no account, no telemetry, no phone-home. The only outbound connection is the optional Cloudflare tunnel — and you can turn it off.
 - **The tunnel is a convenience, not a requirement.** `--no-tunnel` binds a port you open yourself; `--private` binds `127.0.0.1` so the only way in is your own SSH. Zero third parties involved.
 - **Everything is readable before you run it.** The [installer](install-agent.sh) is one file of plain bash. The whole product is AGPL-3.0 — build it from source in two commands and run exactly what you compiled.
-- **Auth by default.** Every install generates a random token; without it every request gets `401`. Secrets in env vars are [redacted](#-security-model) before they ever reach the UI layer.
+- **Auth by default.** Every install generates a random token; without it every request gets `401`. Secrets in env vars are [redacted](#security-model) before they ever reach the UI layer.
 - **Runs as your user, not root**, with only the access you already have (docker group, your kubeconfig).
 
-Full details in the [Security model](#-security-model) and [SECURITY.md](SECURITY.md).
+Full details in the [Security model](#security-model) and [SECURITY.md](SECURITY.md).
 
 ---
 
-## 💻 Multiple VMs — one dashboard
+## Multiple VMs — one dashboard
 
-The mechanics behind the self-host path in [Quick start](#-quick-start): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket — no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token — this is what to run if you'd rather do it by hand.
+The mechanics behind the self-host path in [Quick start](#quick-start): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket — no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token — this is what to run if you'd rather do it by hand.
 
 ```bash
 # On the hub VM:
@@ -248,7 +222,7 @@ Prefer fully isolated dashboards instead? Just install normally on each VM — e
 
 ---
 
-## ☸️ Clusters — Kubernetes with zero install
+## Clusters — Kubernetes with zero install
 
 If you already run Kubernetes, you don't need to put an agent anywhere. Click **+** next to **Clusters** in the sidebar and drop a kubeconfig — the dashboard talks to your cluster's API server directly, the same way `kubectl` does, running from the same machine as `infracanvas serve`.
 
@@ -258,7 +232,7 @@ A kubeconfig with several contexts shows a picker so you connect exactly the clu
 
 ---
 
-## ✨ Features
+## Features
 
 ### Live topology map
 Every container, pod, service, volume and network drawn as connected nodes with edges showing what talks to what. Not a list — a map. Updates every 30 seconds, diff-only.
@@ -287,17 +261,17 @@ Env vars (secrets auto-masked), port mappings, volume mounts, image details, ser
 One static Go binary with the dashboard embedded. Works with Docker, Kubernetes, plain systemd services, PM2 — none of them required.
 
 ### Many VMs, one canvas
-Run the dashboard on one VM and join the rest as outbound-only agents — no inbound ports on the joined machines. Switch between them from the sidebar. See [Multiple VMs](#-multiple-vms--one-dashboard).
+Run the dashboard on one VM and join the rest as outbound-only agents — no inbound ports on the joined machines. Switch between them from the sidebar. See [Multiple VMs](#multiple-vms--one-dashboard).
 
 ### Kubernetes clusters — no agent required
-Drop a kubeconfig and see/control that cluster immediately — no install anywhere, kubeconfig never leaves your machine. See [Clusters](#️-clusters--kubernetes-with-zero-install).
+Drop a kubeconfig and see/control that cluster immediately — no install anywhere, kubeconfig never leaves your machine. See [Clusters](#clusters--kubernetes-with-zero-install).
 
 ### Secure by default
 Binds localhost. Tunnel is optional and outbound-only. Random per-install auth token, separate token for joining agents. Secret redaction before data leaves the discovery layer. Runs as your user, not root. Optional `--read-only` mode for public dashboards.
 
 ---
 
-## ⚙️ How it works
+## How it works
 
 <p align="center"><img src="docs/architecture.png" alt="Architecture diagram: infracanvas serve runs the relay, dashboard, and discovery in one process; your browser reaches it directly or through an optional outbound-only Cloudflare tunnel; other VMs join as outbound agents; Kubernetes clusters connect directly via kubeconfig with no agent installed" width="820"></p>
 
@@ -305,11 +279,11 @@ One binary, one URL. The dashboard, relay and discovery agent all run in the sam
 
 Adding more VMs keeps the same shape: the hub's relay accepts extra agents, each connecting **outbound** to the hub — joined VMs open no inbound port and serve no UI, they only push their graph to the hub.
 
-Kubernetes clusters connect a third way, with no agent at all: drop a kubeconfig and the hub talks to that cluster's API server directly, the same way `kubectl` does. See [Clusters](#️-clusters--kubernetes-with-zero-install).
+Kubernetes clusters connect a third way, with no agent at all: drop a kubeconfig and the hub talks to that cluster's API server directly, the same way `kubectl` does. See [Clusters](#clusters--kubernetes-with-zero-install).
 
 ---
 
-## 🌐 Self-hosting without Cloudflare
+## Self-hosting without Cloudflare
 
 The default install uses a Cloudflare quick-tunnel for zero-config HTTPS. If you want to use your own domain and reverse proxy instead, pass `--no-tunnel`:
 
@@ -382,7 +356,7 @@ No public exposure, no domain, no TLS setup.
 
 ---
 
-## 🔒 Security model
+## Security model
 
 **The exposed URL.** Default mode binds `127.0.0.1:7777` and exposes it through a Cloudflare quick-tunnel — outbound-only from your VM, HTTPS-terminated at Cloudflare's edge. Pass `--no-tunnel` to bind `0.0.0.0` directly, or `--private` to bind `127.0.0.1` only and reach it via SSH tunnel.
 
@@ -404,7 +378,7 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
 ---
 
-## 🔧 Managing the service
+## Managing the service
 
 ```bash
 sudo systemctl status   infracanvas
@@ -445,7 +419,7 @@ Removes: binary, systemd unit, `/etc/infracanvas/`, and the cached `cloudflared`
 
 ---
 
-## 🛠️ Building from source
+## Building from source
 
 **Requirements:** Go 1.21+, Node.js 20+
 
@@ -507,7 +481,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
 
@@ -515,7 +489,7 @@ New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanv
 
 ---
 
-## 📄 License
+## License
 
 GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 
@@ -525,7 +499,7 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 
 ---
 
-## 🤝 Contributors
+## Contributors
 
 <a href="https://github.com/bytestrix/InfraCanvas/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=bytestrix/InfraCanvas" alt="Contributors" />
