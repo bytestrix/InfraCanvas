@@ -3,7 +3,7 @@ import './globals.css'
 import '@xterm/xterm/css/xterm.css'
 
 export const metadata: Metadata = {
-  title: 'InfraCanvas — Infrastructure at a glance',
+  title: 'InfraCanvas | Infrastructure at a glance',
   description: 'Real-time visual infrastructure discovery for VMs, containers, and Kubernetes.',
   icons: {
     icon: '/logo.png',

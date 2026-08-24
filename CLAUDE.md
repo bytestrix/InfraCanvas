@@ -81,7 +81,7 @@ All colors use CSS variables (`var(--bg)`, `var(--ink)`, etc.). Never use hardco
 
 Applies to anything made of sentences: README/docs, website/marketing copy, commit messages, PR descriptions, in-app copy, error messages. Before returning prose, read it back and check it against these:
 
-- **No em dashes (—).** Use a comma, colon, semicolon, parentheses, or split the sentence.
+- **No em dashes (—) in prose.** Use a comma, colon, semicolon, parentheses, or split the sentence. Exception: a page `<title>` using the standard "Page | Site" separator convention is fine as-is or with a pipe — that's a web convention, not a slop tell.
 - **No AI verbs:** delve, leverage, utilize, facilitate, foster, bolster, underscore, unveil, streamline, navigate (metaphorical), endeavour, ascertain, elucidate → use the plain word (use, help, show, explain, find out...).
 - **No AI adjectives:** robust, comprehensive, pivotal, crucial, vital, transformative, cutting-edge, groundbreaking, innovative, seamless, intricate, nuanced, holistic → say what's actually true and specific instead.
 - **No filler transitions:** furthermore, moreover, notwithstanding, that being said, at its core, to put it simply, in the realm/landscape of, in today's [anything] → also, but, still, or just cut it.

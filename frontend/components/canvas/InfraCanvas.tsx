@@ -646,7 +646,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: 2 }}>
           {(['grouped', 'flat'] as const).map((m) => (
             <button key={m} onClick={() => setViewMode(m)}
-              title={m === 'grouped' ? 'Grouped — one card per type' : 'Flat — every node'}
+              title={m === 'grouped' ? 'Grouped: one card per type' : 'Flat: every node'}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -782,7 +782,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                   cursor: 'pointer', fontSize: 11, color: '#fca5a5',
                 }}
               >
-                ⚠ {a.label}: <strong>{a.degraded} degraded</strong> — view &amp; act →
+                ⚠ {a.label}: <strong>{a.degraded} degraded</strong>, view &amp; act →
               </button>
             ))}
           </div>
@@ -895,7 +895,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               (Object.keys(FILTER_GROUPS) as FilterKey[]).find((k) =>
                 (FILTER_GROUPS[k].types as readonly string[]).includes(pickerFor.groupType)
               ) ?? 'k8s'
-            ].label + ' — pick individual nodes'}
+            ].label + ': pick individual nodes'}
             x={pickerFor.x}
             y={pickerFor.y}
             items={(groupsMap.get(pickerFor.groupType)?.nodes ?? []).map((n) => ({
