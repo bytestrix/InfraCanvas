@@ -525,14 +525,10 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
 
 ---
 
-## 🌟 Star History
+## 🤝 Contributors
 
-<a href="https://www.star-history.com/?repos=bytestrix%2FInfracanvas&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bytestrix/Infracanvas&type=date&legend=top-left" />
- </picture>
+<a href="https://github.com/bytestrix/InfraCanvas/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=bytestrix/InfraCanvas" alt="Contributors" />
 </a>
 
 <p align="center">
