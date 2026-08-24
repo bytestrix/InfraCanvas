@@ -483,7 +483,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
 
 New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
