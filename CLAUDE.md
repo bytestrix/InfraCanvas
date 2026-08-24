@@ -76,3 +76,21 @@ make test                    # Go tests
 
 ## Theming
 All colors use CSS variables (`var(--bg)`, `var(--ink)`, etc.). Never use hardcoded hex in inline styles. `[data-theme="dark"|"light"]` on `<html>` switches the entire UI. See `frontend/app/globals.css` for the full token list.
+
+## Writing rules — no AI slop
+
+Applies to anything made of sentences: README/docs, website/marketing copy, commit messages, PR descriptions, in-app copy, error messages. Before returning prose, read it back and check it against these:
+
+- **No em dashes (—).** Use a comma, colon, semicolon, parentheses, or split the sentence.
+- **No AI verbs:** delve, leverage, utilize, facilitate, foster, bolster, underscore, unveil, streamline, navigate (metaphorical), endeavour, ascertain, elucidate → use the plain word (use, help, show, explain, find out...).
+- **No AI adjectives:** robust, comprehensive, pivotal, crucial, vital, transformative, cutting-edge, groundbreaking, innovative, seamless, intricate, nuanced, holistic → say what's actually true and specific instead.
+- **No filler transitions:** furthermore, moreover, notwithstanding, that being said, at its core, to put it simply, in the realm/landscape of, in today's [anything] → also, but, still, or just cut it.
+- **No AI phrase templates:** "It's not just X, it's Y", "Whether you're X, Y, or Z", "In today's fast-paced world", "Let's dive into", "Here's the thing", "It's important to note that", "unlock/elevate/game-changer" → say the actual thing plainly.
+- **No dramatic/narrative headings** ("The Pricing Trap", "The Hidden Cost of X") → name what's in the section, not a tease.
+- **No fake enthusiasm** — no exclamation marks, no cheerleading. State facts; let them carry the weight.
+- **No hollow claims.** Every claim needs a concrete, checkable detail (a number, a name, a command, a behavior) or it gets cut.
+- **No fabricated specifics** — never invent a stat, a quote, a case study, a date, or an attribution. If you don't actually know it, don't write it.
+- **Vary sentence and paragraph length.** Uniform 3-sentence paragraphs and 15-20-word sentences throughout are themselves a tell.
+- **No hedging on things you know.** "may", "could potentially", "it's worth noting that X might" on a fact you can just state → state it.
+
+Self-check before sending: read it back, cut anything that could paste unchanged into a generic SaaS landing page, cut every em dash, cut every word from the banned lists above.
