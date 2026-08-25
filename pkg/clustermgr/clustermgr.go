@@ -290,8 +290,9 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 		return Entry{}, err
 	}
 	// Fail fast on an unreachable/misconfigured cluster rather than persisting
-	// a dead entry — mirrors kubernetes.Discovery.IsAvailable()'s connectivity probe.
-	restCfg.Timeout = 5 * time.Second
+	// a dead entry — mirrors kubernetes.Discovery.IsAvailable()'s connectivity
+	// probe timeout, which exists for the same reason.
+	restCfg.Timeout = 8 * time.Second
 
 	serverURL := ""
 	if c, ok := cfg.Contexts[contextName]; ok {

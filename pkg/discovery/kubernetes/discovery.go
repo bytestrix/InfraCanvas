@@ -56,8 +56,15 @@ func NewDiscoveryFromConfig(config *rest.Config) (*Discovery, error) {
 	// intends. rest.Config.Timeout is a hard http.Client-level bound
 	// client-go always applies, so set one here regardless of the caller's
 	// context.
+	// 10s was sized for a local/in-cluster API server (near-zero latency).
+	// Clusters direct-connect reaches a remote API server over the public
+	// internet by design — real round-trip latency plus a full namespace
+	// listing (e.g. secrets across every namespace) can legitimately run
+	// past 10s on an ordinary home connection, which was surfacing as a
+	// spurious "error" status on clusters that were actually fine, just
+	// slower to reach than a local one.
 	if config.Timeout == 0 {
-		config.Timeout = 10 * time.Second
+		config.Timeout = 30 * time.Second
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -110,7 +117,14 @@ func (d *Discovery) IsAvailable() bool {
 		return false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// 2s was sized for a local/in-cluster API server. For a Clusters
+	// direct-connect target reached over the public internet, that's often
+	// shorter than a single real round trip (TLS handshake + auth + list),
+	// so a perfectly reachable remote cluster would fail this check on
+	// nothing but ordinary latency and get marked "error". 8s comfortably
+	// covers a normal home/office connection while still catching a
+	// genuinely unreachable endpoint well before the 30s discovery timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	// Try to list nodes as a connectivity check
