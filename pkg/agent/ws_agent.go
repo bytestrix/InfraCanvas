@@ -50,6 +50,14 @@ type WSConfig struct {
 	// can resume their session across restarts, same as a real VM agent.
 	MachineIDOverride string
 
+	// HostnameOverride, when set, is sent as HELLO's hostname instead of
+	// os.Hostname(). Clusters virtual agents run in-process on the machine
+	// running `infracanvas serve`, so os.Hostname() reports that machine's
+	// own hostname, not anything about the cluster being connected — every
+	// cluster ends up labeled with the same wrong, identical name in the UI.
+	// Set this to the cluster's name/context so it displays correctly.
+	HostnameOverride string
+
 	// OnDiscoveryResult, if set, is called after every discovery attempt with
 	// the resulting error (nil on success). The WS session itself stays
 	// connected either way — a transient discovery failure shouldn't drop a
@@ -215,6 +223,9 @@ func (a *WSAgent) Run(ctx context.Context) error {
 
 	// Send HELLO.
 	hostname, _ := os.Hostname()
+	if a.cfg.HostnameOverride != "" {
+		hostname = a.cfg.HostnameOverride
+	}
 	machineID := a.cfg.MachineIDOverride
 	if machineID == "" {
 		machineID = MachineID()

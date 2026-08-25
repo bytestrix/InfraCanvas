@@ -405,6 +405,7 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 				QuietPairBanner:   true,
 				KubeConfig:        restCfg,
 				MachineIDOverride: "cluster-" + entry.ID,
+				HostnameOverride:  entry.Name,
 				OnDiscoveryResult: func(discErr error) {
 					m.mu.Lock()
 					m.lastError[entry.ID] = discErr

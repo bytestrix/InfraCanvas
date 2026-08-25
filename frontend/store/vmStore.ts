@@ -91,7 +91,21 @@ export const useVMStore = create<VMStore>((set) => ({
   applyVMDiff: (code, diff) =>
     set((state) => {
       const vm = state.vms[code]
-      if (!vm?.graph) return state // no snapshot yet — diff can't be applied
+      if (!vm?.graph) return state // no snapshot yet, diff can't be applied
+
+      // An empty diff still ticks every refresh interval even when nothing
+      // on the graph actually changed. Replacing state anyway forces a full
+      // ReactFlow re-render (node/edge array identity changes), which on a
+      // large graph is expensive enough to stall the main thread for a
+      // moment, this is one source of "typing feels stuck" reports, separate
+      // from the terminal's own rendering. Skip the update entirely when
+      // there is nothing to apply.
+      if (
+        diff.addedNodes.length === 0 && diff.modifiedNodes.length === 0 && diff.removedNodeIds.length === 0 &&
+        diff.addedEdges.length === 0 && diff.removedEdgeIds.length === 0
+      ) {
+        return state
+      }
 
       const nodeMap = new Map(vm.graph.nodes.map((n) => [n.id, n]))
       const edgeMap = new Map(vm.graph.edges.map((e) => [e.id, e]))
