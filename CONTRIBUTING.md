@@ -23,10 +23,10 @@ make test
 Frontend-only iteration (against a separately running binary):
 
 ```bash
-# Terminal 1 — run the binary in stub mode for fast rebuilds
+# Terminal 1: run the binary in stub mode for fast rebuilds
 make build-stub && ./bin/infracanvas serve --port 7777 --token dev
 
-# Terminal 2 — Next dev server
+# Terminal 2: Next dev server
 cd frontend && npm install && npm run dev    # http://localhost:3000
 ```
 
@@ -46,7 +46,7 @@ frontend/               Next.js dashboard (statically exported)
 
 1. Fork the repo and create a branch from `main`
 2. Write or update tests for your change
-3. Run `make test` and `make lint` — both must pass
+3. Run `make test` and `make lint`; both must pass
 4. Open a pull request against `main`
 
 ## Commit style

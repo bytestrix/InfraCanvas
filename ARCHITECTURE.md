@@ -8,8 +8,8 @@
 
 InfraCanvas is a multi-VM infrastructure discovery and visualization platform. Two distinct products share this repo:
 
-- **OSS** (`infracanvas` CLI) — self-hosted, single-binary, Cloudflare tunnel
-- **SaaS** (`saas-backend/` + SaaS frontend) — multi-tenant, hosted on `bytestrix` VM
+- **OSS** (`infracanvas` CLI): self-hosted, single-binary, Cloudflare tunnel
+- **SaaS** (`saas-backend/` + SaaS frontend): multi-tenant, hosted on `bytestrix` VM
 
 ---
 
@@ -18,7 +18,7 @@ InfraCanvas is a multi-VM infrastructure discovery and visualization platform. T
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      BROWSER                            │
-│  Next.js 14 SPA — React Flow canvas, Zustand state      │
+│  Next.js 14 SPA: React Flow canvas, Zustand state       │
 └──────────────┬──────────────────────────────────────────┘
                │ WebSocket /ws/canvas   HTTP /api/v1/*
                │
@@ -34,7 +34,7 @@ InfraCanvas is a multi-VM infrastructure discovery and visualization platform. T
                │
 ┌──────────────▼──────────────────────────────────────────┐
 │              AGENT  (on each VM)                        │
-│  pkg/agent — discovers host/docker/k8s, streams diffs   │
+│  pkg/agent: discovers host/docker/k8s, streams diffs    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -62,7 +62,7 @@ InfraCanvas is a multi-VM infrastructure discovery and visualization platform. T
 
 ### OSS Relay Server (`pkg/server/`)
 
-**Wire protocol** — all messages use `{"type": "...", "data": {...}}` JSON envelope.
+**Wire protocol**: all messages use `{"type": "...", "data": {...}}` JSON envelope.
 
 | Direction | Message | Meaning |
 |---|---|---|
@@ -121,14 +121,14 @@ Exec sessions: agent opens PTY or Docker exec, streams stdin/stdout via `EXEC_DA
 ### Backend: `saas-backend/` (binary: `infracanvas-api`, port 8090)
 
 **Packages:**
-- `pkg/api/auth/` — JWT auth, registration, login, forgot-password
-- `pkg/api/agents/` — agent registry, list agents per org
-- `pkg/api/websocket/` — SaaS relay (agent ↔ browser via org/agent ID)
-- `pkg/api/organizations/` — org management, API keys
-- `pkg/api/billing/` — billing integration
-- `pkg/middleware/` — JWT validation, org context
-- `pkg/database/` — Postgres connection (pg driver)
-- `pkg/models/` — User, Org, Agent, APIKey structs
+- `pkg/api/auth/`: JWT auth, registration, login, forgot-password
+- `pkg/api/agents/`: agent registry, list agents per org
+- `pkg/api/websocket/`: SaaS relay (agent ↔ browser via org/agent ID)
+- `pkg/api/organizations/`: org management, API keys
+- `pkg/api/billing/`: billing integration
+- `pkg/middleware/`: JWT validation, org context
+- `pkg/database/`: Postgres connection (pg driver)
+- `pkg/models/`: User, Org, Agent, APIKey structs
 
 **Auth flow:**
 - Register/login → JWT
@@ -142,19 +142,19 @@ Exec sessions: agent opens PTY or Docker exec, streams stdin/stdout via `EXEC_DA
 - Browser connects → sees all agents in org
 - Relay bridges browser ↔ specific agent by agent ID (not pair code)
 
-### SaaS Frontend (`~/infracanvas-saas-frontend/` on bytestrix — separate repo from OSS)
+### SaaS Frontend (`~/infracanvas-saas-frontend/` on bytestrix, separate repo from OSS)
 
 Next.js 14 App Router SPA. Deployed as dev server on `:3001`.
 
 **Key routes** (`frontend/app/`):
 - `/` → redirect to `/dashboard`
 - `/auth/login`, `/auth/register`, `/auth/forgot-password`
-- `/dashboard` — main canvas page
+- `/dashboard`: main canvas page
 
 **State management** (`frontend/store/vmStore.ts`):
 - Zustand store: `vms: Record<code, VMState>`
 - VMState: `{status, hostname, scope, graph, error, lastUpdated}`
-- `applyVMDiff()` — merges incremental diffs into graph state
+- `applyVMDiff()`: merges incremental diffs into graph state
 
 **WebSocket client** (`frontend/lib/wsManager.ts`):
 - Module-level singleton (survives React navigation)
@@ -165,8 +165,8 @@ Next.js 14 App Router SPA. Deployed as dev server on `:3001`.
 
 **Canvas rendering** (`frontend/components/canvas/`):
 - React Flow for graph layout
-- `frontend/lib/graphPreprocess.ts` — transforms `GraphOutput` → React Flow nodes/edges
-- `frontend/lib/layout.ts` — hierarchical layout algorithm
+- `frontend/lib/graphPreprocess.ts`: transforms `GraphOutput` → React Flow nodes/edges
+- `frontend/lib/layout.ts`: hierarchical layout algorithm
 
 ---
 
@@ -183,7 +183,7 @@ Next.js 14 App Router SPA. Deployed as dev server on `:3001`.
 | Redis | 6379 | Sessions |
 | nginx | 3000 | Proxy → 3001 + 8090 |
 
-### Nginx routing (port 3000 — working dev URL)
+### Nginx routing (port 3000, working dev URL)
 
 ```
 /ws/   → localhost:8090  (SaaS relay WebSocket)
@@ -259,7 +259,7 @@ Agent on bytestrix connects to `localhost:8090` (same VM). Registered as `ByteSt
 ## Development Workflow
 
 ```bash
-# Local dev (OSS) — run everything in one command
+# Local dev (OSS): run everything in one command
 ./bin/infracanvas serve
 
 # SaaS frontend dev (separate repo on bytestrix)

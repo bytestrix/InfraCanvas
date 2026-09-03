@@ -1,14 +1,14 @@
-# InfraCanvas — Claude Code Instructions
+# InfraCanvas: Claude Code Instructions
 
 ## Release Policy
 
 ### Semver rules (strict)
-- **Patch** (`0.0.X`): bug fixes only — no new features, no UI changes
+- **Patch** (`0.0.X`): bug fixes only, no new features, no UI changes
 - **Minor** (`0.X.0`): new features, UI changes, refactors, dependency bumps
 - **Major** (`X.0.0`): breaking changes to API, install flow, or config format
 
 ### One release per logical unit
-**Never** create multiple releases for changes that belong together. If you are implementing a feature across 10 commits, that is **one release** when complete — not 10 patch releases.
+**Never** create multiple releases for changes that belong together. If you are implementing a feature across 10 commits, that is **one release** when complete, not 10 patch releases.
 
 Bad: v0.6.7, v0.6.8, v0.6.9, v0.6.10 each adding one small piece of the same feature  
 Good: v0.7.0 when the feature is done
@@ -60,9 +60,9 @@ git tag vNEW && git push origin vNEW
 ```
 
 ## Commit conventions
-- `feat(scope): ...` — new feature (triggers minor bump)
-- `fix(scope): ...` — bug fix (triggers patch bump)
-- `chore(...): ...` — tooling, deps, CI (no release needed unless bundled)
+- `feat(scope): ...`: new feature (triggers minor bump)
+- `fix(scope): ...`: bug fix (triggers patch bump)
+- `chore(...): ...`: tooling, deps, CI (no release needed unless bundled)
 - No `Co-Authored-By` credits in any commit
 
 ## Build commands
@@ -77,19 +77,19 @@ make test                    # Go tests
 ## Theming
 All colors use CSS variables (`var(--bg)`, `var(--ink)`, etc.). Never use hardcoded hex in inline styles. `[data-theme="dark"|"light"]` on `<html>` switches the entire UI. See `frontend/app/globals.css` for the full token list.
 
-## Writing rules — no AI slop
+## Writing rules: no AI slop
 
 Applies to anything made of sentences: README/docs, website/marketing copy, commit messages, PR descriptions, in-app copy, error messages. Before returning prose, read it back and check it against these:
 
-- **No em dashes (—) in prose.** Use a comma, colon, semicolon, parentheses, or split the sentence. Exception: a page `<title>` using the standard "Page | Site" separator convention is fine as-is or with a pipe — that's a web convention, not a slop tell.
+- **No em dashes (—) in prose.** Use a comma, colon, semicolon, parentheses, or split the sentence. Exception: a page `<title>` using the standard "Page | Site" separator convention is fine as-is or with a pipe, that's a web convention, not a slop tell.
 - **No AI verbs:** delve, leverage, utilize, facilitate, foster, bolster, underscore, unveil, streamline, navigate (metaphorical), endeavour, ascertain, elucidate → use the plain word (use, help, show, explain, find out...).
 - **No AI adjectives:** robust, comprehensive, pivotal, crucial, vital, transformative, cutting-edge, groundbreaking, innovative, seamless, intricate, nuanced, holistic → say what's actually true and specific instead.
 - **No filler transitions:** furthermore, moreover, notwithstanding, that being said, at its core, to put it simply, in the realm/landscape of, in today's [anything] → also, but, still, or just cut it.
 - **No AI phrase templates:** "It's not just X, it's Y", "Whether you're X, Y, or Z", "In today's fast-paced world", "Let's dive into", "Here's the thing", "It's important to note that", "unlock/elevate/game-changer" → say the actual thing plainly.
 - **No dramatic/narrative headings** ("The Pricing Trap", "The Hidden Cost of X") → name what's in the section, not a tease.
-- **No fake enthusiasm** — no exclamation marks, no cheerleading. State facts; let them carry the weight.
+- **No fake enthusiasm**: no exclamation marks, no cheerleading. State facts; let them carry the weight.
 - **No hollow claims.** Every claim needs a concrete, checkable detail (a number, a name, a command, a behavior) or it gets cut.
-- **No fabricated specifics** — never invent a stat, a quote, a case study, a date, or an attribution. If you don't actually know it, don't write it.
+- **No fabricated specifics**: never invent a stat, a quote, a case study, a date, or an attribution. If you don't actually know it, don't write it.
 - **Vary sentence and paragraph length.** Uniform 3-sentence paragraphs and 15-20-word sentences throughout are themselves a tell.
 - **No hedging on things you know.** "may", "could potentially", "it's worth noting that X might" on a fact you can just state → state it.
 
