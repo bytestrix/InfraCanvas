@@ -16,7 +16,7 @@
     "clsx": "^2.1.1",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.400.0",
-    "next": "^14.2.35",
+    "next": "^15.5.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "reactflow": "^11.11.4",
@@ -30,11 +30,18 @@
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
-    "postcss": "^8.4.39",
+    "postcss": "^8.5.23",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3"
   },
   "overrides": {
-    "browserslist": "^4.28.7"
+    "browserslist": "^4.28.7",
+    "js-yaml": "^4.3.2",
+    "postcss": "^8.5.23",
+    "nanoid": "^3.3.18",
+    "brace-expansion": "^2.1.2",
+    "minimatch": "^9.0.7",
+    "glob": "^10.5.0",
+    "postcss-selector-parser": "^6.1.3"
   }
 }
