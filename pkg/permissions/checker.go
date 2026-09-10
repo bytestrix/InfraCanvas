@@ -13,6 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"infracanvas/pkg/dockerhost"
 )
 
 // PermissionLevel represents the level of access available
@@ -152,9 +154,9 @@ func (c *Checker) checkHostPermissions() {
 	})
 }
 
-// checkDockerPermissions validates Docker-level permissions
+// checkDockerPermissions validates Docker-level (or Podman-level, via its
+// Docker-API-compatible socket — see pkg/dockerhost) permissions.
 func (c *Checker) checkDockerPermissions() {
-	// Check Docker socket accessibility
 	dockerSocket := "/var/run/docker.sock"
 	if dockerHost := os.Getenv("DOCKER_HOST"); dockerHost != "" {
 		// If DOCKER_HOST is set, we'll check connectivity instead
@@ -167,6 +169,17 @@ func (c *Checker) checkDockerPermissions() {
 			Level:      c.getLevel(socketAccessible),
 			Message:    fmt.Sprintf("Access Docker via DOCKER_HOST=%s", dockerHost),
 			Suggestion: "Ensure DOCKER_HOST is correctly configured and accessible",
+		})
+	} else if podmanSocket := dockerhost.Resolve(); podmanSocket != "" {
+		socketAccessible := c.canAccessDockerSocket()
+		c.addCheck(PermissionCheck{
+			Layer:      "docker",
+			Operation:  "docker_socket",
+			Required:   true,
+			Available:  socketAccessible,
+			Level:      c.getLevel(socketAccessible),
+			Message:    fmt.Sprintf("Access Podman via %s", podmanSocket),
+			Suggestion: "Ensure the Podman socket service is running: systemctl --user enable --now podman.socket",
 		})
 	} else {
 		socketAccessible := c.canAccessFile(dockerSocket)
@@ -339,10 +352,13 @@ func (c *Checker) isCommandAvailable(command string) bool {
 }
 
 func (c *Checker) canAccessDockerSocket() bool {
-	cli, err := client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if host := dockerhost.Resolve(); host != "" {
+		opts = append(opts, client.WithHost(host))
+	} else {
+		opts = append(opts, client.FromEnv)
+	}
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return false
 	}

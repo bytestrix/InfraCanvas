@@ -2,8 +2,9 @@
 // Used by: InfraNode (canvas), GroupDrawer (header), NodeDetailPanel (header).
 // Always pass `size` — default 16. Do NOT add emoji or text fallbacks here.
 
-const K8S  = '#326CE5'
-const DOCK = '#2496ED'
+const K8S    = '#326CE5'
+const DOCK   = '#2496ED'
+const PODMAN = '#892CA0'
 const INK2 = 'var(--ink2)'
 const INK3 = 'var(--ink3)'
 
@@ -119,6 +120,17 @@ export default function NodeSvgIcon({ type, size = 16 }: Props) {
       <svg width={s} height={s} viewBox="0 0 40 40" fill="none">
         <path d="M8 18h4v4H8zM13 18h4v4h-4zM18 18h4v4h-4zM18 13h4v4h-4zM13 13h4v4h-4zM23 18h4v4h-4zM23 13h4v4h-4z" fill={DOCK}/>
         <path d="M33 20c-.5-2-2.5-3-4-3h-1c-.5-3-3-4.5-5-5l-1-.5-.5 1c-.5 1-.7 2.5-.5 3.5H6a1 1 0 0 0-1 1 12 12 0 0 0 1 5c1 3 3 4.5 6 5 2 .5 4 .5 6 .5 2.5 0 5-.3 7-1.5 2-1 3.5-2.5 4.5-5h.5c1.5 0 3-.8 3.5-2l.5-1.5z" fill={DOCK}/>
+      </svg>
+    )
+    // Podman's runtime is Docker-API-compatible (see pkg/dockerhost), but
+    // gets its own mark here rather than reusing Docker's whale so a
+    // Podman-backed runtime node doesn't lie about which engine it is.
+    case 'podman': return (
+      <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="18" r="11" stroke={PODMAN} strokeWidth="2.2"/>
+        <circle cx="10.5" cy="9" r="2.4" fill={PODMAN}/>
+        <circle cx="16" cy="6.5" r="2.4" fill={PODMAN}/>
+        <circle cx="21.5" cy="9" r="2.4" fill={PODMAN}/>
       </svg>
     )
     case 'host': return (

@@ -57,7 +57,7 @@ const SINGLETON_TYPES = new Set([
 
 const TYPE_LABELS: Record<string, string> = {
   host: 'Host',
-  container_runtime: 'Docker Runtime',
+  container_runtime: 'Container Runtime',
   container: 'Containers',
   image: 'Images',
   image_group: 'Build Cache',

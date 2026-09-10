@@ -13,6 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"infracanvas/pkg/dockerhost"
 )
 
 // WatcherManager manages all event watchers
@@ -39,9 +41,16 @@ func NewWatcherManager(config *Config, backendClient *BackendClient, cacheInvali
 		cacheInvalidator: cacheInvalidator,
 	}
 
-	// Initialize Docker client if Docker is in scope
+	// Initialize Docker client if Docker is in scope. This also watches
+	// Podman via its Docker-API-compatible socket — see pkg/dockerhost.
 	if contains(config.Scope, "docker") {
-		dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		opts := []client.Opt{client.WithAPIVersionNegotiation()}
+		if host := dockerhost.Resolve(); host != "" {
+			opts = append(opts, client.WithHost(host))
+		} else {
+			opts = append(opts, client.FromEnv)
+		}
+		dockerClient, err := client.NewClientWithOpts(opts...)
 		if err == nil {
 			wm.dockerClient = dockerClient
 		}

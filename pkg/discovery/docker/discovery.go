@@ -10,18 +10,28 @@ import (
 	"github.com/docker/docker/client"
 	"infracanvas/internal/models"
 	"infracanvas/internal/redactor"
+	"infracanvas/pkg/dockerhost"
 )
 
-// Discovery implements Docker-level infrastructure discovery
+// Discovery implements Docker-level infrastructure discovery. Despite the
+// package name, it works against any Docker-Engine-API-compatible socket —
+// Podman's "podman system service" included — since it's the same client.Client
+// from the Docker SDK either way; see pkg/dockerhost for how the socket is found.
 type Discovery struct {
-	client   *client.Client
-	redactor *redactor.Redactor
+	client       *client.Client
+	redactor     *redactor.Redactor
+	resolvedHost string // "" when using DOCKER_HOST or the SDK's own default
 }
 
 // NewDiscovery creates a new Docker discovery instance
 func NewDiscovery(enableRedaction bool) (*Discovery, error) {
 	// Support DOCKER_HOST environment variable
 	dockerHost := os.Getenv("DOCKER_HOST")
+	if dockerHost == "" {
+		// No explicit host and no standard Docker socket present — try
+		// Podman's Docker-API-compatible socket before giving up.
+		dockerHost = dockerhost.Resolve()
+	}
 
 	var cli *client.Client
 	var err error
@@ -44,8 +54,9 @@ func NewDiscovery(enableRedaction bool) (*Discovery, error) {
 	}
 
 	return &Discovery{
-		client:   cli,
-		redactor: redactor.NewRedactor(enableRedaction),
+		client:       cli,
+		redactor:     redactor.NewRedactor(enableRedaction),
+		resolvedHost: dockerHost,
 	}, nil
 }
 

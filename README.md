@@ -245,6 +245,9 @@ Plain VMs running nginx, postgres, node via systemd or PM2 get real workload nod
 ### LXC / LXD / Incus
 Containers managed by LXD or Incus are auto-discovered from the local socket and drawn on the canvas alongside Docker and Kubernetes: name, status, memory, and network, no config. (Discovery/visualization today; terminal & actions for LXC/LXD are on the roadmap.)
 
+### Podman
+Podman's daemon speaks the same API as Docker's, so the agent talks to it with no separate integration: if there's no Docker socket, it checks Podman's rootless socket (`/run/user/<uid>/podman/podman.sock`) and then the rootful one, in that order, before falling back to `DOCKER_HOST` if you've set it. Containers, images, volumes, and networks all show up the same way they would under Docker, and the runtime node on the canvas correctly labels itself "Podman" instead of "Docker."
+
 ### Terminals, logs and actions built in
 - **Container terminal**: full interactive shell inside any container
 - **VM shell**: host PTY, no SSH needed

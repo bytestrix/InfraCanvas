@@ -106,21 +106,25 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
         stats: [['version', c.metadata?.version ?? '—'], ['nodes', String(d.k8sNodes.length)], ['pods', String(d.pods.length)]] as [string,string][],
         health: null, state: '', raw: c,
       })),
-      ...d.runtimes.map(r => ({
-        id: r.id, typeLabel: 'RUNTIME · DOCKER', icon: 'docker',
-        name: r.label, count: 1,
-        stats: [['version', r.metadata?.version ?? '—'], ['containers', String(d.containers.length)], ['volumes', String(d.volumes.length + d.pvcs.length)]] as [string,string][],
-        health: null, state: '', raw: r,
-      })),
+      ...d.runtimes.map(r => {
+        const isPodman = r.metadata?.runtime_type === 'podman'
+        return {
+          id: r.id, typeLabel: isPodman ? 'RUNTIME · PODMAN' : 'RUNTIME · DOCKER', icon: isPodman ? 'podman' : 'docker',
+          name: r.label, count: 1,
+          stats: [['version', r.metadata?.version ?? '—'], ['containers', String(d.containers.length)], ['volumes', String(d.volumes.length + d.pvcs.length)]] as [string,string][],
+          health: null, state: '', raw: r,
+        }
+      }),
     ]
     if (runtimeTiles.length > 0) all.push({ id:'runtimes', label:'Runtimes', count:runtimeTiles.length, tiles:runtimeTiles })
 
     const mkH = (arr: GraphNode[]) => ({ h:arr.filter(n=>n.health==='healthy').length, d:arr.filter(n=>n.health==='degraded').length, u:arr.filter(n=>n.health==='unhealthy').length })
 
+    const containerRuntimeIsPodman = d.runtimes[0]?.metadata?.runtime_type === 'podman'
     const coreTiles: any[] = []
     if (d.k8sNodes.length > 0)   coreTiles.push({ id:'tile-k8snodes',   typeLabel:'K8S NODES',   icon:'k8s-node',  name:'cluster nodes',    count:d.k8sNodes.length,   stats:[['ready',`${d.k8sNodes.filter(n=>n.health==='healthy').length}/${d.k8sNodes.length}`]] as [string,string][], health:mkH(d.k8sNodes),   state:d.k8sNodes.some(n=>n.health!=='healthy')?'warn':'' })
     if (d.namespaces.length > 0)  coreTiles.push({ id:'tile-namespaces', typeLabel:'NAMESPACES',  icon:'namespace', name:'namespaces',        count:d.namespaces.length,  stats:[['active',String(d.namespaces.filter(n=>n.health==='healthy').length)]] as [string,string][], health:mkH(d.namespaces),  state:'' })
-    if (d.containers.length > 0)  coreTiles.push({ id:'tile-containers', typeLabel:'CONTAINERS',  icon:'docker',    name:'docker containers', count:d.containers.length,  stats:[['running',String(d.containers.filter(n=>n.health==='healthy').length)]] as [string,string][], health:mkH(d.containers),  state:'' })
+    if (d.containers.length > 0)  coreTiles.push({ id:'tile-containers', typeLabel:'CONTAINERS',  icon: containerRuntimeIsPodman ? 'podman' : 'docker', name: containerRuntimeIsPodman ? 'podman containers' : 'docker containers', count:d.containers.length,  stats:[['running',String(d.containers.filter(n=>n.health==='healthy').length)]] as [string,string][], health:mkH(d.containers),  state:'' })
     if (d.pvcs.length+d.pvs.length+d.volumes.length > 0) coreTiles.push({ id:'tile-volumes', typeLabel:'VOLUMES', icon:'volume', name:'storage volumes', count:d.pvcs.length+d.pvs.length+d.volumes.length, stats:[['total',String(d.pvcs.length+d.pvs.length+d.volumes.length)],['pvcs',String(d.pvcs.length)]] as [string,string][], health:null, state:'' })
     if (coreTiles.length > 0) all.push({ id:'core', label:'Core resources', count:coreTiles.reduce((s:number,t:any)=>s+t.count,0), tiles:coreTiles })
 

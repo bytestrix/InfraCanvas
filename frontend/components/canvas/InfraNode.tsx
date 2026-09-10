@@ -138,6 +138,9 @@ const InfraNode = memo(({ id, data, selected }: NodeProps<InfraNodeData>) => {
   const { nodeType, label, health, metadata, onOpenPicker } = data
   const keyMeta = getKeyMeta(nodeType, metadata)
   const meters = getMeters(nodeType, metadata)
+  // The runtime node itself should say which engine it actually is — Docker's
+  // whale icon would be wrong for a Podman-backed host.
+  const iconType = nodeType === 'container_runtime' && metadata?.runtime_type === 'podman' ? 'podman' : nodeType
   const dotColor = HEALTH_DOT[health] ?? 'var(--ink4)'
   const barColor = HEALTH_BAR[health] ?? 'var(--line3)'
   const isUnhealthy = health === 'unhealthy' || health === 'degraded'
@@ -161,7 +164,7 @@ const InfraNode = memo(({ id, data, selected }: NodeProps<InfraNodeData>) => {
         {/* Row 1: icon + label + dot */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
           <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--surface-2)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <NodeSvgIcon type={nodeType} size={14} />
+            <NodeSvgIcon type={iconType} size={14} />
           </div>
           <span style={{
             fontSize: 12, fontWeight: 500, color: 'var(--ink)', flex: 1,

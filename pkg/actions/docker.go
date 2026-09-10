@@ -13,19 +13,25 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+
+	"infracanvas/pkg/dockerhost"
 )
 
-// DockerExecutor handles actions on Docker containers
+// DockerExecutor handles actions on Docker containers. Works against Podman
+// too, via its Docker-API-compatible socket — see pkg/dockerhost.
 type DockerExecutor struct {
 	client *client.Client
 }
 
 // NewDockerExecutor creates a new Docker executor
 func NewDockerExecutor() (*DockerExecutor, error) {
-	cli, err := client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if host := dockerhost.Resolve(); host != "" {
+		opts = append(opts, client.WithHost(host))
+	} else {
+		opts = append(opts, client.FromEnv)
+	}
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}

@@ -16,6 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"infracanvas/pkg/dockerhost"
 )
 
 var (
@@ -114,8 +116,14 @@ func getHostLogs() error {
 }
 
 func getContainerLogs(containerName string) error {
-	// Initialize Docker client
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	// Initialize Docker client (also works against Podman — see pkg/dockerhost)
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if host := dockerhost.Resolve(); host != "" {
+		opts = append(opts, client.WithHost(host))
+	} else {
+		opts = append(opts, client.FromEnv)
+	}
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create Docker client: %w", err)
 	}

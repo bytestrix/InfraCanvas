@@ -561,7 +561,7 @@ export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onS
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--line)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <NodeSvgIcon type={node.type} size={16} />
+            <NodeSvgIcon type={node.type === 'container_runtime' && node.metadata?.runtime_type === 'podman' ? 'podman' : node.type} size={16} />
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={node.label}>{node.label}</p>
