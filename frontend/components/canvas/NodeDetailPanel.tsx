@@ -48,8 +48,19 @@ interface ActionDef {
 function k8sTarget(entityType: string, n: any, namespace?: string) {
   return { layer: 'kubernetes', entity_type: entityType, entity_id: n.metadata?.name ?? n.id, namespace: namespace ?? n.metadata?.namespace ?? 'default' }
 }
-function dockerTarget(n: any) {
+function containerLayer(n: any): 'docker' | 'lxd' {
+  const rt = String(n?.metadata?.runtime ?? '').toLowerCase()
+  return rt === 'lxd' || rt === 'incus' ? 'lxd' : 'docker'
+}
+function containerTarget(n: any) {
+  return { layer: containerLayer(n), entity_type: 'container', entity_id: n.id }
+}
+function dockerContainerTarget(n: any) {
   return { layer: 'docker', entity_type: 'container', entity_id: n.id }
+}
+function containerActionType(n: any, verb: 'restart' | 'stop' | 'start') {
+  const prefix = containerLayer(n) === 'lxd' ? 'lxd' : 'docker'
+  return `${prefix}_${verb}_container`
 }
 function nodeTarget(n: any) {
   return { layer: 'kubernetes', entity_type: 'node', entity_id: n.metadata?.name ?? n.id }
@@ -64,14 +75,14 @@ function processTarget(n: any) {
 const ACTIONS: Record<string, ActionDef[]> = {
   container: [
     { id: 'restart', label: 'Restart', Icon: RotateCw, confirm: true,
-      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: 'docker_restart_container', target: dockerTarget(n), parameters: {} }) },
+      buildPayload: (n) => ({ action_id: `restart-${Date.now()}`, type: containerActionType(n, 'restart'), target: containerTarget(n), parameters: {} }) },
     { id: 'stop', label: 'Stop', Icon: Square, confirm: true,
-      buildPayload: (n) => ({ action_id: `stop-${Date.now()}`, type: 'docker_stop_container', target: dockerTarget(n), parameters: {} }) },
+      buildPayload: (n) => ({ action_id: `stop-${Date.now()}`, type: containerActionType(n, 'stop'), target: containerTarget(n), parameters: {} }) },
     { id: 'start', label: 'Start', Icon: Play,
-      buildPayload: (n) => ({ action_id: `start-${Date.now()}`, type: 'docker_start_container', target: dockerTarget(n), parameters: {} }) },
+      buildPayload: (n) => ({ action_id: `start-${Date.now()}`, type: containerActionType(n, 'start'), target: containerTarget(n), parameters: {} }) },
     { id: 'update_image', label: 'Update Image', Icon: Tag,
       form: [{ key: 'image', label: 'New Image:Tag', placeholder: 'nginx:1.25', defaultValue: (n) => n.metadata?.image ?? '' }],
-      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'docker_update_container_image', target: dockerTarget(n), parameters: { image: v.image } }) },
+      buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'docker_update_container_image', target: dockerContainerTarget(n), parameters: { image: v.image } }) },
   ],
   image: [
     { id: 'pull', label: 'Pull / Re-pull', Icon: Download,
@@ -467,7 +478,10 @@ function getActionColor(id: string, danger?: boolean): string {
 
 export default function NodeDetailPanel({ node, vmCode, onClose, onShowLogs, onShowTerminal }: NodeDetailPanelProps) {
   const hc = HEALTH_COLOR[node.health] ?? '#6b7280'
-  const actions = ACTIONS[node.type] ?? []
+  const allActions = ACTIONS[node.type] ?? []
+  const actions = node.type === 'container' && containerLayer(node) === 'lxd'
+      ? allActions.filter((a) => a.id === 'restart' || a.id === 'stop' || a.id === 'start')
+      : allActions
   const { vms } = useVMStore()
   const readOnly = vms[vmCode]?.readOnly ?? false
 

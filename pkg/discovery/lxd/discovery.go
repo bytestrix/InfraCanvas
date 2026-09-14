@@ -34,6 +34,12 @@ type Discovery struct {
 	runtime    string // "lxd" | "incus"
 }
 
+// HTTPClient returns the unix-socket HTTP client used for LXD/Incus API calls.
+func (d *Discovery) HTTPClient() *http.Client { return d.client }
+
+// SocketPath returns the resolved unix socket path for LXD/Incus.
+func (d *Discovery) SocketPath() string { return d.socketPath }
+
 // NewDiscovery finds the first available LXD/Incus socket. Returns an unavailable
 // (but non-nil) Discovery if none is found, so callers can call IsAvailable().
 func NewDiscovery() *Discovery {
@@ -183,12 +189,12 @@ func (d *Discovery) DiscoverAll() (*models.ContainerRuntime, []models.Container,
 				Labels:    map[string]string{"runtime": d.runtime, "lxdType": kind},
 				Timestamp: now,
 			},
-			ContainerID: in.Name,
-			Name:        in.Name,
-			Image:       image,
-			State:       state,
-			Status:      in.Status,
-			MemoryUsage: memUsage,
+			ContainerID:    in.Name,
+			Name:           in.Name,
+			Image:          image,
+			State:          state,
+			Status:         in.Status,
+			MemoryUsage:    memUsage,
 			NetworkRxBytes: rx,
 			NetworkTxBytes: tx,
 			Environment:    map[string]string{},

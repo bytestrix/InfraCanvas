@@ -32,7 +32,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
   const [showLogs, setShowLogs]         = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
-  const [terminalLayer, setTerminalLayer] = useState<'docker'|'host'|'kubernetes'>('docker')
+  const [terminalLayer, setTerminalLayer] = useState<'docker'|'lxd'|'host'|'kubernetes'>('docker')
   const [showHostTerminal, setShowHostTerminal] = useState(false)
 
   const nodes = graph.nodes
@@ -314,7 +314,11 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
           onClose={() => setSelectedNode(null)}
           onShowLogs={['container','pod','host'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
           onShowTerminal={['container','host','pod'].includes(selectedNode.type) ? () => {
-            setTerminalLayer(selectedNode.type === 'host' ? 'host' : selectedNode.type === 'pod' ? 'kubernetes' : 'docker')
+            setTerminalLayer(
+                selectedNode.type === 'host' ? 'host'
+                    : selectedNode.type === 'pod' ? 'kubernetes'
+                        : (['lxd', 'incus'].includes(String(selectedNode.metadata?.runtime ?? '').toLowerCase()) ? 'lxd' : 'docker'),
+            )
             setShowTerminal(true)
             setShowLogs(false)
           } : undefined}

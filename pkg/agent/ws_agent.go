@@ -100,6 +100,7 @@ type GraphDiff struct {
 // Exactly one of dockerSess, ptmx, or k8sSess will be non-nil.
 type execSession struct {
 	dockerSess *actions.ExecSession    // Docker exec (container terminal)
+	lxd        bool                    // dockerSess is an LXD/Incus exec session
 	ptmx       *os.File                // host PTY (VM terminal)
 	k8sSess    *actions.K8sExecSession // Kubernetes pod exec
 	cancel     context.CancelFunc
@@ -992,6 +993,7 @@ func (a *WSAgent) sendLogData(requestID, containerID string, lines []string, err
 // For layer "host" it spawns a PTY shell on the VM itself.
 // For layer "kubernetes" it opens a pod exec via SPDY.
 // For layer "docker" (or empty) it runs docker exec inside the container.
+// For layer "lxd" it runs LXD/Incus exec inside the container.
 func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 	var req struct {
 		SessionID   string   `json:"session_id"`
@@ -999,7 +1001,7 @@ func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 		Namespace   string   `json:"namespace"`    // kubernetes layer
 		PodName     string   `json:"pod_name"`     // kubernetes layer
 		Container   string   `json:"container"`    // kubernetes layer (optional)
-		Layer       string   `json:"layer"`        // "host", "docker", or "kubernetes"
+		Layer       string   `json:"layer"`        // "host", "docker", "lxd", or "kubernetes"
 		Cmd         []string `json:"cmd"`
 		Rows        uint     `json:"rows"`
 		Cols        uint     `json:"cols"`
@@ -1028,6 +1030,8 @@ func (a *WSAgent) handleExecStart(ctx context.Context, data json.RawMessage) {
 			req.Namespace = "default"
 		}
 		a.startK8sExec(execCtx, cancel, req.SessionID, req.Namespace, req.PodName, req.Container, req.Cmd)
+	case "lxd":
+		a.startLXDExec(execCtx, cancel, req.SessionID, req.ContainerID, req.Cmd, req.Rows, req.Cols)
 	default:
 		a.startDockerExec(execCtx, cancel, req.SessionID, req.ContainerID, req.Cmd, req.Rows, req.Cols)
 	}
@@ -1200,6 +1204,58 @@ func (a *WSAgent) startDockerExec(ctx context.Context, cancel context.CancelFunc
 	}()
 }
 
+// startLXDExec opens an exec session inside an LXD/Incus container.
+func (a *WSAgent) startLXDExec(ctx context.Context, cancel context.CancelFunc, sessionID, rawContainerID string, cmd []string, rows, cols uint) {
+	if len(cmd) == 0 {
+		cmd = []string{"/bin/sh"}
+	}
+	containerID := normalizeEntityID(rawContainerID)
+
+	if a.actionExecutor == nil {
+		cancel()
+		a.sendExecData(sessionID, nil, "action executor not available")
+		return
+	}
+
+	sess, err := a.actionExecutor.LXDExec(ctx, containerID, cmd, rows, cols)
+	if err != nil {
+		cancel()
+		a.sendExecData(sessionID, nil, fmt.Sprintf("lxd exec failed: %v", err))
+		return
+	}
+
+	a.execSessions.Store(sessionID, &execSession{dockerSess: sess, lxd: true, cancel: cancel})
+
+	go func() {
+		defer func() {
+			sess.Attach.Close()
+			a.actionExecutor.LXDCloseExec(sess.ExecID)
+			a.execSessions.Delete(sessionID)
+			a.sendExecEnd(sessionID)
+		}()
+		ch := make(chan []byte, 64)
+		go func() {
+			defer close(ch)
+			buf := make([]byte, 4096)
+			for {
+				n, err := sess.Attach.Reader.Read(buf)
+				if n > 0 {
+					chunk := make([]byte, n)
+					copy(chunk, buf[:n])
+					ch <- chunk
+				}
+				if err != nil {
+					if err != io.EOF {
+						log.Printf("[exec] lxd read error session=%s: %v", sessionID, err)
+					}
+					return
+				}
+			}
+		}()
+		a.coalesceExecOutput(ctx, sessionID, ch)
+	}()
+}
+
 // startK8sExec opens an exec session inside a Kubernetes pod.
 func (a *WSAgent) startK8sExec(ctx context.Context, cancel context.CancelFunc, sessionID, namespace, podName, containerName string, cmd []string) {
 	if a.actionExecutor == nil {
@@ -1314,7 +1370,11 @@ func (a *WSAgent) handleExecResize(data json.RawMessage) {
 	} else if es.dockerSess != nil && a.actionExecutor != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = a.actionExecutor.DockerExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
+		if es.lxd {
+			_ = a.actionExecutor.LXDExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
+		} else {
+			_ = a.actionExecutor.DockerExecResize(ctx, es.dockerSess.ExecID, req.Rows, req.Cols)
+		}
 	}
 }
 
@@ -1373,6 +1433,13 @@ func mapFrontendActionType(frontendType string) (actions.ActionType, string) {
 		return actions.ActionStopContainer, "docker"
 	case "docker_start_container":
 		return actions.ActionStartContainer, "docker"
+	// LXD/Incus container
+	case "lxd_restart_container":
+		return actions.ActionRestartContainer, "lxd"
+	case "lxd_stop_container":
+		return actions.ActionStopContainer, "lxd"
+	case "lxd_start_container":
+		return actions.ActionStartContainer, "lxd"
 	case "docker_update_container_image":
 		return actions.ActionDockerUpdateImage, "docker"
 	case "docker_pull_image":

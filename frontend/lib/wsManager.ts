@@ -261,7 +261,7 @@ export function sendExecStart(
   cmd: string[],
   rows: number,
   cols: number,
-  layer: 'docker' | 'host' | 'kubernetes' = 'docker',
+  layer: 'docker' | 'lxd' | 'host' | 'kubernetes' = 'docker',
   extraParams?: { namespace?: string; pod_name?: string; container?: string },
 ): void {
   const entry = sockets.get(code)
