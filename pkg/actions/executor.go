@@ -23,6 +23,7 @@ type Executor interface {
 type ActionExecutor struct {
 	hostExecutor       *HostExecutor
 	dockerExecutor     *DockerExecutor
+	lxdExecutor        *LXDExecutor
 	kubernetesExecutor *KubernetesExecutor
 }
 
@@ -42,9 +43,16 @@ func NewActionExecutor() (*ActionExecutor, error) {
 		k8sExec = nil
 	}
 
+	lxdExec, err := NewLXDExecutor()
+	if err != nil {
+		// LXD/Incus may not be available, that's okay
+		lxdExec = nil
+	}
+
 	return &ActionExecutor{
 		hostExecutor:       hostExec,
 		dockerExecutor:     dockerExec,
+		lxdExecutor:        lxdExec,
 		kubernetesExecutor: k8sExec,
 	}, nil
 }
@@ -94,6 +102,12 @@ func (e *ActionExecutor) ValidateAction(action *Action) error {
 			return fmt.Errorf("kubernetes is not available")
 		}
 		return e.kubernetesExecutor.ValidateAction(action)
+
+	case "lxd":
+		if e.lxdExecutor == nil {
+			return fmt.Errorf("lxd is not available")
+		}
+		return e.lxdExecutor.ValidateAction(action)
 
 	default:
 		return fmt.Errorf("unknown layer: %s", action.Target.Layer)
@@ -166,6 +180,20 @@ func (e *ActionExecutor) ExecuteAction(ctx context.Context, action *Action) (*Ac
 	case "kubernetes":
 		result, err = e.kubernetesExecutor.ExecuteAction(ctx, action)
 
+	case "lxd":
+		if e.lxdExecutor == nil {
+			err = fmt.Errorf("lxd is not available")
+			result = &ActionResult{
+				Success:   false,
+				Message:   "LXD is not available",
+				Error:     err.Error(),
+				StartTime: startTime,
+				EndTime:   time.Now(),
+			}
+			break
+		}
+		result, err = e.lxdExecutor.ExecuteAction(ctx, action)
+
 	default:
 		err = fmt.Errorf("unknown layer: %s", action.Target.Layer)
 		result = &ActionResult{
@@ -210,6 +238,37 @@ func (e *ActionExecutor) DockerExecResize(ctx context.Context, execID string, ro
 		return fmt.Errorf("docker is not available")
 	}
 	return e.dockerExecutor.ExecResize(ctx, execID, rows, cols)
+}
+
+// LXDExec creates an interactive exec session in an LXD/Incus container.
+func (e *ActionExecutor) LXDExec(ctx context.Context, containerID string, cmd []string, rows, cols uint) (*ExecSession, error) {
+	if e.lxdExecutor == nil {
+		return nil, fmt.Errorf("lxd is not available")
+	}
+	sess, err := e.lxdExecutor.ExecCreate(ctx, containerID, cmd)
+	if err != nil {
+		return nil, err
+	}
+	if rows > 0 && cols > 0 {
+		_ = e.lxdExecutor.ExecResize(ctx, sess.ExecID, rows, cols)
+	}
+	return sess, nil
+}
+
+// LXDExecResize resizes an active LXD exec session's terminal.
+func (e *ActionExecutor) LXDExecResize(ctx context.Context, execID string, rows, cols uint) error {
+	if e.lxdExecutor == nil {
+		return fmt.Errorf("lxd is not available")
+	}
+	return e.lxdExecutor.ExecResize(ctx, execID, rows, cols)
+}
+
+// LXDCloseExec releases LXD-specific exec resources (control websocket, etc).
+func (e *ActionExecutor) LXDCloseExec(execID string) {
+	if e.lxdExecutor == nil {
+		return
+	}
+	e.lxdExecutor.CloseExec(execID)
 }
 
 // KubernetesExec opens an interactive shell inside a pod.

@@ -15,7 +15,7 @@ import type { GraphNode } from '@/types'
 interface TerminalPanelProps {
   node: GraphNode
   vmCode: string
-  layer?: 'docker' | 'host' | 'kubernetes'
+  layer?: 'docker' | 'lxd' | 'host' | 'kubernetes'
   onClose: () => void
 }
 

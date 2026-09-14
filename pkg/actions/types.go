@@ -69,7 +69,7 @@ const (
 
 // ActionTarget identifies the target entity for an action
 type ActionTarget struct {
-	Layer      string `json:"layer"`       // host, docker, kubernetes
+	Layer      string `json:"layer"`       // host, docker, lxd, kubernetes
 	EntityType string `json:"entity_type"` // service, container, deployment, etc.
 	EntityID   string `json:"entity_id"`   // name or ID of the entity
 	Namespace  string `json:"namespace,omitempty"`
