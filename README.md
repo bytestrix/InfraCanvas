@@ -11,7 +11,8 @@
 <p align="center">
   <a href="https://infracanvas.app">Website</a> ·
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#try-it-locally-first">Try it locally</a> ·
+  <a href="#install-it-for-real">Install it for real</a> ·
   <a href="#can-i-trust-this-on-my-vm">Trust</a> ·
   <a href="#clusters-kubernetes-with-zero-install">Clusters</a> ·
   <a href="#multiple-vms-one-dashboard">Multiple VMs</a> ·
@@ -33,46 +34,21 @@ You get a **map**, not a list: what runs where, what talks to what, and what's b
 
 ---
 
-## Quick start
+## Try it locally first
 
-**1. Install it**
-
-One VM:
+No VM, no systemd, no public URL, nothing to trust yet. Clone it, build it, run it on the machine you're already on:
 
 ```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
+git clone https://github.com/bytestrix/InfraCanvas.git
+cd InfraCanvas && make all
+./bin/infracanvas serve --no-tunnel --private
+# → http://localhost:7777/?token=…
 ```
 
-A Kubernetes cluster: run this wherever `kubectl` already works for you (laptop, bastion, anywhere with network access to the cluster, doesn't need to run near it, or on Linux):
+Requires Go 1.21+ and Node.js 20+. Open the URL it prints. `--private` binds `127.0.0.1` only, `--no-tunnel` skips Cloudflare entirely; nothing leaves your machine.
 
-```bash
-os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
-curl -fsSLO "https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-$os-$arch"
-chmod +x infracanvas-*
-./infracanvas-* serve --no-tunnel --private
-```
-
-**2. Open the link it prints**
-
-```
-✓ InfraCanvas installed and running
-
-  Open in your browser:
-    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
-
-  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
-```
-
-- **One VM**: you're already looking at its live topology: containers, pods, services, whatever's running, with a terminal and logs built in. Nothing else to configure.
-- **Kubernetes**: click **+** next to **Clusters** in the sidebar and drop a kubeconfig. Nothing gets installed on the cluster and the file never leaves this machine. A picker appears if it has multiple contexts. [Full details](#clusters-kubernetes-with-zero-install), or expand below if you don't have a kubeconfig handy.
-
-**3. Add more, if you have it**
-
-- **Another VM**: click **+ Add machine** in the sidebar; it hands you a ready-to-paste install command for that machine, join token included. [Details](#multiple-vms-one-dashboard)
-- **Another cluster**: click **+** next to **Clusters** again, once per kubeconfig.
-- **Don't want to run the dashboard yourself?** [InfraCanvas Cloud](https://cloud.infracanvas.app) does it for you: first 3 VMs free, no credit card.
-
-That's the whole flow. Next: [Features](#features) below, or [other ways to install](#other-ways-to-install) if you'd rather not use the one-liners above.
+- **Have Docker or a local Kubernetes context** (kind, minikube, Docker Desktop) on this machine? You're already looking at its live topology, nothing else to configure.
+- **Want to point it at a real cluster?** Click **+** next to **Clusters** in the sidebar and drop a kubeconfig. The dashboard talks to that cluster's API server directly, the same way `kubectl` does; the file is read into memory by this same local process and never transmitted anywhere. A picker appears if it has multiple contexts. [Full details](#clusters-kubernetes-with-zero-install), or expand below if you don't have a kubeconfig handy.
 
 <details>
 <summary>Don't have a kubeconfig handy?</summary>
@@ -103,28 +79,52 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
+Happy with what you see? [Install it for real](#install-it-for-real) below, on a VM with a systemd service, or just keep running it from a terminal, nothing forces you to move it.
+
 ---
 
-### Other ways to install
+## Install it for real
 
-Prefer more control than the one-liners above give you, or want several VMs on one self-hosted dashboard? Same binary, different levels of trust/control:
+Same binary, one more step: a systemd service that survives a reboot, and (optionally) a public URL.
 
-<details>
-<summary><strong>Build from source: you compile it, you read it</strong></summary>
-
-Requires Go 1.21+ and Node 20+:
+**One VM:**
 
 ```bash
-git clone https://github.com/bytestrix/InfraCanvas.git
-cd InfraCanvas && make all
-
-./bin/infracanvas serve --no-tunnel --private
-# → http://localhost:7777/?token=…
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
 
-Reach it from your laptop over SSH (`ssh -L 7777:127.0.0.1:7777 user@vm`), open your own port with `--no-tunnel`, or put [Nginx or Caddy in front](#self-hosting-without-cloudflare) with your own domain and TLS. Your network rules, your call.
+This installs a systemd service and, by default, opens a temporary Cloudflare quick-tunnel so you get an HTTPS URL immediately with no domain or certs to set up. It's optional: pass `--no-tunnel` to bind a port you open yourself, or `--private` to bind `127.0.0.1` and reach it over SSH instead. Prefer your own domain and reverse proxy from the start? See [Self-hosting without Cloudflare](#self-hosting-without-cloudflare).
 
-</details>
+It prints your URL and auth token on success:
+
+```
+✓ InfraCanvas installed and running
+
+  Open in your browser:
+    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
+
+  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
+```
+
+**A Kubernetes cluster, no VM to run this on:** grab the binary and run it wherever `kubectl` already works for you (laptop, bastion, anywhere with network access to the cluster):
+
+```bash
+os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+curl -fsSLO "https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-$os-$arch"
+chmod +x infracanvas-*
+./infracanvas-* serve --no-tunnel --private
+```
+
+**Add more, once it's running:**
+
+- **Another VM**: click **+ Add machine** in the sidebar; it hands you a ready-to-paste install command for that machine, join token included. [Details](#multiple-vms-one-dashboard)
+- **Another cluster**: click **+** next to **Clusters** again, once per kubeconfig.
+- **Don't want to run the dashboard yourself?** [InfraCanvas Cloud](https://cloud.infracanvas.app) does it for you: first 3 VMs free, no credit card.
+
+<details>
+<summary><strong>Other ways to install</strong></summary>
+
+<br>
 
 <details>
 <summary><strong>Release binary: no installer, no systemd</strong></summary>
@@ -144,9 +144,9 @@ Just a static binary you can delete when done, no firewall changes made on your 
 </details>
 
 <details>
-<summary><strong>One-liner install options</strong></summary>
+<summary><strong>One-liner install flags</strong></summary>
 
-The tunnel is optional even with the curl installer, every private-by-default flag works through it too ([read the script first](install-agent.sh), it's one file of plain bash):
+Every flag below works through the curl installer too ([read the script first](install-agent.sh), it's one file of plain bash):
 
 ```bash
 # Skip Cloudflare tunnel; bind 0.0.0.0:7777 directly
@@ -170,18 +170,6 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 
 </details>
 
-<details>
-<summary><strong>Run it on your laptop instead of a VM</strong></summary>
-
-Build from source (above), then:
-
-```bash
-infracanvas serve
-# → https://*.trycloudflare.com/?token=…   (or --no-tunnel for http://localhost:7777)
-```
-
-You'll see your laptop's Docker containers and Kubernetes context on the canvas.
-
 </details>
 
 ---
@@ -202,7 +190,7 @@ Full details in the [Security model](#security-model) and [SECURITY.md](SECURITY
 
 ## Multiple VMs, one dashboard
 
-The mechanics behind the self-host path in [Quick start](#quick-start): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
+The mechanics behind the self-host path in [Install it for real](#install-it-for-real): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
 
 ```bash
 # On the hub VM:
@@ -422,17 +410,13 @@ Removes: binary, systemd unit, `/etc/infracanvas/`, and the cached `cloudflared`
 
 ---
 
-## Building from source
+## Contributing
 
-**Requirements:** Go 1.21+, Node.js 20+
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
 
-```bash
-git clone https://github.com/bytestrix/InfraCanvas.git
-cd InfraCanvas
+New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
-make all                # build dashboard + binary (with embedded UI)
-./bin/infracanvas serve # → http://localhost:7777/?token=…
-```
+Clone and build it the same way as [Try it locally first](#try-it-locally-first) above (`make all`, requires Go 1.21+ and Node.js 20+); these are the other targets you'll want while working on it:
 
 <details>
 <summary><strong>Make targets</strong></summary>
@@ -481,14 +465,6 @@ InfraCanvas/
 </details>
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a deeper dive.
-
----
-
-## Contributing
-
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Open an issue before a large PR. `make test` and `make lint` must pass, plus `cd frontend && npm run lint`.
-
-New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
 ---
 
