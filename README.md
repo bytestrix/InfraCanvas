@@ -12,7 +12,7 @@
   <a href="https://infracanvas.app">Website</a> ·
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
   <a href="#try-it-locally-first">Try it locally</a> ·
-  <a href="#install-it-for-real">Install it for real</a> ·
+  <a href="#run-it-as-a-service">Run it as a service</a> ·
   <a href="#can-i-trust-this-on-my-vm">Trust</a> ·
   <a href="#clusters-kubernetes-with-zero-install">Clusters</a> ·
   <a href="#multiple-vms-one-dashboard">Multiple VMs</a> ·
@@ -79,13 +79,13 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
-Happy with what you see? [Install it for real](#install-it-for-real) below, on a VM with a systemd service, or just keep running it from a terminal, nothing forces you to move it.
+Happy with what you see? You're already self-hosting it, this is the whole install. [Run it as a service](#run-it-as-a-service) below if you want it to survive closing the terminal or a reboot, or just keep it running like this, nothing forces you to move it.
 
 ---
 
-## Install it for real
+## Run it as a service
 
-Same binary, one more step: a systemd service that survives a reboot, and (optionally) a public URL.
+Same binary, same install, one more step: point it at a systemd unit instead of a terminal, so it survives a reboot, and (optionally) a public URL.
 
 **One VM:**
 
@@ -190,7 +190,7 @@ Full details in the [Security model](#security-model) and [SECURITY.md](SECURITY
 
 ## Multiple VMs, one dashboard
 
-The mechanics behind the self-host path in [Install it for real](#install-it-for-real): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
+The mechanics behind the self-host path in [Run it as a service](#run-it-as-a-service): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
 
 ```bash
 # On the hub VM:
