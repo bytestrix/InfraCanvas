@@ -505,9 +505,5 @@ GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 ## Contributors
 
 <a href="https://github.com/bytestrix/InfraCanvas/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=bytestrix/InfraCanvas" alt="Contributors" />
+  <img src="https://contrib.rocks/image?repo=bytestrix/InfraCanvas&anon=0&v=2" alt="Contributors" />
 </a>
-
-<p align="center">
-  Built by <a href="https://bytestrix.com">Bytestrix</a>
-</p>
