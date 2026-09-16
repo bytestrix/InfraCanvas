@@ -105,7 +105,7 @@ const ACTIONS: Record<string, ActionDef[]> = {
       form: [
         { key: 'container', label: 'Container', type: 'select',
           defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
-          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name}: ${c.image}`, prefill: { image: c.image } })) },
         { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
       ],
       buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('deployment', n), parameters: { image: v.image, container: v.container } }) },
@@ -126,7 +126,7 @@ const ACTIONS: Record<string, ActionDef[]> = {
       form: [
         { key: 'container', label: 'Container', type: 'select',
           defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
-          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name}: ${c.image}`, prefill: { image: c.image } })) },
         { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
       ],
       buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('statefulset', n), parameters: { image: v.image, container: v.container } }) },
@@ -140,7 +140,7 @@ const ACTIONS: Record<string, ActionDef[]> = {
       form: [
         { key: 'container', label: 'Container', type: 'select',
           defaultValue: (n) => n.metadata?.containers?.[0]?.name ?? '',
-          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name} — ${c.image}`, prefill: { image: c.image } })) },
+          options: (n) => (n.metadata?.containers ?? []).map((c: any) => ({ value: c.name, label: `${c.name}: ${c.image}`, prefill: { image: c.image } })) },
         { key: 'image', label: 'New Image:Tag', placeholder: 'registry/name:v2.0', defaultValue: (n) => n.metadata?.containers?.[0]?.image ?? '' },
       ],
       buildPayload: (n, v) => ({ action_id: `upd-img-${Date.now()}`, type: 'k8s_update_image', target: k8sTarget('daemonset', n), parameters: { image: v.image, container: v.container } }) },
