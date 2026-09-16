@@ -562,6 +562,21 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     URL.revokeObjectURL(url)
   }
 
+  async function handleExportSVG() {
+    if (!canvasWrapRef.current) return
+    try {
+      const { toSvg } = await import('html-to-image')
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0A0A0A'
+      const dataUrl = await toSvg(canvasWrapRef.current, { backgroundColor: bg })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${vm.hostname ?? vm.code}-canvas.svg`
+      a.click()
+    } catch (err) {
+      console.error('[export] SVG failed', err)
+    }
+  }
+
   // ── Critical alert banner ──────────────────────────────────────────────────
   const criticalGroups = useMemo(() => {
     const alerts: Array<{ label: string; degraded: number; type: string }> = []
@@ -741,6 +756,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', minWidth: 130, zIndex: 50, boxShadow: '0 12px 32px rgba(0,0,0,0.12)' }}>
             {[
               { label: 'Export PNG', action: () => { handleExportPNG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
+              { label: 'Export SVG', action: () => { handleExportSVG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
               { label: 'Export JSON', action: () => { handleExportJSON(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
             ].map(({ label, action }) => (
               <button key={label} onClick={action}
