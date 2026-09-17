@@ -11,8 +11,7 @@
 <p align="center">
   <a href="https://infracanvas.app">Website</a> ·
   <a href="https://demo.infracanvas.app/?token=demo"><strong>Live demo</strong></a> ·
-  <a href="#try-it-locally-first">Try it locally</a> ·
-  <a href="#run-it-as-a-service">Run it as a service</a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#can-i-trust-this-on-my-vm">Trust</a> ·
   <a href="#clusters-kubernetes-with-zero-install">Clusters</a> ·
   <a href="#multiple-vms-one-dashboard">Multiple VMs</a> ·
@@ -34,7 +33,11 @@ You get a **map**, not a list: what runs where, what talks to what, and what's b
 
 ---
 
-## Try it locally first
+## Quick start
+
+Two steps: try it, then decide if you want it to stick around. Both are the exact same binary and the exact same install, just at different levels of commitment.
+
+### Step 1: try it locally
 
 No VM, no systemd, no public URL, nothing to trust yet. Clone it, build it, run it on the machine you're already on:
 
@@ -79,11 +82,9 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
-Happy with what you see? You're already self-hosting it, this is the whole install. [Run it as a service](#run-it-as-a-service) below if you want it to survive closing the terminal or a reboot, or just keep it running like this, nothing forces you to move it.
+Happy with what you see? You're already self-hosting it, this is the whole install. [Step 2](#step-2-run-it-as-a-service) below if you want it to survive closing the terminal or a reboot, or just keep it running like this, nothing forces you to move it.
 
----
-
-## Run it as a service
+### Step 2: run it as a service
 
 Same binary, same install, one more step: point it at a systemd unit instead of a terminal, so it survives a reboot.
 
@@ -94,7 +95,7 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 **How you reach it afterward depends on where you just ran that:**
 
 - **On a VM you'll open from somewhere else** (your laptop, anywhere): by default this opens a temporary Cloudflare tunnel, so you get a working HTTPS URL immediately, no domain or certs to set up first. That's why it's the default, most people putting this on a bare VM don't have a domain sitting ready. Don't want Cloudflare involved at all? Pass `--no-tunnel` to bind the port yourself and put [your own reverse proxy in front](#self-hosting-without-cloudflare), or `--private` to bind `127.0.0.1` only and reach it over an SSH tunnel instead, no public exposure either way.
-- **On this same machine, staying local:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Try it locally first](#try-it-locally-first) above, just running as a background service now instead of a terminal you'll eventually close.
+- **On this same machine, staying local:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Step 1](#step-1-try-it-locally) above, just running as a background service now instead of a terminal you'll eventually close.
 
 It prints your URL and auth token on success:
 
@@ -191,7 +192,7 @@ Full details in the [Security model](#security-model) and [SECURITY.md](SECURITY
 
 ## Multiple VMs, one dashboard
 
-The mechanics behind the self-host path in [Run it as a service](#run-it-as-a-service): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
+The mechanics behind the self-host path in [Quick start](#quick-start): one VM runs the dashboard (the **hub**); every other VM streams to it over an **outbound-only** WebSocket, no ports opened, nothing installed beyond the agent. The dashboard's **+ Add machine** button gives you the join command below pre-filled with the right host/token; this is what to run if you'd rather do it by hand.
 
 ```bash
 # On the hub VM:
@@ -417,7 +418,7 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of C
 
 New here? Start with [`good first issue`](https://github.com/bytestrix/InfraCanvas/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
-Clone and build it the same way as [Try it locally first](#try-it-locally-first) above (`make all`, requires Go 1.21+ and Node.js 20+); these are the other targets you'll want while working on it:
+Clone and build it the same way as [Quick start](#quick-start) above (`make all`, requires Go 1.21+ and Node.js 20+); these are the other targets you'll want while working on it:
 
 <details>
 <summary><strong>Make targets</strong></summary>
