@@ -35,9 +35,9 @@ You get a **map**, not a list: what runs where, what talks to what, and what's b
 
 ## Quick start
 
-Two steps: try it, then decide if you want it to stick around. Both are the exact same binary and the exact same install, just at different levels of commitment.
+Two ways to run it, not two steps, pick whichever matches what you're doing right now. Both are the exact same binary and the exact same install, the only difference is whether it survives you closing the terminal.
 
-### Step 1: try it locally
+### Try it locally
 
 No VM, no systemd, no public URL, nothing to trust yet. Clone it, build it, run it on the machine you're already on:
 
@@ -82,11 +82,11 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
-Happy with what you see? You're already self-hosting it, this is the whole install. [Step 2](#step-2-run-it-as-a-service) below if you want it to survive closing the terminal or a reboot, or just keep it running like this, nothing forces you to move it.
+Happy with what you see? You're already self-hosting it, this is the whole install, nothing forces you to move it. Only go further if you actually want it running permanently: [Run it permanently](#run-it-permanently) below.
 
-### Step 2: run it as a service
+### Run it permanently
 
-Same binary, same install, one more step: point it at a systemd unit instead of a terminal, so it survives a reboot.
+Same binary, same install, just point it at a systemd unit instead of a terminal, so it survives a reboot.
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
@@ -95,7 +95,7 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 **How you reach it afterward depends on where you just ran that:**
 
 - **On a VM you'll open from somewhere else** (your laptop, anywhere): by default this opens a temporary Cloudflare tunnel, so you get a working HTTPS URL immediately, no domain or certs to set up first. That's why it's the default, most people putting this on a bare VM don't have a domain sitting ready. Don't want Cloudflare involved at all? Pass `--no-tunnel` to bind the port yourself and put [your own reverse proxy in front](#self-hosting-without-cloudflare), or `--private` to bind `127.0.0.1` only and reach it over an SSH tunnel instead, no public exposure either way.
-- **On this same machine, staying local:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Step 1](#step-1-try-it-locally) above, just running as a background service now instead of a terminal you'll eventually close.
+- **On this same machine, staying local:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Try it locally](#try-it-locally) above, just running as a background service now instead of a terminal you'll eventually close.
 
 It prints your URL and auth token on success:
 
