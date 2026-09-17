@@ -85,15 +85,16 @@ Happy with what you see? You're already self-hosting it, this is the whole insta
 
 ## Run it as a service
 
-Same binary, same install, one more step: point it at a systemd unit instead of a terminal, so it survives a reboot, and (optionally) a public URL.
-
-**One VM:**
+Same binary, same install, one more step: point it at a systemd unit instead of a terminal, so it survives a reboot.
 
 ```bash
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
 
-This installs a systemd service and, by default, opens a temporary Cloudflare quick-tunnel so you get an HTTPS URL immediately with no domain or certs to set up. It's optional: pass `--no-tunnel` to bind a port you open yourself, or `--private` to bind `127.0.0.1` and reach it over SSH instead. Prefer your own domain and reverse proxy from the start? See [Self-hosting without Cloudflare](#self-hosting-without-cloudflare).
+**How you reach it afterward depends on where you just ran that:**
+
+- **On a VM you'll open from somewhere else** (your laptop, anywhere): by default this opens a temporary Cloudflare tunnel, so you get a working HTTPS URL immediately, no domain or certs to set up first. That's why it's the default, most people putting this on a bare VM don't have a domain sitting ready. Don't want Cloudflare involved at all? Pass `--no-tunnel` to bind the port yourself and put [your own reverse proxy in front](#self-hosting-without-cloudflare), or `--private` to bind `127.0.0.1` only and reach it over an SSH tunnel instead, no public exposure either way.
+- **On this same machine, staying local:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Try it locally first](#try-it-locally-first) above, just running as a background service now instead of a terminal you'll eventually close.
 
 It prints your URL and auth token on success:
 
