@@ -50,7 +50,7 @@ cd InfraCanvas && make all
 
 Requires Go 1.21+ and Node.js 20+. Open the URL it prints. `--private` binds `127.0.0.1` only, `--no-tunnel` skips Cloudflare entirely; nothing leaves your machine.
 
-- **Have Docker or a local Kubernetes context** (kind, minikube, Docker Desktop) on this machine? You're already looking at its live topology, nothing else to configure.
+- **Have Docker or a local Kubernetes context** (kind, minikube, Docker Desktop) on this machine? InfraCanvas auto-discovers local kubeconfig contexts (`$KUBECONFIG` or `~/.kube/config`) and connects to the current context at startup. To skip local kubeconfig auto-discovery, run `infracanvas serve --discover-local-kubeconfig=false` (or set `INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG=false`).
 - **Want to point it at a real cluster?** Click **+** next to **Clusters** in the sidebar and drop a kubeconfig. The dashboard talks to that cluster's API server directly, the same way `kubectl` does; the file is read into memory by this same local process and never transmitted anywhere. A picker appears if it has multiple contexts. [Full details](#clusters-kubernetes-with-zero-install), or expand below if you don't have a kubeconfig handy.
 
 <details>
@@ -162,6 +162,9 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 
 # Read-only: viewers can look, not touch; public demos and dashboards on a TV
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --read-only
+
+# Disable local kubeconfig auto-discovery (keeps Docker auto-discovery on)
+INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG=false infracanvas serve
 
 # Agent-only: join this VM to an existing hub (see Multiple VMs below)
 curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --join <hub-url> --token <join-token>
