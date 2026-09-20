@@ -29,6 +29,12 @@ type ActionExecutor struct {
 
 // NewActionExecutor creates a new action executor
 func NewActionExecutor() (*ActionExecutor, error) {
+	return NewActionExecutorWithLocalKubeconfigAutoDiscovery(true)
+}
+
+// NewActionExecutorWithLocalKubeconfigAutoDiscovery creates a new action
+// executor and controls whether local kubeconfig auto-discovery is enabled.
+func NewActionExecutorWithLocalKubeconfigAutoDiscovery(localKubeconfigAutoDiscovery bool) (*ActionExecutor, error) {
 	hostExec := NewHostExecutor()
 
 	dockerExec, err := NewDockerExecutor()
@@ -37,7 +43,7 @@ func NewActionExecutor() (*ActionExecutor, error) {
 		dockerExec = nil
 	}
 
-	k8sExec, err := NewKubernetesExecutor()
+	k8sExec, err := NewKubernetesExecutorWithLocalKubeconfigAutoDiscovery(localKubeconfigAutoDiscovery)
 	if err != nil {
 		// Kubernetes may not be available, that's okay
 		k8sExec = nil

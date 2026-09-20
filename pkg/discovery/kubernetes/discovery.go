@@ -3,33 +3,44 @@ package kubernetes
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"infracanvas/internal/models"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Discovery implements Kubernetes-level infrastructure discovery
 type Discovery struct {
-	clientset *kubernetes.Clientset
-	config    *rest.Config
-	cache     *Cache
+	clientset         *kubernetes.Clientset
+	config            *rest.Config
+	cache             *Cache
+	connectedContexts int
 }
 
 // NewDiscovery creates a new Kubernetes discovery instance, resolving the
 // kubeconfig from the local host (in-cluster config, $KUBECONFIG, or
 // ~/.kube/config).
 func NewDiscovery() (*Discovery, error) {
-	config, err := getKubeConfig()
+	config, _, err := ResolveKubeConfig(true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 	return NewDiscoveryFromConfig(config)
+}
+
+// NewDiscoveryWithLocalKubeconfigAutoDiscovery creates a new Kubernetes
+// discovery instance and returns details about local kubeconfig
+// auto-discovery behavior.
+func NewDiscoveryWithLocalKubeconfigAutoDiscovery(enabled bool) (*Discovery, models.LocalKubeconfigAutoDiscovery, error) {
+	config, info, err := ResolveKubeConfig(enabled)
+	if err != nil {
+		return nil, info, fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+	d, err := NewDiscoveryFromConfig(config)
+	return d, info, err
 }
 
 // NewDiscoveryFromConfig creates a Discovery against an explicit *rest.Config
@@ -73,42 +84,11 @@ func NewDiscoveryFromConfig(config *rest.Config) (*Discovery, error) {
 	}
 
 	return &Discovery{
-		clientset: clientset,
-		config:    config,
-		cache:     NewCache(30 * time.Second),
+		clientset:         clientset,
+		config:            config,
+		cache:             NewCache(30 * time.Second),
+		connectedContexts: 0,
 	}, nil
-}
-
-// getKubeConfig attempts to load kubeconfig from multiple sources
-func getKubeConfig() (*rest.Config, error) {
-	// 1. Try in-cluster config first
-	config, err := rest.InClusterConfig()
-	if err == nil {
-		return config, nil
-	}
-
-	// 2. Try KUBECONFIG environment variable
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath != "" {
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-		if err == nil {
-			return config, nil
-		}
-	}
-
-	// 3. Try default kubeconfig location
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		defaultKubeconfig := filepath.Join(homeDir, ".kube", "config")
-		if _, err := os.Stat(defaultKubeconfig); err == nil {
-			config, err := clientcmd.BuildConfigFromFlags("", defaultKubeconfig)
-			if err == nil {
-				return config, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("unable to load kubeconfig from any source")
 }
 
 // IsAvailable checks if Kubernetes is available and accessible
@@ -134,6 +114,7 @@ func (d *Discovery) IsAvailable() bool {
 
 // DiscoverAll performs a complete Kubernetes discovery
 func (d *Discovery) DiscoverAll() (*models.Cluster, []models.Node, []models.Namespace, []models.Deployment, []models.StatefulSet, []models.DaemonSet, []models.Job, []models.CronJob, []models.Pod, []models.K8sService, []models.Ingress, []models.ConfigMap, []models.Secret, []models.PersistentVolumeClaim, []models.PersistentVolume, []models.StorageClass, []models.Event, error) {
+	d.connectedContexts = 0
 	if !d.IsAvailable() {
 		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Kubernetes is not available")
 	}
@@ -232,7 +213,14 @@ func (d *Discovery) DiscoverAll() (*models.Cluster, []models.Node, []models.Name
 		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, storageclasses, nil, fmt.Errorf("failed to get events: %w", err)
 	}
 
+	d.connectedContexts = 1
 	return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, storageclasses, events, nil
+}
+
+// ConnectedContexts returns how many local kubeconfig contexts were
+// successfully connected in the last discovery pass.
+func (d *Discovery) ConnectedContexts() int {
+	return d.connectedContexts
 }
 
 // InvalidateCache invalidates all cached Kubernetes data
