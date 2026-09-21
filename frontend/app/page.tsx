@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
-import { connectVM } from '@/lib/wsManager'
-import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
+import { connectVM, disconnectVM } from '@/lib/wsManager'
+import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, removeCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
 import { useTheme } from '@/hooks/useTheme'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 import type { SessionInfo } from '@/types'
 
 const LOCAL_KEY = 'local'
@@ -75,13 +75,31 @@ const IcMoon = () => (
 )
 
 export default function App() {
-  const { vms, machines, activeKey, setMachines, setActiveKey } = useVMStore()
+  const { vms, machines, activeKey, setMachines, setActiveKey, removeVM } = useVMStore()
   const vm = vms[activeKey]
   const [view, setView] = useState<View>('overview')
 
   useEffect(() => {
     if (!vms[LOCAL_KEY]) connectVM(LOCAL_KEY)
   }, [vms])
+
+  const refreshMachines = useCallback(() => {
+    return fetchSessions().then(m => setMachines(m)).catch(() => {})
+  }, [setMachines])
+
+  // Disconnects a Clusters connection: deletes the persisted kubeconfig on
+  // the server, then drops any local VM/store state for it so the sidebar
+  // and canvas don't keep pointing at a connection that no longer exists.
+  const handleRemoveCluster = useCallback(async (m: SessionInfo) => {
+    if (!m.machineId?.startsWith('cluster-')) return
+    const clusterId = m.machineId.slice('cluster-'.length)
+    await removeCluster(clusterId)
+    const key = machineKey(m)
+    disconnectVM(key)
+    removeVM(key)
+    if (activeKey === key) setActiveKey(LOCAL_KEY)
+    await refreshMachines()
+  }, [activeKey, refreshMachines, removeVM, setActiveKey])
 
   // Keep the machine list fresh; failures (e.g. old server) leave it empty,
   // which hides the section entirely.
@@ -122,7 +140,8 @@ export default function App() {
           machines={machineList} clusters={clusterList} activeKey={activeKey}
           onSelectMachine={(m) => { selectMachine(m); setSidebarOpen(false) }}
           onAddMachine={() => { setShowAddMachine(true); setSidebarOpen(false) }}
-          onAddCluster={() => { setShowAddCluster(true); setSidebarOpen(false) }} />
+          onAddCluster={() => { setShowAddCluster(true); setSidebarOpen(false) }}
+          onRemoveCluster={handleRemoveCluster} />
       </div>
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
         <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
@@ -419,11 +438,12 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
 }
 
 /* ── Sidebar ── */
-function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSelectMachine, onAddMachine, onAddCluster }: {
+function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSelectMachine, onAddMachine, onAddCluster, onRemoveCluster }: {
   vm: any; view: View; onViewChange: (v: View) => void
   machines: SessionInfo[]; clusters: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
-  onAddMachine: () => void; onAddCluster: () => void
+  onAddMachine: () => void; onAddCluster: () => void; onRemoveCluster: (m: SessionInfo) => void
 }) {
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
   const { theme, toggle } = useTheme()
@@ -563,6 +583,29 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                         opacity: m.readOnly ? 1 : 0.5,
                       }}
                     >{m.readOnly ? 'RO' : 'RW'}</span>
+                  )}
+                  {m.machineId?.startsWith('cluster-') && (
+                    <span
+                      role="button"
+                      title="Disconnect this cluster"
+                      onClick={async e => {
+                        e.stopPropagation()
+                        if (!window.confirm(`Disconnect ${m.hostname || m.id}? This removes the saved kubeconfig; you can reconnect it later.`)) return
+                        setRemovingId(m.id)
+                        try {
+                          await onRemoveCluster(m)
+                        } finally {
+                          setRemovingId(null)
+                        }
+                      }}
+                      style={{
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        width:16, height:16, borderRadius:5, flexShrink:0, cursor:'pointer',
+                        color:T.ink4, opacity: removingId === m.id ? 0.4 : 0.6,
+                      }}
+                      onMouseEnter={e=>{ (e.currentTarget as any).style.opacity = 1; (e.currentTarget as any).style.color = T.ink }}
+                      onMouseLeave={e=>{ (e.currentTarget as any).style.opacity = removingId === m.id ? 0.4 : 0.6; (e.currentTarget as any).style.color = T.ink4 }}
+                    ><X size={11} /></span>
                   )}
                 </button>
               )
