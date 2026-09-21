@@ -52,6 +52,7 @@ import {
   Server,
   AlertTriangle,
   Download,
+  Search,
 } from 'lucide-react'
 
 // ─── Filter groups ────────────────────────────────────────────────────────────
@@ -215,6 +216,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const canvasWrapRef = useRef<HTMLDivElement>(null)
 
   const [spotlightKey, setSpotlightKey] = useState<FilterKey | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
 
   const rfRef = useRef<ReactFlowInstance | null>(null)
 
@@ -527,6 +530,31 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     setSelectedNodeId(nodeId)
   }
 
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q || !vm.graph) return []
+    return vm.graph.nodes.filter((n) => n.label.toLowerCase().includes(q)).slice(0, 20)
+  }, [searchQuery, vm.graph])
+
+  function handleSelectSearchResult(nodeId: string) {
+    setSearchQuery('')
+    setSearchFocused(false)
+    if (rfRef.current) {
+      const rfNode = rfRef.current.getNode(nodeId)
+      if (rfNode) {
+        rfRef.current.setCenter(
+          rfNode.position.x + (rfNode.width ?? 220) / 2,
+          rfNode.position.y + (rfNode.height ?? 60) / 2,
+          { zoom: 1.8, duration: 600 },
+        )
+        setDrawerGroup(null)
+        setSelectedNodeId(nodeId)
+        return
+      }
+    }
+    handleSelectNodeFromDrawer(nodeId)
+  }
+
   function handlePaneClick() {
     setSelectedNodeId(null)
     setDrawerGroup(null)
@@ -656,6 +684,61 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             <button onClick={() => setSpotlightKey(null)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', padding: 0, fontSize: 11 }}>✕</button>
           </span>
         )}
+
+        {/* Search */}
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8,
+            padding: '4px 8px', width: 180,
+          }}>
+            <Search size={12} color="var(--ink4)" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchMatches.length > 0) handleSelectSearchResult(searchMatches[0].id)
+                if (e.key === 'Escape') { setSearchQuery(''); setSearchFocused(false) }
+              }}
+              placeholder="Search nodes…"
+              style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', fontSize: 12, color: 'var(--ink)', fontFamily: 'inherit' }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', color: 'var(--ink4)', cursor: 'pointer', padding: 0, fontSize: 11, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+          {searchFocused && searchQuery && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: 260, maxHeight: 320,
+              overflowY: 'auto', background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.25)', zIndex: 50,
+            }}>
+              {searchMatches.length === 0 ? (
+                <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--ink4)' }}>No matches</div>
+              ) : (
+                searchMatches.map((n) => (
+                  <button
+                    key={n.id}
+                    onMouseDown={() => handleSelectSearchResult(n.id)}
+                    style={{
+                      display: 'flex', width: '100%', textAlign: 'left', alignItems: 'center', gap: 8,
+                      padding: '6px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+                      fontSize: 12, color: 'var(--ink)',
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: getNodeColor(n.type) }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.label}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink4)', flexShrink: 0 }}>{n.type}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={DIVIDER} />
 
         {/* View mode toggle */}
         <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: 2 }}>

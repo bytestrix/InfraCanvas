@@ -35,20 +35,30 @@ You get a **map**, not a list: what runs where, what talks to what, and what's b
 
 ## Quick start
 
-The same binary and the same install work either way, in a terminal or as a background service, on your laptop or on a VM. The only real choice is whether you want it to keep running after you close the terminal.
-
-### Run it in a terminal
-
-No VM, no systemd, no public URL, nothing to trust yet. Clone it, build it, run it on the machine you're already on:
+Install and run, one command:
 
 ```bash
-git clone https://github.com/bytestrix/InfraCanvas.git
-cd InfraCanvas && make all
-./bin/infracanvas serve --no-tunnel --private
-# → http://localhost:7777/?token=…
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
 ```
 
-Requires Go 1.21+ and Node.js 20+. Open the URL it prints. `--private` binds `127.0.0.1` only, `--no-tunnel` skips Cloudflare entirely; nothing leaves your machine.
+It installs the binary, runs it as a systemd service, and opens a temporary Cloudflare tunnel so you get a working HTTPS URL immediately, no domain or certs to set up first:
+
+```
+✓ InfraCanvas installed and running
+
+  Open in your browser:
+    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
+
+  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
+```
+
+Running it on your own laptop rather than a VM? Add `--private --no-tunnel` so nothing leaves the machine:
+
+```bash
+curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash -s -- --private --no-tunnel
+```
+
+Don't want Cloudflare involved on a VM either? Pass `--no-tunnel` to bind the port yourself and put [your own reverse proxy in front](#self-hosting-without-cloudflare), or `--private` alone to bind `127.0.0.1` only and reach it over an SSH tunnel.
 
 - **Have Docker or a local Kubernetes context** (kind, minikube, Docker Desktop) on this machine? You're already looking at its live topology, nothing else to configure.
 - **Want to point it at a real cluster?** Click **+** next to **Clusters** in the sidebar and drop a kubeconfig. The dashboard talks to that cluster's API server directly, the same way `kubectl` does; the file is read into memory by this same local process and never transmitted anywhere. A picker appears if it has multiple contexts. [Full details](#clusters-kubernetes-with-zero-install), or expand below if you don't have a kubeconfig handy.
@@ -82,41 +92,6 @@ One caveat: EKS/GKE/AKS-generated kubeconfigs typically authenticate via an `exe
 
 </details>
 
-Happy with what you see? This is already the whole install, nothing forces you to move it. Want it running after you close this terminal, or surviving a reboot? [Run it as a background service](#run-it-as-a-background-service) below.
-
-### Run it as a background service
-
-Same binary, same install, point it at a systemd unit instead of a terminal.
-
-```bash
-curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/install.sh | bash
-```
-
-**How you reach it afterward depends on where you just ran that:**
-
-- **On a VM you'll open from somewhere else** (your laptop, anywhere): by default this opens a temporary Cloudflare tunnel, so you get a working HTTPS URL immediately, no domain or certs to set up first. That's why it's the default, most people putting this on a bare VM don't have a domain sitting ready. Don't want Cloudflare involved at all? Pass `--no-tunnel` to bind the port yourself and put [your own reverse proxy in front](#self-hosting-without-cloudflare), or `--private` to bind `127.0.0.1` only and reach it over an SSH tunnel instead, no public exposure either way.
-- **On this same machine you're already on:** pass `--private --no-tunnel`. Nothing needs to leave this box, same idea as [Run it in a terminal](#run-it-in-a-terminal) above, just running in the background now instead of a terminal you'll eventually close.
-
-It prints your URL and auth token on success:
-
-```
-✓ InfraCanvas installed and running
-
-  Open in your browser:
-    https://shy-pine-2f1a.trycloudflare.com/?token=a8f3e2b1c9d4f02e
-
-  Auth token:  a8f3e2b1c9d4f02e  (saved in /etc/infracanvas/config.env)
-```
-
-**A Kubernetes cluster, no VM to run this on:** grab the binary and run it wherever `kubectl` already works for you (laptop, bastion, anywhere with network access to the cluster):
-
-```bash
-os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
-curl -fsSLO "https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-$os-$arch"
-chmod +x infracanvas-*
-./infracanvas-* serve --no-tunnel --private
-```
-
 **Add more, once it's running:**
 
 - **Another VM**: click **+ Add machine** in the sidebar; it hands you a ready-to-paste install command for that machine, join token included. [Details](#multiple-vms-one-dashboard)
@@ -124,9 +99,25 @@ chmod +x infracanvas-*
 - **Don't want to run the dashboard yourself?** [InfraCanvas Cloud](https://cloud.infracanvas.app) does it for you: first 3 VMs free, no credit card.
 
 <details>
-<summary><strong>Other ways to install</strong></summary>
+<summary><strong>Other ways to run it</strong></summary>
 
 <br>
+
+<details>
+<summary><strong>From source, in a terminal: no install, nothing persists</strong></summary>
+
+No VM, no systemd, no public URL, nothing to trust yet. Clone it, build it, run it on the machine you're already on:
+
+```bash
+git clone https://github.com/bytestrix/InfraCanvas.git
+cd InfraCanvas && make all
+./bin/infracanvas serve --no-tunnel --private
+# → http://localhost:7777/?token=…
+```
+
+Requires Go 1.21+ and Node.js 20+. Open the URL it prints. `--private` binds `127.0.0.1` only, `--no-tunnel` skips Cloudflare entirely; nothing leaves your machine.
+
+</details>
 
 <details>
 <summary><strong>Release binary: no installer, no systemd</strong></summary>
@@ -142,6 +133,20 @@ chmod +x infracanvas-linux-amd64
 ```
 
 Just a static binary you can delete when done, no firewall changes made on your behalf.
+
+</details>
+
+<details>
+<summary><strong>Kubernetes cluster, no VM to run this on</strong></summary>
+
+Grab the binary and run it wherever `kubectl` already works for you (laptop, bastion, anywhere with network access to the cluster):
+
+```bash
+os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+curl -fsSLO "https://github.com/bytestrix/InfraCanvas/releases/latest/download/infracanvas-$os-$arch"
+chmod +x infracanvas-*
+./infracanvas-* serve --no-tunnel --private
+```
 
 </details>
 
