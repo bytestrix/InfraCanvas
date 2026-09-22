@@ -21,6 +21,7 @@ import (
 
 	"infracanvas/pkg/audit"
 	"infracanvas/pkg/clustermgr"
+	"infracanvas/pkg/runstate"
 )
 
 // Message type constants — shared with agent and browser clients.
@@ -674,7 +675,8 @@ type addClusterRequest struct {
 
 // updateClusterRequest is the body for PATCH /api/clusters/{id}.
 type updateClusterRequest struct {
-	ReadOnly *bool `json:"readOnly,omitempty"` // pointer so "omitted" and "set to false" are distinguishable
+	ReadOnly *bool   `json:"readOnly,omitempty"` // pointer so "omitted" and "set to false" are distinguishable
+	Name     *string `json:"name,omitempty"`
 }
 
 // handleClusters serves GET (list) and POST (add) on /api/clusters.
@@ -799,6 +801,14 @@ func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// Remove() only cancels the virtual agent's context, which closes its
+		// connection and leaves the session behind marked offline (so a
+		// normal disconnect/reconnect doesn't lose browser state) — that's
+		// wrong here, the cluster is gone for good, so drop the session too
+		// or it lingers in the sidebar forever as a dead "disconnected" row.
+		if sess, ok := s.sessions.FindByAny("cluster-" + id); ok {
+			s.sessions.Delete(sess)
+		}
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodPatch:
@@ -816,14 +826,30 @@ func (s *Server) handleClusterByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		if req.ReadOnly == nil {
+		if req.ReadOnly == nil && req.Name == nil {
 			http.Error(w, "nothing to update", http.StatusBadRequest)
 			return
 		}
-		entry, err := s.clusterMgr.SetReadOnly(id, *req.ReadOnly)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
+		var entry runstate.ClusterEntry
+		if req.Name != nil {
+			entry, err = s.clusterMgr.Rename(id, *req.Name)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			// The virtual agent already sent its HELLO with the old name;
+			// push the new one into the live session directly so the
+			// sidebar/overview update without waiting for a reconnect.
+			if sess, ok := s.sessions.FindByAny("cluster-" + id); ok {
+				s.sessions.SetHostname(sess, entry.Name)
+			}
+		}
+		if req.ReadOnly != nil {
+			entry, err = s.clusterMgr.SetReadOnly(id, *req.ReadOnly)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(entry)

@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM, disconnectVM } from '@/lib/wsManager'
-import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, removeCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
+import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, removeCluster, renameCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import { LogoMark } from '@/components/Logo'
@@ -101,6 +101,20 @@ export default function App() {
     await refreshMachines()
   }, [activeKey, refreshMachines, removeVM, setActiveKey])
 
+  const handleRenameCluster = useCallback(async (m: SessionInfo, name: string) => {
+    if (!m.machineId?.startsWith('cluster-')) return
+    const clusterId = m.machineId.slice('cluster-'.length)
+    await renameCluster(clusterId, name)
+    await refreshMachines()
+  }, [refreshMachines])
+
+  const handleToggleClusterReadOnly = useCallback(async (m: SessionInfo) => {
+    if (!m.machineId?.startsWith('cluster-')) return
+    const clusterId = m.machineId.slice('cluster-'.length)
+    await setClusterReadOnly(clusterId, !m.readOnly)
+    await refreshMachines()
+  }, [refreshMachines])
+
   // Keep the machine list fresh; failures (e.g. old server) leave it empty,
   // which hides the section entirely.
   useEffect(() => {
@@ -144,7 +158,11 @@ export default function App() {
           onRemoveCluster={handleRemoveCluster} />
       </div>
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
-        <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')} />
+        <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')}
+          clusterSession={machines.find(m => machineKey(m) === activeKey && m.kind === 'cluster')}
+          onRemoveCluster={handleRemoveCluster}
+          onRenameCluster={handleRenameCluster}
+          onToggleClusterReadOnly={handleToggleClusterReadOnly} />
       </main>
       {showAddMachine && <AddMachineModal onClose={() => setShowAddMachine(false)} />}
       {showAddCluster && <AddClusterModal onClose={() => setShowAddCluster(false)} />}
@@ -441,9 +459,12 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
 function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSelectMachine, onAddMachine, onAddCluster, onRemoveCluster }: {
   vm: any; view: View; onViewChange: (v: View) => void
   machines: SessionInfo[]; clusters: SessionInfo[]; activeKey: string; onSelectMachine: (m: SessionInfo) => void
-  onAddMachine: () => void; onAddCluster: () => void; onRemoveCluster: (m: SessionInfo) => void
+  onAddMachine: () => void; onAddCluster: () => void; onRemoveCluster: (m: SessionInfo) => Promise<void>
 }) {
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connected = vm?.status === 'connected'
   const hostname  = vm?.hostname ?? null
   const { theme, toggle } = useTheme()
@@ -587,30 +608,47 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                   {m.machineId?.startsWith('cluster-') && (
                     <span
                       role="button"
-                      title="Disconnect this cluster"
-                      onClick={async e => {
+                      title={confirmRemoveId === m.id ? 'Click again to disconnect' : 'Disconnect this cluster'}
+                      onClick={e => {
                         e.stopPropagation()
-                        if (!window.confirm(`Disconnect ${m.hostname || m.id}? This removes the saved kubeconfig; you can reconnect it later.`)) return
-                        setRemovingId(m.id)
-                        try {
-                          await onRemoveCluster(m)
-                        } finally {
-                          setRemovingId(null)
+                        e.preventDefault()
+                        if (confirmRemoveId !== m.id) {
+                          setConfirmRemoveId(m.id)
+                          setRemoveError(null)
+                          if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current)
+                          confirmTimeoutRef.current = setTimeout(() => setConfirmRemoveId(null), 3000)
+                          return
                         }
+                        if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current)
+                        setConfirmRemoveId(null)
+                        setRemovingId(m.id)
+                        setRemoveError(null)
+                        onRemoveCluster(m)
+                          .catch(err => setRemoveError(err?.message ?? 'Failed to disconnect cluster'))
+                          .finally(() => setRemovingId(null))
                       }}
                       style={{
                         display:'flex', alignItems:'center', justifyContent:'center',
-                        width:16, height:16, borderRadius:5, flexShrink:0, cursor:'pointer',
-                        color:T.ink4, opacity: removingId === m.id ? 0.4 : 0.6,
+                        width: confirmRemoveId === m.id ? 'auto' : 16, height:16, borderRadius:5, flexShrink:0, cursor:'pointer',
+                        padding: confirmRemoveId === m.id ? '0 4px' : 0,
+                        color: confirmRemoveId === m.id ? '#ef4444' : T.ink4,
+                        background: confirmRemoveId === m.id ? 'rgba(239,68,68,0.12)' : 'transparent',
+                        opacity: removingId === m.id ? 0.4 : 1,
+                        fontSize: 9.5, fontFamily: MONO, gap: 3,
                       }}
-                      onMouseEnter={e=>{ (e.currentTarget as any).style.opacity = 1; (e.currentTarget as any).style.color = T.ink }}
-                      onMouseLeave={e=>{ (e.currentTarget as any).style.opacity = removingId === m.id ? 0.4 : 0.6; (e.currentTarget as any).style.color = T.ink4 }}
-                    ><X size={11} /></span>
+                      onMouseEnter={e=>{ if (confirmRemoveId !== m.id) { (e.currentTarget as any).style.color = T.ink } }}
+                      onMouseLeave={e=>{ if (confirmRemoveId !== m.id) { (e.currentTarget as any).style.color = T.ink4 } }}
+                    >{confirmRemoveId === m.id ? 'Sure?' : <X size={11} />}</span>
                   )}
                 </button>
               )
             })}
           </div>
+          {removeError && (
+            <div style={{ margin:'6px 8px 0', fontSize:10.5, color:'#ef4444', fontFamily:MONO }}>
+              {removeError}
+            </div>
+          )}
         </div>
       )}
       {clusters.length === 0 && (
@@ -684,7 +722,13 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
 }
 
 /* ── Main content router ── */
-function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: string; view: View; onSwitchToCanvas: () => void }) {
+function MainContent({ vm, vmKey, view, onSwitchToCanvas, clusterSession, onRemoveCluster, onRenameCluster, onToggleClusterReadOnly }: {
+  vm: any; vmKey: string; view: View; onSwitchToCanvas: () => void
+  clusterSession?: SessionInfo
+  onRemoveCluster: (m: SessionInfo) => Promise<void>
+  onRenameCluster: (m: SessionInfo, name: string) => Promise<void>
+  onToggleClusterReadOnly: (m: SessionInfo) => Promise<void>
+}) {
   const isLoading = !vm || vm.status === 'connecting' || vm.status === 'paired'
   const isError   = vm?.status === 'error'
 
@@ -713,6 +757,12 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
       hostname={vm.hostname ?? null}
       vmCode={vmKey}
       onSwitchToCanvas={onSwitchToCanvas}
+      cluster={clusterSession ? {
+        readOnly: !!clusterSession.readOnly,
+        onRename: (name: string) => onRenameCluster(clusterSession, name),
+        onToggleReadOnly: () => onToggleClusterReadOnly(clusterSession),
+        onDisconnect: () => onRemoveCluster(clusterSession),
+      } : undefined}
     />
   )
 }

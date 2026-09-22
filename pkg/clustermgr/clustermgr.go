@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -256,6 +257,38 @@ func (m *Manager) SetReadOnly(id string, readOnly bool) (runstate.ClusterEntry, 
 		for i := range s.Clusters {
 			if s.Clusters[i].ID == id {
 				s.Clusters[i].ReadOnly = readOnly
+				updated = s.Clusters[i]
+				found = true
+				return
+			}
+		}
+	})
+	if err != nil {
+		return runstate.ClusterEntry{}, err
+	}
+	if !found {
+		return runstate.ClusterEntry{}, fmt.Errorf("cluster %q not found", id)
+	}
+	return updated, nil
+}
+
+// Rename updates one cluster's display name and returns its entry (without
+// live Online status — callers that need that should re-List). Empty names
+// are rejected; the name that seeded startAgent's session Hostname doesn't
+// change on its own once the virtual agent has already sent its HELLO, so
+// callers that want the running session's display name to follow along too
+// (e.g. the HTTP handler) need to push it into the session store themselves.
+func (m *Manager) Rename(id, name string) (runstate.ClusterEntry, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return runstate.ClusterEntry{}, fmt.Errorf("name cannot be empty")
+	}
+	var updated runstate.ClusterEntry
+	found := false
+	err := runstate.Update(func(s *runstate.State) {
+		for i := range s.Clusters {
+			if s.Clusters[i].ID == id {
+				s.Clusters[i].Name = name
 				updated = s.Clusters[i]
 				found = true
 				return

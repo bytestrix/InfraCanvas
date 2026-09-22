@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Terminal, LayoutGrid, AlertTriangle } from 'lucide-react'
+import { useState, useMemo, useRef } from 'react'
+import { Terminal, LayoutGrid, AlertTriangle, Pencil, Check, X as XIcon, Lock, Unlock, Trash2 } from 'lucide-react'
 import { GraphNode, GraphOutput } from '@/types'
 import NodeSvgIcon from '@/components/canvas/NodeSvgIcon'
 import GroupDrawer from '@/components/canvas/GroupDrawer'
@@ -19,14 +19,22 @@ const H = { healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444', unknown:
 const MONO = "var(--font-geist-mono,'Geist Mono',ui-monospace,monospace)"
 const SANS = "var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)"
 
+interface ClusterControls {
+  readOnly: boolean
+  onRename: (name: string) => Promise<void>
+  onToggleReadOnly: () => Promise<void>
+  onDisconnect: () => Promise<void>
+}
+
 interface Props {
   graph: GraphOutput
   hostname: string | null
   vmCode: string
   onSwitchToCanvas?: () => void
+  cluster?: ClusterControls
 }
 
-export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanvas }: Props) {
+export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanvas, cluster }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nsFilter]                  = useState<string>('all')
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
@@ -34,6 +42,53 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalLayer, setTerminalLayer] = useState<'docker'|'lxd'|'host'|'kubernetes'>('docker')
   const [showHostTerminal, setShowHostTerminal] = useState(false)
+
+  // Cluster connection controls (rename / read-only toggle / disconnect) —
+  // only present for a Clusters connection, never for a VM agent.
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [nameBusy, setNameBusy] = useState(false)
+  const [nameError, setNameError] = useState('')
+  const [roBusy, setRoBusy] = useState(false)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const [disconnectBusy, setDisconnectBusy] = useState(false)
+  const [disconnectError, setDisconnectError] = useState('')
+  const disconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const startRename = () => {
+    setNameDraft(hostname ?? '')
+    setNameError('')
+    setEditingName(true)
+  }
+  const submitRename = async () => {
+    if (!cluster) return
+    const name = nameDraft.trim()
+    if (!name) { setNameError('Name cannot be empty'); return }
+    setNameBusy(true)
+    setNameError('')
+    try {
+      await cluster.onRename(name)
+      setEditingName(false)
+    } catch (e: any) {
+      setNameError(e?.message ?? 'Failed to rename')
+    } finally {
+      setNameBusy(false)
+    }
+  }
+  const clickDisconnect = () => {
+    if (!cluster) return
+    if (!confirmDisconnect) {
+      setConfirmDisconnect(true)
+      setDisconnectError('')
+      if (disconnectTimeoutRef.current) clearTimeout(disconnectTimeoutRef.current)
+      disconnectTimeoutRef.current = setTimeout(() => setConfirmDisconnect(false), 3000)
+      return
+    }
+    if (disconnectTimeoutRef.current) clearTimeout(disconnectTimeoutRef.current)
+    setConfirmDisconnect(false)
+    setDisconnectBusy(true)
+    cluster.onDisconnect().catch(e => setDisconnectError(e?.message ?? 'Failed to disconnect')).finally(() => setDisconnectBusy(false))
+  }
 
   const nodes = graph.nodes
 
@@ -151,6 +206,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
 
   const detailNodes = useMemo((): GraphNode[] => {
     if (!selectedId) return []
+    if (selectedId === 'issues') return d.alerts
     const typeMap: Record<string, string[]> = {
       'host-vm':          ['host'],
       'tile-k8snodes':    ['node'],
@@ -174,10 +230,22 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       base = base.filter(n => n.metadata?.namespace === nsFilter)
     }
     return base
-  }, [selectedId, nodes, nsFilter])
+  }, [selectedId, nodes, nsFilter, d.alerts])
 
   const groupInfo = useMemo((): GroupInfo | null => {
-    if (!detailTile || !detailNodes.length) return null
+    if (!detailNodes.length) return null
+    if (selectedId === 'issues') {
+      const hc = (h: string) => detailNodes.filter(n => n.health === h).length
+      return {
+        id: 'group:issues',
+        type: detailNodes[0]?.type ?? 'unknown',
+        label: 'Issues',
+        count: detailNodes.length,
+        healthCounts: { healthy: hc('healthy'), degraded: hc('degraded'), unhealthy: hc('unhealthy'), unknown: hc('unknown') },
+        nodes: detailNodes,
+      }
+    }
+    if (!detailTile) return null
     const iconToType: Record<string, string> = {
       'host':'host', 'k8s':'cluster', 'k8s-node':'node', 'docker':'container_runtime',
       'namespace':'namespace', 'deployment':'deployment', 'statefulset':'statefulset',
@@ -195,7 +263,7 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       healthCounts: { healthy: hc('healthy'), degraded: hc('degraded'), unhealthy: hc('unhealthy'), unknown: hc('unknown') },
       nodes: detailNodes,
     }
-  }, [detailTile, detailNodes])
+  }, [selectedId, detailTile, detailNodes])
 
   function handleTileClick(id: string) {
     // Host tile has exactly 1 node — skip the drawer, open detail directly
@@ -230,9 +298,31 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       <div style={{ flex:1, overflowY:'auto', minWidth:0 }}>
         {/* Page header */}
         <div style={{ padding:'28px 36px 20px', borderBottom:`1px solid ${T.line}` }}>
-          <h1 style={{ margin:0, fontSize:22, fontWeight:500, letterSpacing:'-0.025em', color:T.ink }}>
-            {hostname ?? 'Local machine'}
-          </h1>
+          {cluster && editingName ? (
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setEditingName(false) }}
+                disabled={nameBusy}
+                style={{ fontSize:22, fontWeight:500, letterSpacing:'-0.025em', color:T.ink, background:T.surface, border:`1px solid ${T.line2}`, borderRadius:6, padding:'2px 8px', fontFamily:SANS, minWidth:120 }}
+              />
+              <button onClick={submitRename} disabled={nameBusy} title="Save" style={iconBtnSmall}><Check size={14} /></button>
+              <button onClick={() => setEditingName(false)} disabled={nameBusy} title="Cancel" style={iconBtnSmall}><XIcon size={14} /></button>
+              {nameError && <span style={{ fontSize:11.5, color:H.unhealthy, fontFamily:MONO }}>{nameError}</span>}
+            </div>
+          ) : (
+            <h1 style={{ margin:0, fontSize:22, fontWeight:500, letterSpacing:'-0.025em', color:T.ink, display:'flex', alignItems:'center', gap:8 }}>
+              {hostname ?? 'Local machine'}
+              {cluster && (
+                <button onClick={startRename} title="Rename this cluster" style={{ ...iconBtnSmall, opacity:0.5 }}
+                  onMouseEnter={e=>{ (e.currentTarget as any).style.opacity = 1 }}
+                  onMouseLeave={e=>{ (e.currentTarget as any).style.opacity = 0.5 }}
+                ><Pencil size={13} /></button>
+              )}
+            </h1>
+          )}
           <div style={{ marginTop:7, display:'flex', alignItems:'center', gap:12, fontSize:12, color:T.ink3, fontFamily:MONO, flexWrap:'wrap' }}>
             {hostMeta.os   && <span>{hostMeta.os}</span>}
             {hostMeta.arch && <><DotSep /><span>{hostMeta.arch}</span></>}
@@ -253,17 +343,43 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
               </button>
             )}
             {d.alerts.length > 0 && (
-              <button style={{ display:'inline-flex', alignItems:'center', gap:5, height:28, padding:'0 10px', borderRadius:6, border:`1px solid ${(d.totalUnhealthy>0?H.unhealthy:H.degraded)+'40'}`, background:`${d.totalUnhealthy>0?H.unhealthy:H.degraded}12`, color:d.totalUnhealthy>0?H.unhealthy:H.degraded, fontSize:12, cursor:'default', fontFamily:SANS }}>
+              <button
+                onClick={() => selectedId === 'issues' ? closeAll() : handleTileClick('issues')}
+                style={{ display:'inline-flex', alignItems:'center', gap:5, height:28, padding:'0 10px', borderRadius:6, border:`1px solid ${(d.totalUnhealthy>0?H.unhealthy:H.degraded)+(selectedId==='issues'?'80':'40')}`, background:`${d.totalUnhealthy>0?H.unhealthy:H.degraded}${selectedId==='issues'?'1f':'12'}`, color:d.totalUnhealthy>0?H.unhealthy:H.degraded, fontSize:12, cursor:'pointer', fontFamily:SANS }}
+              >
                 <AlertTriangle size={12} strokeWidth={1.5} />
                 {d.alerts.length} issues
               </button>
+            )}
+            {cluster && (
+              <>
+                <button onClick={() => { setRoBusy(true); cluster.onToggleReadOnly().finally(() => setRoBusy(false)) }} disabled={roBusy} style={actionBtn} title={cluster.readOnly ? 'Read-only — click to allow writes' : 'Read-write — click to make read-only'}>
+                  {cluster.readOnly ? <Lock size={12} strokeWidth={1.5} /> : <Unlock size={12} strokeWidth={1.5} />}
+                  {cluster.readOnly ? 'Read-only' : 'Read-write'}
+                </button>
+                <button
+                  onClick={clickDisconnect}
+                  disabled={disconnectBusy}
+                  style={{ ...actionBtn, ...(confirmDisconnect ? { color:H.unhealthy, borderColor:`${H.unhealthy}60`, background:`${H.unhealthy}12` } : {}) }}
+                  title={confirmDisconnect ? 'Click again to disconnect' : 'Disconnect this cluster'}
+                >
+                  <Trash2 size={12} strokeWidth={1.5} />
+                  {confirmDisconnect ? 'Click again to confirm' : 'Disconnect'}
+                </button>
+                {disconnectError && <span style={{ fontSize:11.5, color:H.unhealthy, fontFamily:MONO }}>{disconnectError}</span>}
+              </>
             )}
           </div>
         </div>
 
         {/* Alert summary bar */}
         {d.alerts.length > 0 && (
-          <div style={{ margin:'12px 36px 0', padding:'10px 16px', background:T.surface, border:`1px solid ${T.line2}`, borderRadius:10, display:'flex', alignItems:'center', gap:10 }}>
+          <button
+            onClick={() => selectedId === 'issues' ? closeAll() : handleTileClick('issues')}
+            style={{ margin:'12px 36px 0', padding:'10px 16px', background:T.surface, border:`1px solid ${selectedId==='issues'?T.line3:T.line2}`, borderRadius:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer', width:'calc(100% - 72px)', textAlign:'left', fontFamily:SANS }}
+            onMouseEnter={e=>{ (e.currentTarget as any).style.background = T.surface2 }}
+            onMouseLeave={e=>{ (e.currentTarget as any).style.background = T.surface }}
+          >
             <AlertTriangle size={14} color={d.totalUnhealthy>0?H.unhealthy:H.degraded} strokeWidth={1.5} style={{ flexShrink:0 }} />
             <span style={{ fontSize:12.5, color:T.ink, fontWeight:500 }}>{d.alerts.length} issues detected</span>
             <span style={{ fontSize:11.5, color:T.ink3 }}>
@@ -271,7 +387,8 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
               {d.totalUnhealthy>0 && d.totalDegraded>0 && ' · '}
               {d.totalDegraded>0  && `${d.totalDegraded} degraded`}
             </span>
-          </div>
+            <span style={{ marginLeft:'auto', fontSize:11, color:T.ink4 }}>click to view →</span>
+          </button>
         )}
 
         {/* Topology tiers */}
@@ -410,4 +527,10 @@ const actionBtn: React.CSSProperties = {
   height:28, padding:'0 10px', borderRadius:6,
   border:`1px solid var(--line2)`, background:'var(--surface)',
   color:'var(--ink2)', fontSize:12, cursor:'pointer', fontFamily:"var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)",
+}
+
+const iconBtnSmall: React.CSSProperties = {
+  display:'inline-flex', alignItems:'center', justifyContent:'center',
+  width:24, height:24, borderRadius:6, border:'none', background:'transparent',
+  color:'var(--ink3)', cursor:'pointer', padding:0,
 }

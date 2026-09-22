@@ -157,6 +157,16 @@ func (s *SessionStore) MarkOffline(sess *Session) {
 	sess.LastSeen = time.Now()
 }
 
+// SetHostname updates a session's display name in place — used when a
+// Clusters connection is renamed, so the sidebar/overview reflect the new
+// name immediately instead of waiting for the virtual agent to reconnect
+// and re-send its original HELLO.
+func (s *SessionStore) SetHostname(sess *Session, hostname string) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	sess.Hostname = hostname
+}
+
 func (s *SessionStore) FindByCode(code string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

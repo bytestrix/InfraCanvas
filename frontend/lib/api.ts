@@ -71,6 +71,17 @@ export async function setClusterReadOnly(id: string, readOnly: boolean): Promise
   return res.json()
 }
 
+// Renames a connected cluster's display name (sidebar + overview page).
+export async function renameCluster(id: string, name: string): Promise<ClusterEntry> {
+  const res = await fetch(`/api/clusters/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error((await res.text()) || `clusters: HTTP ${res.status}`)
+  return res.json()
+}
+
 export interface PermissionPreview {
   canView: boolean
   canViewSecrets: boolean

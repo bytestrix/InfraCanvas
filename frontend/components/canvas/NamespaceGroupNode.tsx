@@ -6,15 +6,20 @@ import { InfraNodeData } from './InfraNode'
 import NodeSvgIcon from './NodeSvgIcon'
 
 /**
- * Namespace group node — renders as a labeled container that wraps child nodes.
- * ReactFlow positions child nodes (with parentNode: this.id) inside this box.
+ * Namespace group node — a standalone card, same footprint as InfraNode.
+ * Every caller constructs it with a fixed 220×100 (see buildGroupedGraph /
+ * buildFlatFlowElements), so it sizes itself explicitly rather than via
+ * width/height:'100%' — ReactFlow doesn't apply the node's width/height
+ * data fields as inline CSS on the wrapper, so percentage sizing here
+ * collapsed the whole card to a few pixels (nothing but Handles and
+ * absolutely-positioned children contribute to intrinsic size).
  */
 export default function NamespaceGroupNode({ data, selected }: NodeProps<InfraNodeData>) {
   const healthDot = data.health === 'healthy' ? 'var(--ink)' : data.health === 'degraded' ? 'var(--ink3)' : 'var(--line3)'
 
   return (
     <div style={{
-      width: '100%', height: '100%', borderRadius: 10,
+      width: 220, height: 100, borderRadius: 10,
       border: `1px dashed ${selected ? 'var(--ink2)' : 'var(--line2)'}`,
       background: 'var(--surface-2)',
       position: 'relative', boxSizing: 'border-box', pointerEvents: 'all',
