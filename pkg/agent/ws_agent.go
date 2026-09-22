@@ -35,6 +35,9 @@ type WSConfig struct {
 	RefreshSeconds  int      // how often to re-discover and send diffs (default 30)
 	TLSInsecure     bool
 	EnableRedaction bool
+	// AutoDiscoverLocalKubeconfig controls whether local kubeconfig contexts are
+	// auto-discovered when in-cluster config is unavailable.
+	AutoDiscoverLocalKubeconfig bool
 	// QuietPairBanner suppresses the "Pair code: …" stdout banner. Used when
 	// the agent runs in-process under `infracanvas serve`, where pair codes
 	// are irrelevant (local auto-pair).
@@ -73,10 +76,11 @@ type WSConfig struct {
 // DefaultWSConfig returns sensible defaults.
 func DefaultWSConfig() *WSConfig {
 	return &WSConfig{
-		BackendURL:      "ws://localhost:8080",
-		Scope:           []string{"host", "docker"},
-		RefreshSeconds:  30,
-		EnableRedaction: true,
+		BackendURL:                  "ws://localhost:8080",
+		Scope:                       []string{"host", "docker"},
+		RefreshSeconds:              30,
+		EnableRedaction:             true,
+		AutoDiscoverLocalKubeconfig: true,
 	}
 }
 
@@ -166,9 +170,9 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 		cfg.Scope = []string{"host", "docker"}
 	}
 
-	orch := orchestrator.NewOrchestrator(cfg.EnableRedaction)
+	orch := orchestrator.NewOrchestratorWithLocalKubeconfigAutoDiscovery(cfg.EnableRedaction, cfg.AutoDiscoverLocalKubeconfig)
 
-	executor, err := actions.NewActionExecutor()
+	executor, err := actions.NewActionExecutorWithLocalKubeconfigAutoDiscovery(cfg.AutoDiscoverLocalKubeconfig)
 	if err != nil {
 		log.Printf("[agent] Warning: action executor init failed: %v", err)
 	}

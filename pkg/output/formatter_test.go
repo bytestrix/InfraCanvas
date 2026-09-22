@@ -126,6 +126,40 @@ func TestJSONFormatter(t *testing.T) {
 	}
 }
 
+func TestGraphFormatter_LocalKubeconfigAutoDiscovery(t *testing.T) {
+	snapshot := createTestSnapshot()
+	snapshot.Metadata.LocalKubeconfigAutoDiscovery = models.LocalKubeconfigAutoDiscovery{
+		Enabled:            true,
+		Ran:                true,
+		DiscoveredContexts: 3,
+		ConnectedContexts:  1,
+	}
+
+	formatter := &GraphFormatter{}
+	raw, err := formatter.Format(snapshot)
+	if err != nil {
+		t.Fatalf("GraphFormatter.Format() error = %v", err)
+	}
+
+	var out GraphOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("failed to unmarshal graph output: %v", err)
+	}
+
+	if !out.Snapshot.LocalKubeconfigAutoDiscovery.Enabled {
+		t.Fatal("expected local kubeconfig auto-discovery to be enabled in graph snapshot")
+	}
+	if !out.Snapshot.LocalKubeconfigAutoDiscovery.Ran {
+		t.Fatal("expected local kubeconfig auto-discovery to be marked as ran")
+	}
+	if out.Snapshot.LocalKubeconfigAutoDiscovery.DiscoveredContexts != 3 {
+		t.Fatalf("expected discovered contexts 3, got %d", out.Snapshot.LocalKubeconfigAutoDiscovery.DiscoveredContexts)
+	}
+	if out.Snapshot.LocalKubeconfigAutoDiscovery.ConnectedContexts != 1 {
+		t.Fatalf("expected connected contexts 1, got %d", out.Snapshot.LocalKubeconfigAutoDiscovery.ConnectedContexts)
+	}
+}
+
 func TestJSONFormatterCompact(t *testing.T) {
 	snapshot := createTestSnapshot()
 	formatter := &JSONFormatter{PrettyPrint: false}

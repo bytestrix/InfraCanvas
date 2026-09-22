@@ -41,10 +41,20 @@ type InfraSnapshot struct {
 
 // SnapshotMetadata contains metadata about the snapshot collection
 type SnapshotMetadata struct {
-	CollectionDuration time.Duration     `json:"collection_duration"`
-	Scope              []string          `json:"scope"`
-	Errors             []CollectionError `json:"errors,omitempty"`
-	PermissionIssues   []string          `json:"permission_issues,omitempty"`
+	CollectionDuration           time.Duration                `json:"collection_duration"`
+	Scope                        []string                     `json:"scope"`
+	Errors                       []CollectionError            `json:"errors,omitempty"`
+	PermissionIssues             []string                     `json:"permission_issues,omitempty"`
+	LocalKubeconfigAutoDiscovery LocalKubeconfigAutoDiscovery `json:"local_kubeconfig_auto_discovery"`
+}
+
+// LocalKubeconfigAutoDiscovery describes local kubeconfig auto-discovery
+// behavior for this snapshot.
+type LocalKubeconfigAutoDiscovery struct {
+	Enabled            bool `json:"enabled"`
+	Ran                bool `json:"ran"`
+	DiscoveredContexts int  `json:"discovered_contexts"`
+	ConnectedContexts  int  `json:"connected_contexts"`
 }
 
 // CollectionError represents an error that occurred during collection

@@ -20,9 +20,17 @@ type GraphOutput struct {
 }
 
 type GraphSnapshot struct {
-	HostID             string  `json:"hostId"`
-	Timestamp          string  `json:"timestamp"`
-	CollectionDuration float64 `json:"collectionDuration"` // in seconds
+	HostID                       string                            `json:"hostId"`
+	Timestamp                    string                            `json:"timestamp"`
+	CollectionDuration           float64                           `json:"collectionDuration"` // in seconds
+	LocalKubeconfigAutoDiscovery GraphLocalKubeconfigAutoDiscovery `json:"localKubeconfigAutoDiscovery"`
+}
+
+type GraphLocalKubeconfigAutoDiscovery struct {
+	Enabled            bool `json:"enabled"`
+	Ran                bool `json:"ran"`
+	DiscoveredContexts int  `json:"discoveredContexts"`
+	ConnectedContexts  int  `json:"connectedContexts"`
 }
 
 type GraphNode struct {
@@ -63,6 +71,12 @@ func (f *GraphFormatter) Format(snapshot *models.InfraSnapshot) ([]byte, error) 
 			HostID:             snapshot.HostID,
 			Timestamp:          snapshot.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
 			CollectionDuration: snapshot.Metadata.CollectionDuration.Seconds(),
+			LocalKubeconfigAutoDiscovery: GraphLocalKubeconfigAutoDiscovery{
+				Enabled:            snapshot.Metadata.LocalKubeconfigAutoDiscovery.Enabled,
+				Ran:                snapshot.Metadata.LocalKubeconfigAutoDiscovery.Ran,
+				DiscoveredContexts: snapshot.Metadata.LocalKubeconfigAutoDiscovery.DiscoveredContexts,
+				ConnectedContexts:  snapshot.Metadata.LocalKubeconfigAutoDiscovery.ConnectedContexts,
+			},
 		},
 		Nodes: []GraphNode{},
 		Edges: []GraphEdge{},
