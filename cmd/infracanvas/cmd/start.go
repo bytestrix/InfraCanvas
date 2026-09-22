@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
-	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
 	"infracanvas/pkg/discovery/lxd"
+
+	"github.com/spf13/cobra"
 )
 
 // containsStr reports whether s is present in xs.
@@ -21,11 +23,12 @@ func containsStr(xs []string, s string) bool {
 }
 
 var (
-	backendURL     string
-	agentToken     string
-	refreshSeconds int
-	tlsInsecure    bool
-	noRedact       bool
+	backendURL                   string
+	agentToken                   string
+	refreshSeconds               int
+	tlsInsecure                  bool
+	noRedact                     bool
+	startDiscoverLocalKubeconfig bool
 )
 
 var startCmd = &cobra.Command{
@@ -43,9 +46,10 @@ Run this on the machine you want to observe:
 Then open the canvas UI and enter the displayed pair code.
 
 Environment variables:
-  INFRACANVAS_BACKEND   Override --backend
-  INFRACANVAS_SCOPE     Override --scope (comma-separated)
-  INFRACANVAS_TOKEN     Override --token (shared secret)`,
+  INFRACANVAS_BACKEND                         Override --backend
+  INFRACANVAS_SCOPE                           Override --scope (comma-separated)
+  INFRACANVAS_TOKEN                           Override --token (shared secret)
+  INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG       Override --discover-local-kubeconfig`,
 	RunE: runStart,
 }
 
@@ -57,6 +61,7 @@ func init() {
 	startCmd.Flags().IntVar(&refreshSeconds, "refresh", 30, "Seconds between refresh cycles")
 	startCmd.Flags().BoolVar(&tlsInsecure, "tls-insecure", false, "Skip TLS certificate verification")
 	startCmd.Flags().BoolVar(&noRedact, "no-redact", false, "Disable sensitive data redaction")
+	startCmd.Flags().BoolVar(&startDiscoverLocalKubeconfig, "discover-local-kubeconfig", true, "Auto-discover local kubeconfig contexts when in-cluster config is unavailable")
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
@@ -82,6 +87,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Override scope from env if set.
 	if envScope := os.Getenv("INFRACANVAS_SCOPE"); envScope != "" {
 		cfg.Scope = splitComma(envScope)
+	}
+	cfg.AutoDiscoverLocalKubeconfig = startDiscoverLocalKubeconfig
+	if v, ok := parseBoolEnv("INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG"); ok {
+		cfg.AutoDiscoverLocalKubeconfig = v
 	}
 
 	// Zero-config LXC/LXD/Incus: the install script pins a fixed scope
@@ -130,4 +139,16 @@ func splitOn(s string, sep rune) []string {
 	}
 	parts = append(parts, s[start:])
 	return parts
+}
+
+func parseBoolEnv(key string) (bool, bool) {
+	v := os.Getenv(key)
+	if v == "" {
+		return false, false
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, false
+	}
+	return parsed, true
 }

@@ -3,9 +3,9 @@ package actions
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
+
+	k8sdiscovery "infracanvas/pkg/discovery/kubernetes"
 
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // KubernetesExecutor handles actions on Kubernetes resources
@@ -26,7 +25,14 @@ type KubernetesExecutor struct {
 // NewKubernetesExecutor creates a new Kubernetes executor, resolving the
 // kubeconfig from the local host.
 func NewKubernetesExecutor() (*KubernetesExecutor, error) {
-	config, err := getKubeConfig()
+	return NewKubernetesExecutorWithLocalKubeconfigAutoDiscovery(true)
+}
+
+// NewKubernetesExecutorWithLocalKubeconfigAutoDiscovery creates a new
+// Kubernetes executor and controls whether local kubeconfig auto-discovery is
+// allowed when in-cluster config is unavailable.
+func NewKubernetesExecutorWithLocalKubeconfigAutoDiscovery(localKubeconfigAutoDiscovery bool) (*KubernetesExecutor, error) {
+	config, _, err := k8sdiscovery.ResolveKubeConfig(localKubeconfigAutoDiscovery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
@@ -54,38 +60,6 @@ func NewKubernetesExecutorFromConfig(config *rest.Config) (*KubernetesExecutor, 
 		dynamicClient: dynClient,
 		config:        config,
 	}, nil
-}
-
-// getKubeConfig attempts to load kubeconfig from multiple sources
-func getKubeConfig() (*rest.Config, error) {
-	// 1. Try in-cluster config first
-	config, err := rest.InClusterConfig()
-	if err == nil {
-		return config, nil
-	}
-
-	// 2. Try KUBECONFIG environment variable
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath != "" {
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-		if err == nil {
-			return config, nil
-		}
-	}
-
-	// 3. Try default kubeconfig location
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		defaultKubeconfig := filepath.Join(homeDir, ".kube", "config")
-		if _, err := os.Stat(defaultKubeconfig); err == nil {
-			config, err := clientcmd.BuildConfigFromFlags("", defaultKubeconfig)
-			if err == nil {
-				return config, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("unable to load kubeconfig from any source")
 }
 
 // ValidateAction validates a Kubernetes action

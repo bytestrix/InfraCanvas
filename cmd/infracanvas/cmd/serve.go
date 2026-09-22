@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
 	"infracanvas/pkg/agent"
 	"infracanvas/pkg/audit"
 	"infracanvas/pkg/clustermgr"
@@ -24,6 +23,8 @@ import (
 	"infracanvas/pkg/server"
 	"infracanvas/pkg/tunnel"
 	"infracanvas/pkg/webui"
+
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -32,14 +33,15 @@ const (
 )
 
 var (
-	servePort       int
-	servePrivate    bool
-	serveNoTunnel   bool
-	serveReadOnly   bool
-	serveUIToken    string
-	serveAgentToken string
-	serveScope      []string
-	serveRefresh    int
+	servePort                    int
+	servePrivate                 bool
+	serveNoTunnel                bool
+	serveReadOnly                bool
+	serveUIToken                 string
+	serveAgentToken              string
+	serveScope                   []string
+	serveRefresh                 int
+	serveDiscoverLocalKubeconfig bool
 )
 
 var serveCmd = &cobra.Command{
@@ -65,7 +67,9 @@ and it appears in the sidebar's machine list.
 Environment variables:
   INFRACANVAS_UI_TOKEN     Auth token (default: random per run)
   INFRACANVAS_AGENT_TOKEN  Join token other VMs use (default: random per run)
-  INFRACANVAS_SCOPE        Discovery scopes (default: host,docker,kubernetes)`,
+  INFRACANVAS_SCOPE        Discovery scopes (default: host,docker,kubernetes)
+  INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG
+                           Override --discover-local-kubeconfig`,
 	RunE: runServe,
 }
 
@@ -79,6 +83,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveAgentToken, "agent-token", "", "Override the join token other VMs use to connect")
 	serveCmd.Flags().StringSliceVar(&serveScope, "discover", []string{"host", "docker", "lxd", "kubernetes"}, "Discovery scopes")
 	serveCmd.Flags().IntVar(&serveRefresh, "refresh", 30, "Seconds between discovery refreshes")
+	serveCmd.Flags().BoolVar(&serveDiscoverLocalKubeconfig, "discover-local-kubeconfig", true, "Auto-discover local kubeconfig contexts when in-cluster config is unavailable")
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
@@ -217,6 +222,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	cfg.RefreshSeconds = serveRefresh
 	cfg.EnableRedaction = true
 	cfg.QuietPairBanner = true
+	cfg.AutoDiscoverLocalKubeconfig = serveDiscoverLocalKubeconfig
+	if v, ok := parseBoolEnv("INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG"); ok {
+		cfg.AutoDiscoverLocalKubeconfig = v
+	}
 
 	for {
 		if ctx.Err() != nil {

@@ -14,24 +14,35 @@ import (
 	"infracanvas/pkg/discovery/lxd"
 	"infracanvas/pkg/health"
 	"infracanvas/pkg/relationships"
+
 	"k8s.io/client-go/rest"
 )
 
 // Orchestrator coordinates discovery across multiple layers
 type Orchestrator struct {
-	hostDiscovery       *host.Discovery
-	dockerDiscovery     *docker.Discovery
-	kubernetesDiscovery *kubernetes.Discovery
-	lxdDiscovery        *lxd.Discovery
-	relationshipBuilder *relationships.Builder
-	healthCalculator    *health.Calculator
-	redactor            *redactor.Redactor
+	hostDiscovery                *host.Discovery
+	dockerDiscovery              *docker.Discovery
+	kubernetesDiscovery          *kubernetes.Discovery
+	localKubeconfigAutoDiscovery models.LocalKubeconfigAutoDiscovery
+	lxdDiscovery                 *lxd.Discovery
+	relationshipBuilder          *relationships.Builder
+	healthCalculator             *health.Calculator
+	redactor                     *redactor.Redactor
 }
 
 // NewOrchestrator creates a new discovery orchestrator
 func NewOrchestrator(enableRedaction bool) *Orchestrator {
+	return NewOrchestratorWithLocalKubeconfigAutoDiscovery(enableRedaction, true)
+}
+
+// NewOrchestratorWithLocalKubeconfigAutoDiscovery creates a new discovery
+// orchestrator and controls whether local kubeconfig auto-discovery is enabled.
+func NewOrchestratorWithLocalKubeconfigAutoDiscovery(enableRedaction bool, localKubeconfigAutoDiscovery bool) *Orchestrator {
 	return &Orchestrator{
-		hostDiscovery:       host.NewDiscovery(),
+		hostDiscovery: host.NewDiscovery(),
+		localKubeconfigAutoDiscovery: models.LocalKubeconfigAutoDiscovery{
+			Enabled: localKubeconfigAutoDiscovery,
+		},
 		relationshipBuilder: relationships.NewBuilder(),
 		healthCalculator:    health.NewCalculator(),
 		redactor:            redactor.NewRedactor(enableRedaction),
@@ -66,8 +77,9 @@ func (o *Orchestrator) Discover(ctx context.Context, scope []string) (*models.In
 		Entities:  make(map[string]models.Entity),
 		Relations: []models.Relation{},
 		Metadata: models.SnapshotMetadata{
-			Scope:  scope,
-			Errors: []models.CollectionError{},
+			Scope:                        scope,
+			Errors:                       []models.CollectionError{},
+			LocalKubeconfigAutoDiscovery: o.localKubeconfigAutoDiscovery,
 		},
 	}
 
@@ -278,7 +290,10 @@ func (o *Orchestrator) discoverKubernetes(snapshot *models.InfraSnapshot, mu *sy
 	// Initialize Kubernetes discovery if not already done
 	if o.kubernetesDiscovery == nil {
 		var err error
-		o.kubernetesDiscovery, err = kubernetes.NewDiscovery()
+		var info models.LocalKubeconfigAutoDiscovery
+		o.kubernetesDiscovery, info, err = kubernetes.NewDiscoveryWithLocalKubeconfigAutoDiscovery(o.localKubeconfigAutoDiscovery.Enabled)
+		o.localKubeconfigAutoDiscovery = info
+		snapshot.Metadata.LocalKubeconfigAutoDiscovery = info
 		if err != nil {
 			return fmt.Errorf("failed to initialize Kubernetes discovery: %w", err)
 		}
@@ -300,6 +315,10 @@ func (o *Orchestrator) discoverKubernetes(snapshot *models.InfraSnapshot, mu *sy
 	// Add cluster entity
 	if cluster != nil {
 		snapshot.Entities[cluster.ID] = cluster
+	}
+	if o.localKubeconfigAutoDiscovery.Ran && o.localKubeconfigAutoDiscovery.DiscoveredContexts > 0 {
+		o.localKubeconfigAutoDiscovery.ConnectedContexts = o.kubernetesDiscovery.ConnectedContexts()
+		snapshot.Metadata.LocalKubeconfigAutoDiscovery = o.localKubeconfigAutoDiscovery
 	}
 
 	// Add nodes

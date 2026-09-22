@@ -13,6 +13,7 @@ import type { SessionInfo } from '@/types'
 
 const LOCAL_KEY = 'local'
 const SESSIONS_POLL_MS = 10_000
+const LOCAL_KUBECONFIG_NOTICE_KEY = 'ic-local-kubeconfig-autodiscovery-notice-v1'
 
 // The websocket/store key for a machine: the hub's own agent uses the
 // 'local' alias, remote agents their session id.
@@ -687,6 +688,76 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
 function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: string; view: View; onSwitchToCanvas: () => void }) {
   const isLoading = !vm || vm.status === 'connecting' || vm.status === 'paired'
   const isError   = vm?.status === 'error'
+  const localKubeconfigAuto = vm?.graph?.snapshot?.localKubeconfigAutoDiscovery
+  const [showLocalKubeconfigNotice, setShowLocalKubeconfigNotice] = useState(false)
+  const [connectedLocalContexts, setConnectedLocalContexts] = useState(0)
+
+  useEffect(() => {
+    const shouldShow = vmKey === LOCAL_KEY &&
+        !!localKubeconfigAuto?.enabled &&
+        !!localKubeconfigAuto?.ran &&
+        (localKubeconfigAuto?.discoveredContexts ?? 0) > 0 &&
+        (localKubeconfigAuto?.connectedContexts ?? 0) > 0
+
+    if (!shouldShow || typeof window === 'undefined') {
+      setShowLocalKubeconfigNotice(false)
+      return
+    }
+    if (window.localStorage.getItem(LOCAL_KUBECONFIG_NOTICE_KEY) === '1') {
+      setShowLocalKubeconfigNotice(false)
+      return
+    }
+
+    setConnectedLocalContexts(localKubeconfigAuto.connectedContexts)
+    setShowLocalKubeconfigNotice(true)
+  }, [
+    vmKey,
+    localKubeconfigAuto?.enabled,
+    localKubeconfigAuto?.ran,
+    localKubeconfigAuto?.discoveredContexts,
+    localKubeconfigAuto?.connectedContexts,
+  ])
+
+  const dismissLocalKubeconfigNotice = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LOCAL_KUBECONFIG_NOTICE_KEY, '1')
+    }
+    setShowLocalKubeconfigNotice(false)
+  }
+
+  const notice = showLocalKubeconfigNotice ? (
+      <div style={{
+        margin:'14px 16px 0',
+        padding:'10px 12px',
+        borderRadius:10,
+        border:`1px solid ${T.line}`,
+        background:T.surface,
+        display:'flex',
+        alignItems:'center',
+        justifyContent:'space-between',
+        gap:12,
+      }}>
+        <div style={{ fontSize:12.5, color:T.ink2 }}>
+          Connected to {connectedLocalContexts} local Kubernetes context{connectedLocalContexts === 1 ? '' : 's'} from your kubeconfig.
+        </div>
+        <button
+            onClick={dismissLocalKubeconfigNotice}
+            style={{
+              border:`1px solid ${T.line2}`,
+              background:'transparent',
+              color:T.ink3,
+              borderRadius:7,
+              cursor:'pointer',
+              fontSize:11.5,
+              padding:'4px 8px',
+              fontFamily:MONO,
+              flexShrink:0,
+            }}
+        >
+          Dismiss
+        </button>
+      </div>
+  ) : null
 
   if (isError) {
     return <ErrorContent message={vm.error ?? 'Connection failed'} />
@@ -700,6 +771,7 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
     if (isLoading) return <LoadingContent />
     return (
       <div style={{ flex:1, position:'relative', height:'100%', overflow:'hidden' }}>
+        {notice}
         <InfraCanvas vm={vm} />
       </div>
     )
@@ -708,12 +780,17 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas }: { vm: any; vmKey: st
   if (isLoading || !vm?.graph) return <LoadingContent />
 
   return (
-    <AgentOverview
-      graph={vm.graph}
-      hostname={vm.hostname ?? null}
-      vmCode={vmKey}
-      onSwitchToCanvas={onSwitchToCanvas}
-    />
+      <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column' }}>
+        {notice}
+        <div style={{ flex:1, minHeight:0 }}>
+          <AgentOverview
+              graph={vm.graph}
+              hostname={vm.hostname ?? null}
+              vmCode={vmKey}
+              onSwitchToCanvas={onSwitchToCanvas}
+          />
+        </div>
+      </div>
   )
 }
 
