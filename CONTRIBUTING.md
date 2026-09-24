@@ -4,7 +4,7 @@ Thank you for your interest in contributing. This document covers how to set up 
 
 ## Development setup
 
-**Requirements:** Go 1.21+, Node.js 20+
+**Requirements:** Go 1.25+ (see `go.mod`), Node.js 20+
 
 ```bash
 git clone https://github.com/bytestrix/InfraCanvas.git
@@ -17,7 +17,7 @@ make all
 make test
 
 # Run the dashboard locally
-./bin/infracanvas       # → http://localhost:7777/?token=…
+./bin/infracanvas serve --no-tunnel --private   # → http://localhost:7777/?token=…
 ```
 
 Frontend-only iteration (against a separately running binary):
