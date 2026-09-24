@@ -126,8 +126,9 @@ type WSAgent struct {
 	connMu         sync.Mutex
 	lastGraph      *output.GraphOutput
 	lastGraphMu    sync.RWMutex
-	execSessions   sync.Map // sessionID → *execSession
-	pfSessions     sync.Map // key (ns/pod:local) → *actions.PortForwardSession
+	discoverMu     sync.Mutex // one discovery pass at a time
+	execSessions   sync.Map   // sessionID → *execSession
+	pfSessions     sync.Map   // key (ns/pod:local) → *actions.PortForwardSession
 
 	// resumeSecret proves ownership of this agent's MachineID on reconnect —
 	// required since the shared hub join token alone doesn't distinguish one
@@ -285,12 +286,17 @@ func (a *WSAgent) Run(ctx context.Context) error {
 		a.setLastGraph(snap, graph)
 	}
 
-	// Periodic refresh ticker.
-	ticker := time.NewTicker(time.Duration(a.cfg.RefreshSeconds) * time.Second)
-	defer ticker.Stop()
+	// Periodic discovery runs in its own goroutine. A pass takes seconds
+	// (docker, /proc, remote API servers), and running it in the select loop
+	// below stalled command handling for that long: terminal keystrokes
+	// queued up and then arrived all at once.
+	go a.refreshLoop(ctx)
 
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
+
+	inputs := newExecInputQueues(a)
+	defer inputs.closeAll()
 
 	for {
 		select {
@@ -301,6 +307,31 @@ func (a *WSAgent) Run(ctx context.Context) error {
 			_ = a.send("HEARTBEAT", map[string]string{
 				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
+
+		case env := <-commandCh:
+			switch env.Type {
+			case "EXEC_INPUT":
+				inputs.enqueue(env.Data)
+			case "EXEC_END":
+				inputs.close(env.Data)
+				a.handleServerCommand(ctx, env)
+			default:
+				a.handleServerCommand(ctx, env)
+			}
+		}
+	}
+}
+
+// refreshLoop runs discovery every RefreshSeconds and sends the result as a
+// diff (or as a snapshot if browsers haven't had one yet).
+func (a *WSAgent) refreshLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Duration(a.cfg.RefreshSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
 
 		case <-ticker.C:
 			snap, graph, err := a.collectAndFormatGraph(ctx)
@@ -326,9 +357,6 @@ func (a *WSAgent) Run(ctx context.Context) error {
 				}
 			}
 			a.setLastGraph(snap, graph)
-
-		case env := <-commandCh:
-			a.handleServerCommand(ctx, env)
 		}
 	}
 }
@@ -554,6 +582,8 @@ func discoveryResult(snap *models.InfraSnapshot, err error) error {
 }
 
 func (a *WSAgent) collectAndFormatGraph(ctx context.Context) (*models.InfraSnapshot, *output.GraphOutput, error) {
+	a.discoverMu.Lock()
+	defer a.discoverMu.Unlock()
 	snap, err := a.orch.Discover(ctx, a.cfg.Scope)
 	if err != nil {
 		return nil, nil, fmt.Errorf("discovery failed: %w", err)
@@ -1364,6 +1394,57 @@ func (a *WSAgent) loadExecSession(sessionID string) (*execSession, bool) {
 			return nil, false
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// execInputQueues gives each terminal session a single writer goroutine so
+// keystrokes reach the PTY in the order they were typed, without the read
+// loop waiting on a slow write. All methods are called from Run's select
+// loop only, so enqueue and close never race.
+type execInputQueues struct {
+	a      *WSAgent
+	queues map[string]chan json.RawMessage
+}
+
+func newExecInputQueues(a *WSAgent) *execInputQueues {
+	return &execInputQueues{a: a, queues: make(map[string]chan json.RawMessage)}
+}
+
+func execSessionID(data json.RawMessage) string {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(data, &req)
+	return req.SessionID
+}
+
+func (q *execInputQueues) enqueue(data json.RawMessage) {
+	id := execSessionID(data)
+	ch, ok := q.queues[id]
+	if !ok {
+		ch = make(chan json.RawMessage, 256)
+		q.queues[id] = ch
+		go func() {
+			for d := range ch {
+				q.a.handleExecInput(d)
+			}
+		}()
+	}
+	ch <- data
+}
+
+func (q *execInputQueues) close(data json.RawMessage) {
+	id := execSessionID(data)
+	if ch, ok := q.queues[id]; ok {
+		close(ch)
+		delete(q.queues, id)
+	}
+}
+
+func (q *execInputQueues) closeAll() {
+	for id, ch := range q.queues {
+		close(ch)
+		delete(q.queues, id)
 	}
 }
 
