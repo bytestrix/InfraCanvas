@@ -9,9 +9,10 @@
 #   --private       Imply --no-tunnel and bind 127.0.0.1 (SSH-tunnel only)
 #   --read-only     Viewers can look but not touch: actions and terminals
 #                   are blocked server-side (for public demos)
-#   --run-user <U>  Run the systemd service as this user (default: auto-detect
-#                   from $SUDO_USER, then any user with ~/.kube/config, then
-#                   any user in the docker group; falls back to root)
+#   --run-user <U>  Run the systemd service as this user (default: the user
+#                   running the installer, or $SUDO_USER under sudo; if run as
+#                   root directly, a user with ~/.kube/config, then one in the
+#                   docker group; falls back to root)
 #   --version <V>   Install a specific release tag (default: latest)
 #   --join <URL>    Agent-only install: connect this VM to an existing
 #                   InfraCanvas hub instead of running its own dashboard.
@@ -248,10 +249,12 @@ fi
 # Cascade:
 #   1. --run-user flag (explicit override)
 #   2. $SUDO_USER (when run via plain `sudo …/install.sh`)
-#   3. First non-root user in /home/* whose ~/.kube/config is readable
-#   4. First non-root user in /home/* who is a member of the docker group
-#   5. First non-root user with a real shell in /home/*
-#   6. root (last resort — Kubernetes/Docker discovery may be empty)
+#   3. The invoking user, when the script itself isn't running as root
+#      (`curl … | bash` as a normal user; run_priv sudo's each step)
+#   4. First non-root user in /home/* whose ~/.kube/config is readable
+#   5. First non-root user in /home/* who is a member of the docker group
+#   6. First non-root user with a real shell in /home/*
+#   7. root (last resort — Kubernetes/Docker discovery may be empty)
 pick_run_user() {
   local u
   if [[ -n "$RUN_USER_OVERRIDE" ]]; then
@@ -263,6 +266,9 @@ pick_run_user() {
   if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]] \
        && getent passwd "$SUDO_USER" >/dev/null 2>&1; then
     echo "$SUDO_USER"; return
+  fi
+  if [[ $EUID -ne 0 ]]; then
+    id -un; return
   fi
   # Scan /home for a candidate
   for h in /home/*/; do
@@ -328,7 +334,9 @@ if [[ -n "$JOIN_URL" ]]; then
   EXEC_START="${INSTALL_DIR}/infracanvas start"
   UNIT_DESC="InfraCanvas agent (streaming to hub)"
 else
-  EXEC_START="${INSTALL_DIR}/infracanvas serve --port \${INFRACANVAS_PORT}${SERVE_FLAGS}"
+  # Tunnel, private and read-only come from config.env (EnvironmentFile), so
+  # editing that file and restarting the service changes them.
+  EXEC_START="${INSTALL_DIR}/infracanvas serve --port \${INFRACANVAS_PORT}"
   UNIT_DESC="InfraCanvas dashboard and agent"
 fi
 
