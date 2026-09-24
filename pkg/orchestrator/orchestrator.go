@@ -300,8 +300,8 @@ func (o *Orchestrator) discoverKubernetes(snapshot *models.InfraSnapshot, mu *sy
 	}
 
 	// Check if Kubernetes is available
-	if !o.kubernetesDiscovery.IsAvailable() {
-		return fmt.Errorf("Kubernetes is not available")
+	if err := o.kubernetesDiscovery.Ping(); err != nil {
+		return err
 	}
 
 	cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, storageclasses, events, err := o.kubernetesDiscovery.DiscoverAll()
@@ -315,6 +315,9 @@ func (o *Orchestrator) discoverKubernetes(snapshot *models.InfraSnapshot, mu *sy
 	// Add cluster entity
 	if cluster != nil {
 		snapshot.Entities[cluster.ID] = cluster
+	}
+	for _, kind := range o.kubernetesDiscovery.Skipped() {
+		snapshot.Metadata.PermissionIssues = append(snapshot.Metadata.PermissionIssues, "kubernetes: no permission to list "+kind)
 	}
 	if o.localKubeconfigAutoDiscovery.Ran && o.localKubeconfigAutoDiscovery.DiscoveredContexts > 0 {
 		o.localKubeconfigAutoDiscovery.ConnectedContexts = o.kubernetesDiscovery.ConnectedContexts()

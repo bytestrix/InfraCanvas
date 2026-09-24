@@ -36,6 +36,7 @@ const (
 	MsgLogData        = "LOG_DATA"
 	MsgExecData       = "EXEC_DATA"
 	MsgExecEnd        = "EXEC_END"
+	MsgDiscoveryError = "DISCOVERY_ERROR"
 
 	// Server → Agent (and Browser → Server → Agent)
 	MsgPairCode      = "PAIR_CODE"
@@ -386,9 +387,9 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/api/sessions", s.requireUIToken(s.handleSessions))
 	s.mux.HandleFunc("/api/audit", s.requireUIToken(s.handleAudit))
 	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
-	s.mux.HandleFunc("/api/clusters", s.requireUIOrAgentToken(s.handleClusters))
-	s.mux.HandleFunc("/api/clusters/preview", s.requireUIOrAgentToken(s.handleClusterPreview))
-	s.mux.HandleFunc("/api/clusters/", s.requireUIOrAgentToken(s.handleClusterByID))
+	s.mux.HandleFunc("/api/clusters", s.requireUIToken(s.handleClusters))
+	s.mux.HandleFunc("/api/clusters/preview", s.requireUIToken(s.handleClusterPreview))
+	s.mux.HandleFunc("/api/clusters/", s.requireUIToken(s.handleClusterByID))
 	return s
 }
 
@@ -748,9 +749,9 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 
 // handleClusterPreview serves POST /api/clusters/preview — checks what a
 // kubeconfig context can actually do (view, exec, restart, scale, read
-// secrets) before the user commits to connecting it. Read-only in every
-// sense: no cluster is added, no virtual agent starts, nothing is persisted,
-// so this is allowed even in --read-only mode.
+// secrets) before the user commits to connecting it. Nothing is persisted,
+// but calling the API server runs the kubeconfig's auth, including any
+// `exec:` credential plugin, so read-only mode blocks it the same as Add.
 func (s *Server) handleClusterPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -768,6 +769,10 @@ func (s *Server) handleClusterPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.Kubeconfig) == "" {
 		http.Error(w, "kubeconfig is required", http.StatusBadRequest)
+		return
+	}
+	if s.readOnly {
+		http.Error(w, "read-only mode: cluster preview is disabled", http.StatusForbidden)
 		return
 	}
 	preview, err := clustermgr.PreviewPermissions([]byte(req.Kubeconfig), req.Context)
@@ -1037,11 +1042,23 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		sess.mu.Lock()
 		sess.LastSnapshot = make([]byte, len(raw))
 		copy(sess.LastSnapshot, raw)
+		sess.LastDiscoveryError = nil
 		sess.NodeCount = len(snap.Data.Nodes)
 		sess.mu.Unlock()
 
 		broadcastToBrowsers(sess, raw)
 		log.Printf("[agent] GRAPH_SNAPSHOT  %d bytes  → %d browsers", len(raw), sess.BrowserCount())
+
+	case MsgDiscoveryError:
+		// Only meaningful before the first snapshot; cache it so a browser
+		// that opens the machine later sees the error too.
+		sess.mu.Lock()
+		if sess.LastSnapshot == nil {
+			sess.LastDiscoveryError = make([]byte, len(raw))
+			copy(sess.LastDiscoveryError, raw)
+		}
+		sess.mu.Unlock()
+		broadcastToBrowsers(sess, raw)
 
 	case MsgGraphDiff:
 		broadcastToBrowsers(sess, raw)
@@ -1222,9 +1239,12 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Replay the last cached snapshot so the browser doesn't wait for the next tick.
 	sess.mu.RLock()
 	lastSnap := sess.LastSnapshot
+	lastDiscErr := sess.LastDiscoveryError
 	sess.mu.RUnlock()
 	if lastSnap != nil {
 		_ = conn.WriteMessage(websocket.TextMessage, lastSnap)
+	} else if lastDiscErr != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, lastDiscErr)
 	}
 
 	// Attaching to an offline machine shows its last-known state; tell the

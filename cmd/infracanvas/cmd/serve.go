@@ -67,7 +67,9 @@ and it appears in the sidebar's machine list.
 Environment variables:
   INFRACANVAS_UI_TOKEN     Auth token (default: random per run)
   INFRACANVAS_AGENT_TOKEN  Join token other VMs use (default: random per run)
-  INFRACANVAS_SCOPE        Discovery scopes (default: host,docker,kubernetes)
+  INFRACANVAS_SCOPE        Discovery scopes (default: host,docker,lxd,kubernetes)
+  INFRACANVAS_TUNNEL       false = same as --no-tunnel
+  INFRACANVAS_PRIVATE      true = same as --private
   INFRACANVAS_DISCOVER_LOCAL_KUBECONFIG
                            Override --discover-local-kubeconfig`,
 	RunE: runServe,
@@ -76,7 +78,7 @@ Environment variables:
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Flags().IntVar(&servePort, "port", defaultPort, "Local port (auto-falls-back if taken)")
-	serveCmd.Flags().BoolVar(&servePrivate, "private", false, "With --no-tunnel: bind 127.0.0.1 instead of 0.0.0.0")
+	serveCmd.Flags().BoolVar(&servePrivate, "private", false, "Bind 127.0.0.1 only, no tunnel (reach it over SSH)")
 	serveCmd.Flags().BoolVar(&serveNoTunnel, "no-tunnel", false, "Disable Cloudflare tunnel; bind the port directly")
 	serveCmd.Flags().BoolVar(&serveReadOnly, "read-only", false, "Block actions and terminals; viewers can only look (for public demos)")
 	serveCmd.Flags().StringVar(&serveUIToken, "token", "", "Override the UI auth token")
@@ -87,6 +89,16 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
+	// config.env written by the installer sets these; an explicit flag wins.
+	if v, ok := parseBoolEnv("INFRACANVAS_TUNNEL"); ok && !cmd.Flags().Changed("no-tunnel") {
+		serveNoTunnel = !v
+	}
+	if v, ok := parseBoolEnv("INFRACANVAS_PRIVATE"); ok && !cmd.Flags().Changed("private") {
+		servePrivate = v
+	}
+	if servePrivate {
+		serveNoTunnel = true
+	}
 	useTunnel := !serveNoTunnel
 	host := "0.0.0.0"
 	if useTunnel || servePrivate {

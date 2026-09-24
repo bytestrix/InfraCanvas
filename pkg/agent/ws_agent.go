@@ -52,6 +52,13 @@ type WSConfig struct {
 	// file. Clusters virtual agents use a per-cluster stable ID so the relay
 	// can resume their session across restarts, same as a real VM agent.
 	MachineIDOverride string
+	// ResumeSecret and OnResumeSecret let a MachineIDOverride agent keep its
+	// session's resume secret across agent restarts within one process. A
+	// real VM agent persists the secret to disk; a Clusters virtual agent
+	// doesn't, and without this a restarted agent reconnects with no secret
+	// and the relay rejects it as a hijack attempt.
+	ResumeSecret   string
+	OnResumeSecret func(secret string)
 
 	// HostnameOverride, when set, is sent as HELLO's hostname instead of
 	// os.Hostname(). Clusters virtual agents run in-process on the machine
@@ -119,8 +126,9 @@ type WSAgent struct {
 	connMu         sync.Mutex
 	lastGraph      *output.GraphOutput
 	lastGraphMu    sync.RWMutex
-	execSessions   sync.Map // sessionID → *execSession
-	pfSessions     sync.Map // key (ns/pod:local) → *actions.PortForwardSession
+	discoverMu     sync.Mutex // one discovery pass at a time
+	execSessions   sync.Map   // sessionID → *execSession
+	pfSessions     sync.Map   // key (ns/pod:local) → *actions.PortForwardSession
 
 	// resumeSecret proves ownership of this agent's MachineID on reconnect —
 	// required since the shared hub join token alone doesn't distinguish one
@@ -141,7 +149,7 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 		cfg.RefreshSeconds = 5
 	}
 
-	agentResumeSecret := ""
+	agentResumeSecret := cfg.ResumeSecret
 	if cfg.MachineIDOverride == "" {
 		agentResumeSecret = loadResumeSecret()
 	}
@@ -199,6 +207,9 @@ func (a *WSAgent) setResumeSecret(secret string) {
 	a.resumeSecretMu.Unlock()
 	if a.cfg.MachineIDOverride == "" {
 		saveResumeSecret(secret)
+	}
+	if a.cfg.OnResumeSecret != nil {
+		a.cfg.OnResumeSecret(secret)
 	}
 }
 
@@ -267,6 +278,7 @@ func (a *WSAgent) Run(ctx context.Context) error {
 	}
 	if err != nil {
 		log.Printf("initial discovery error: %v", err)
+		a.sendDiscoveryError(err)
 	} else {
 		if err := a.sendSnapshot(graph); err != nil {
 			log.Printf("failed to send initial snapshot: %v", err)
@@ -274,12 +286,17 @@ func (a *WSAgent) Run(ctx context.Context) error {
 		a.setLastGraph(snap, graph)
 	}
 
-	// Periodic refresh ticker.
-	ticker := time.NewTicker(time.Duration(a.cfg.RefreshSeconds) * time.Second)
-	defer ticker.Stop()
+	// Periodic discovery runs in its own goroutine. A pass takes seconds
+	// (docker, /proc, remote API servers), and running it in the select loop
+	// below stalled command handling for that long: terminal keystrokes
+	// queued up and then arrived all at once.
+	go a.refreshLoop(ctx)
 
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
+
+	inputs := newExecInputQueues(a)
+	defer inputs.closeAll()
 
 	for {
 		select {
@@ -291,6 +308,31 @@ func (a *WSAgent) Run(ctx context.Context) error {
 				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
 
+		case env := <-commandCh:
+			switch env.Type {
+			case "EXEC_INPUT":
+				inputs.enqueue(env.Data)
+			case "EXEC_END":
+				inputs.close(env.Data)
+				a.handleServerCommand(ctx, env)
+			default:
+				a.handleServerCommand(ctx, env)
+			}
+		}
+	}
+}
+
+// refreshLoop runs discovery every RefreshSeconds and sends the result as a
+// diff (or as a snapshot if browsers haven't had one yet).
+func (a *WSAgent) refreshLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Duration(a.cfg.RefreshSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
 		case <-ticker.C:
 			snap, graph, err := a.collectAndFormatGraph(ctx)
 			if a.cfg.OnDiscoveryResult != nil {
@@ -298,18 +340,23 @@ func (a *WSAgent) Run(ctx context.Context) error {
 			}
 			if err != nil {
 				log.Printf("discovery error: %v", err)
+				if !a.hasLastGraph() {
+					a.sendDiscoveryError(err)
+				}
 				continue
 			}
-			diff := a.computeDiff(graph)
-			if diff != nil {
+			if !a.hasLastGraph() {
+				// The first pass failed, so browsers never got a snapshot and
+				// a diff would have nothing to apply to.
+				if err := a.sendSnapshot(graph); err != nil {
+					log.Printf("failed to send snapshot: %v", err)
+				}
+			} else if diff := a.computeDiff(graph); diff != nil {
 				if err := a.sendDiff(diff); err != nil {
 					log.Printf("failed to send diff: %v", err)
 				}
 			}
 			a.setLastGraph(snap, graph)
-
-		case env := <-commandCh:
-			a.handleServerCommand(ctx, env)
 		}
 	}
 }
@@ -535,6 +582,8 @@ func discoveryResult(snap *models.InfraSnapshot, err error) error {
 }
 
 func (a *WSAgent) collectAndFormatGraph(ctx context.Context) (*models.InfraSnapshot, *output.GraphOutput, error) {
+	a.discoverMu.Lock()
+	defer a.discoverMu.Unlock()
 	snap, err := a.orch.Discover(ctx, a.cfg.Scope)
 	if err != nil {
 		return nil, nil, fmt.Errorf("discovery failed: %w", err)
@@ -552,6 +601,23 @@ func (a *WSAgent) collectAndFormatGraph(ctx context.Context) (*models.InfraSnaps
 	}
 
 	return snap, &graph, nil
+}
+
+func (a *WSAgent) hasLastGraph() bool {
+	a.lastGraphMu.RLock()
+	defer a.lastGraphMu.RUnlock()
+	return a.lastGraph != nil
+}
+
+// sendDiscoveryError tells browsers why no canvas has arrived yet, so they
+// show the error instead of an endless "Discovering infrastructure…".
+func (a *WSAgent) sendDiscoveryError(err error) {
+	if sendErr := a.send("DISCOVERY_ERROR", map[string]interface{}{
+		"message":      err.Error(),
+		"retrySeconds": a.cfg.RefreshSeconds,
+	}); sendErr != nil {
+		log.Printf("failed to send discovery error: %v", sendErr)
+	}
 }
 
 func (a *WSAgent) sendSnapshot(graph *output.GraphOutput) error {
@@ -1328,6 +1394,57 @@ func (a *WSAgent) loadExecSession(sessionID string) (*execSession, bool) {
 			return nil, false
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// execInputQueues gives each terminal session a single writer goroutine so
+// keystrokes reach the PTY in the order they were typed, without the read
+// loop waiting on a slow write. All methods are called from Run's select
+// loop only, so enqueue and close never race.
+type execInputQueues struct {
+	a      *WSAgent
+	queues map[string]chan json.RawMessage
+}
+
+func newExecInputQueues(a *WSAgent) *execInputQueues {
+	return &execInputQueues{a: a, queues: make(map[string]chan json.RawMessage)}
+}
+
+func execSessionID(data json.RawMessage) string {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(data, &req)
+	return req.SessionID
+}
+
+func (q *execInputQueues) enqueue(data json.RawMessage) {
+	id := execSessionID(data)
+	ch, ok := q.queues[id]
+	if !ok {
+		ch = make(chan json.RawMessage, 256)
+		q.queues[id] = ch
+		go func() {
+			for d := range ch {
+				q.a.handleExecInput(d)
+			}
+		}()
+	}
+	ch <- data
+}
+
+func (q *execInputQueues) close(data json.RawMessage) {
+	id := execSessionID(data)
+	if ch, ok := q.queues[id]; ok {
+		close(ch)
+		delete(q.queues, id)
+	}
+}
+
+func (q *execInputQueues) closeAll() {
+	for id, ch := range q.queues {
+		close(ch)
+		delete(q.queues, id)
 	}
 }
 

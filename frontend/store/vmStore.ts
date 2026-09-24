@@ -18,6 +18,7 @@ interface VMStore {
   setVMGraph: (code: string, graph: GraphOutput) => void
   applyVMDiff: (code: string, diff: GraphDiff) => void
   setVMError: (code: string, error: string) => void
+  setVMDiscoveryError: (code: string, message: string, retrySeconds?: number) => void
   clearVMError: (code: string) => void
   setVMDisconnected: (code: string) => void
 }
@@ -42,6 +43,7 @@ export const useVMStore = create<VMStore>((set) => ({
           readOnly: false,
           graph: null,
           error: null,
+          discoveryError: null,
           lastUpdated: null,
         },
       },
@@ -83,6 +85,7 @@ export const useVMStore = create<VMStore>((set) => ({
         [code]: {
           ...state.vms[code],
           graph,
+          discoveryError: null,
           lastUpdated: Date.now(),
         },
       },
@@ -143,6 +146,17 @@ export const useVMStore = create<VMStore>((set) => ({
           ...state.vms[code],
           status: 'error',
           error,
+        },
+      },
+    })),
+
+  setVMDiscoveryError: (code, message, retrySeconds) =>
+    set((state) => ({
+      vms: {
+        ...state.vms,
+        [code]: {
+          ...state.vms[code],
+          discoveryError: { message, retrySeconds },
         },
       },
     })),

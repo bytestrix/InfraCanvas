@@ -28,6 +28,7 @@ import (
 	"infracanvas/internal/redactor"
 
 	"infracanvas/pkg/agent"
+	k8sdiscovery "infracanvas/pkg/discovery/kubernetes"
 	"infracanvas/pkg/runstate"
 )
 
@@ -168,7 +169,10 @@ type Manager struct {
 	// to the local server always succeeds regardless of whether the cluster
 	// itself is reachable. This tracks the thing that actually matters.
 	lastError map[string]error
-	rootCtx   context.Context // long-lived; never an inbound request's context
+	// secrets holds each cluster session's relay resume secret so a
+	// restarted virtual agent can reclaim its own session.
+	secrets map[string]string
+	rootCtx context.Context // long-lived; never an inbound request's context
 }
 
 // NewManager creates a Manager. backendURL is the local server's own
@@ -182,6 +186,7 @@ func NewManager(backendURL, agentToken string, refreshSeconds int) *Manager {
 		enableRedact:   true,
 		cancels:        make(map[string]context.CancelFunc),
 		lastError:      make(map[string]error),
+		secrets:        make(map[string]string),
 	}
 }
 
@@ -323,9 +328,11 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 		return Entry{}, err
 	}
 	// Fail fast on an unreachable/misconfigured cluster rather than persisting
-	// a dead entry — mirrors kubernetes.Discovery.IsAvailable()'s connectivity
-	// probe timeout, which exists for the same reason.
+	// a dead entry that sits in the sidebar with an "error" status.
 	restCfg.Timeout = 8 * time.Second
+	if err := pingCluster(restCfg); err != nil {
+		return Entry{}, err
+	}
 
 	serverURL := ""
 	if c, ok := cfg.Contexts[contextName]; ok {
@@ -333,35 +340,67 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 			serverURL = cl.Server
 		}
 	}
-
-	id := randomID()
-	if err := os.MkdirAll(clusterDir(), 0o700); err != nil {
-		return Entry{}, fmt.Errorf("create cluster dir: %w", err)
-	}
-	path := filepath.Join(clusterDir(), id+".kubeconfig")
-	if err := os.WriteFile(path, kubeconfigBytes, 0o600); err != nil {
-		return Entry{}, fmt.Errorf("save kubeconfig: %w", err)
-	}
-
 	if name == "" {
 		name = contextName
 	}
-	entry := runstate.ClusterEntry{
-		ID:             id,
-		Name:           name,
-		ContextName:    contextName,
-		ServerURL:      serverURL,
-		KubeconfigPath: path,
-		AddedAt:        time.Now().UTC(),
-		ReadOnly:       readOnly,
+
+	if err := os.MkdirAll(clusterDir(), 0o700); err != nil {
+		return Entry{}, fmt.Errorf("create cluster dir: %w", err)
+	}
+
+	// Re-adding a cluster that's already connected (same API server and
+	// context) updates the existing entry in place instead of creating a
+	// duplicate: new kubeconfig, name and read-only flag, same ID.
+	var entry runstate.ClusterEntry
+	replaced := false
+	if s, err := runstate.Read(); err == nil {
+		for _, e := range s.Clusters {
+			if e.ServerURL == serverURL && e.ContextName == contextName {
+				entry = e
+				replaced = true
+				break
+			}
+		}
+	}
+	if !replaced {
+		id := randomID()
+		entry = runstate.ClusterEntry{
+			ID:             id,
+			ContextName:    contextName,
+			ServerURL:      serverURL,
+			KubeconfigPath: filepath.Join(clusterDir(), id+".kubeconfig"),
+			AddedAt:        time.Now().UTC(),
+		}
+	}
+	entry.Name = name
+	entry.ReadOnly = readOnly
+
+	if err := os.WriteFile(entry.KubeconfigPath, kubeconfigBytes, 0o600); err != nil {
+		return Entry{}, fmt.Errorf("save kubeconfig: %w", err)
 	}
 
 	if err := runstate.Update(func(s *runstate.State) {
+		for i := range s.Clusters {
+			if s.Clusters[i].ID == entry.ID {
+				s.Clusters[i] = entry
+				return
+			}
+		}
 		s.Clusters = append(s.Clusters, entry)
 	}); err != nil {
-		_ = os.Remove(path)
+		if !replaced {
+			_ = os.Remove(entry.KubeconfigPath)
+		}
 		return Entry{}, fmt.Errorf("persist cluster: %w", err)
 	}
+
+	m.mu.Lock()
+	if cancel, ok := m.cancels[entry.ID]; ok {
+		cancel()
+		delete(m.cancels, entry.ID)
+	}
+	delete(m.lastError, entry.ID)
+	m.mu.Unlock()
 
 	rootCtx := m.rootCtx
 	if rootCtx == nil {
@@ -369,6 +408,16 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 	}
 	m.startAgent(rootCtx, entry)
 	return Entry{ClusterEntry: entry, Online: true}, nil
+}
+
+// pingCluster checks the API server is reachable with the given credentials.
+// A variable so tests can stub it out.
+var pingCluster = func(cfg *rest.Config) error {
+	d, err := k8sdiscovery.NewDiscoveryFromConfig(cfg)
+	if err != nil {
+		return err
+	}
+	return d.Ping()
 }
 
 // Remove stops the virtual agent and deletes the cluster's persisted entry
@@ -380,6 +429,7 @@ func (m *Manager) Remove(id string) error {
 		delete(m.cancels, id)
 	}
 	delete(m.lastError, id)
+	delete(m.secrets, id)
 	m.mu.Unlock()
 
 	var path string
@@ -440,6 +490,12 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 				KubeConfig:        restCfg,
 				MachineIDOverride: "cluster-" + entry.ID,
 				HostnameOverride:  entry.Name,
+				ResumeSecret:      m.resumeSecret(entry.ID),
+				OnResumeSecret: func(secret string) {
+					m.mu.Lock()
+					m.secrets[entry.ID] = secret
+					m.mu.Unlock()
+				},
 				OnDiscoveryResult: func(discErr error) {
 					m.mu.Lock()
 					m.lastError[entry.ID] = discErr
@@ -463,6 +519,12 @@ func (m *Manager) startAgent(parent context.Context, entry runstate.ClusterEntry
 			}
 		}
 	}()
+}
+
+func (m *Manager) resumeSecret(id string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.secrets[id]
 }
 
 func randomID() string {

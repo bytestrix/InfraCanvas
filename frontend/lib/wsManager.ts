@@ -133,6 +133,10 @@ function handleMessage(code: string, msg: WsInbound): void {
       }
       break
 
+    case 'DISCOVERY_ERROR':
+      store.setVMDiscoveryError(code, msg.data.message, msg.data.retrySeconds)
+      break
+
     case 'GRAPH_DIFF':
       store.applyVMDiff(code, msg.data)
       break

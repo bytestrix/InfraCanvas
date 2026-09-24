@@ -39,7 +39,10 @@ type Session struct {
 	NodeCount    int
 	PairedAt     time.Time
 	LastSnapshot []byte // cached for late-joining browsers
-	mu           sync.RWMutex
+	// LastDiscoveryError is the agent's most recent DISCOVERY_ERROR while it
+	// has never produced a snapshot; cleared on the first snapshot.
+	LastDiscoveryError []byte
+	mu                 sync.RWMutex
 }
 
 func (s *Session) BrowserCount() int {

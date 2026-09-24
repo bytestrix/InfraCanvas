@@ -811,6 +811,10 @@ function MainContent({ vm, vmKey, view, onSwitchToCanvas, clusterSession, onRemo
     return <AuditView />
   }
 
+  if (!vm?.graph && vm?.discoveryError) {
+    return <DiscoveryErrorContent message={vm.discoveryError.message} retrySeconds={vm.discoveryError.retrySeconds} />
+  }
+
   if (view === 'canvas') {
     if (isLoading) return <LoadingContent />
     return (
@@ -927,6 +931,33 @@ function LoadingContent() {
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
         <div className="animate-spin" style={{ width:38, height:38, borderRadius:'50%', border:'2.5px solid var(--spinner-track)', borderTopColor:'var(--spinner-tip)' }} />
         <p style={{ fontSize:13, color:T.ink3, fontFamily:MONO, margin:0 }}>Discovering infrastructure…</p>
+      </div>
+    </div>
+  )
+}
+
+/* ── Discovery failed before the first canvas ── */
+function DiscoveryErrorContent({ message, retrySeconds }: { message: string; retrySeconds?: number }) {
+  return (
+    <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', background:T.bg, padding:16 }}>
+      <div style={{ maxWidth:520, width:'100%', background:T.surface, border:`1px solid ${T.line}`, borderRadius:16, padding:'28px 28px 24px', display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <div style={{ width:42, height:42, borderRadius:11, background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', display:'flex', alignItems:'center', justifyContent:'center', color:'#F87171', flexShrink:0 }}>
+            <AlertCircle size={20} />
+          </div>
+          <div>
+            <p style={{ fontSize:15, fontWeight:600, color:T.ink, margin:0 }}>Discovery failed</p>
+            <p style={{ fontSize:12, color:T.ink3, margin:'3px 0 0' }}>
+              The agent is connected but couldn&apos;t read this machine or cluster{retrySeconds ? `. Retrying every ${retrySeconds}s.` : '.'}
+            </p>
+          </div>
+        </div>
+        <p style={{ fontSize:12, color:T.ink2, margin:0, padding:'12px 14px', borderRadius:9, background:T.bg, border:`1px solid ${T.line}`, fontFamily:MONO, lineHeight:1.6, wordBreak:'break-word' }}>
+          {message}
+        </p>
+        <p style={{ fontSize:12, color:T.ink3, margin:0, lineHeight:1.6 }}>
+          A kubeconfig context pointing at a deleted or unreachable cluster causes this. Remove it from the Clusters list, or start with <code style={{ color:T.ink2, fontFamily:MONO }}>--discover-local-kubeconfig=false</code> to skip local contexts.
+        </p>
       </div>
     </div>
   )
