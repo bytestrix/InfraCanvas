@@ -70,4 +70,56 @@ jobs:
             curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
             ```
 
-            The installer brings up the dashboard and prints a public URL via Cloudflare's free quick-tunnel — no firewall config or signup required. Pass `--no-tunnel` if you'd rather bind a local port directly. See the [README](https://github.com/${{ github.repository }}#readme) for full options.
+            The installer brings up the dashboard and prints a public URL via a Cloudflare quick-tunnel, no firewall config or signup required. Pass `--no-tunnel` to bind a local port directly, or `--private --no-tunnel` to keep it on localhost.
+
+            ## Or run it with Docker
+
+            ```bash
+            docker run -d --name infracanvas --pid=host --network=host \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v infracanvas:/data \
+              ghcr.io/${{ github.repository_owner }}/infracanvas:latest serve --no-tunnel --private
+            docker logs infracanvas   # prints the URL with its token
+            ```
+
+            See the [README](https://github.com/${{ github.repository }}#readme) for full options.
+
+  image:
+    name: Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/infracanvas
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,8 @@
+.git
+bin/
+dist/
+frontend/node_modules
+frontend/.next
+frontend/out
+pkg/webui/dist
+docs/
