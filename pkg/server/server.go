@@ -387,9 +387,9 @@ func NewWithOptions(opts Options) *Server {
 	s.mux.HandleFunc("/api/sessions", s.requireUIToken(s.handleSessions))
 	s.mux.HandleFunc("/api/audit", s.requireUIToken(s.handleAudit))
 	s.mux.HandleFunc("/api/join-info", s.requireUIOrAgentToken(s.handleJoinInfo))
-	s.mux.HandleFunc("/api/clusters", s.requireUIOrAgentToken(s.handleClusters))
-	s.mux.HandleFunc("/api/clusters/preview", s.requireUIOrAgentToken(s.handleClusterPreview))
-	s.mux.HandleFunc("/api/clusters/", s.requireUIOrAgentToken(s.handleClusterByID))
+	s.mux.HandleFunc("/api/clusters", s.requireUIToken(s.handleClusters))
+	s.mux.HandleFunc("/api/clusters/preview", s.requireUIToken(s.handleClusterPreview))
+	s.mux.HandleFunc("/api/clusters/", s.requireUIToken(s.handleClusterByID))
 	return s
 }
 
@@ -749,9 +749,9 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 
 // handleClusterPreview serves POST /api/clusters/preview — checks what a
 // kubeconfig context can actually do (view, exec, restart, scale, read
-// secrets) before the user commits to connecting it. Read-only in every
-// sense: no cluster is added, no virtual agent starts, nothing is persisted,
-// so this is allowed even in --read-only mode.
+// secrets) before the user commits to connecting it. Nothing is persisted,
+// but calling the API server runs the kubeconfig's auth, including any
+// `exec:` credential plugin, so read-only mode blocks it the same as Add.
 func (s *Server) handleClusterPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -769,6 +769,10 @@ func (s *Server) handleClusterPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.Kubeconfig) == "" {
 		http.Error(w, "kubeconfig is required", http.StatusBadRequest)
+		return
+	}
+	if s.readOnly {
+		http.Error(w, "read-only mode: cluster preview is disabled", http.StatusForbidden)
 		return
 	}
 	preview, err := clustermgr.PreviewPermissions([]byte(req.Kubeconfig), req.Context)
