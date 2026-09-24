@@ -137,6 +137,12 @@ export interface WsError {
   data: { message: string }
 }
 
+// Sent by an agent whose discovery has failed before it produced any canvas.
+export interface WsDiscoveryError {
+  type: 'DISCOVERY_ERROR'
+  data: { message: string; retrySeconds?: number }
+}
+
 export interface WsLogData {
   type: 'LOG_DATA'
   data: {
@@ -168,6 +174,7 @@ export type WsInbound =
   | WsAgentConnected
   | WsAgentDisconnected
   | WsError
+  | WsDiscoveryError
   | WsLogData
   | WsExecData
   | WsExecEnd
@@ -184,6 +191,8 @@ export interface VMState {
   readOnly: boolean
   graph: GraphOutput | null
   error: string | null
+  // Why the agent hasn't produced a canvas yet; cleared by the first snapshot.
+  discoveryError: { message: string; retrySeconds?: number } | null
   lastUpdated: number | null
 }
 

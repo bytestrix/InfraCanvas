@@ -36,6 +36,7 @@ const (
 	MsgLogData        = "LOG_DATA"
 	MsgExecData       = "EXEC_DATA"
 	MsgExecEnd        = "EXEC_END"
+	MsgDiscoveryError = "DISCOVERY_ERROR"
 
 	// Server → Agent (and Browser → Server → Agent)
 	MsgPairCode      = "PAIR_CODE"
@@ -1037,11 +1038,23 @@ func (s *Server) routeAgentMessage(sess *Session, env Envelope, raw []byte) {
 		sess.mu.Lock()
 		sess.LastSnapshot = make([]byte, len(raw))
 		copy(sess.LastSnapshot, raw)
+		sess.LastDiscoveryError = nil
 		sess.NodeCount = len(snap.Data.Nodes)
 		sess.mu.Unlock()
 
 		broadcastToBrowsers(sess, raw)
 		log.Printf("[agent] GRAPH_SNAPSHOT  %d bytes  → %d browsers", len(raw), sess.BrowserCount())
+
+	case MsgDiscoveryError:
+		// Only meaningful before the first snapshot; cache it so a browser
+		// that opens the machine later sees the error too.
+		sess.mu.Lock()
+		if sess.LastSnapshot == nil {
+			sess.LastDiscoveryError = make([]byte, len(raw))
+			copy(sess.LastDiscoveryError, raw)
+		}
+		sess.mu.Unlock()
+		broadcastToBrowsers(sess, raw)
 
 	case MsgGraphDiff:
 		broadcastToBrowsers(sess, raw)
@@ -1222,9 +1235,12 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Replay the last cached snapshot so the browser doesn't wait for the next tick.
 	sess.mu.RLock()
 	lastSnap := sess.LastSnapshot
+	lastDiscErr := sess.LastDiscoveryError
 	sess.mu.RUnlock()
 	if lastSnap != nil {
 		_ = conn.WriteMessage(websocket.TextMessage, lastSnap)
+	} else if lastDiscErr != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, lastDiscErr)
 	}
 
 	// Attaching to an offline machine shows its last-known state; tell the

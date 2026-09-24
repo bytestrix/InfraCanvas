@@ -7,7 +7,7 @@ import (
 
 	"infracanvas/internal/models"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -18,6 +18,7 @@ type Discovery struct {
 	config            *rest.Config
 	cache             *Cache
 	connectedContexts int
+	skipped           []string
 }
 
 // NewDiscovery creates a new Kubernetes discovery instance, resolving the
@@ -93,128 +94,125 @@ func NewDiscoveryFromConfig(config *rest.Config) (*Discovery, error) {
 
 // IsAvailable checks if Kubernetes is available and accessible
 func (d *Discovery) IsAvailable() bool {
+	return d.Ping() == nil
+}
+
+// Ping checks that the API server is reachable and accepts our credentials.
+// It hits /version, which every authenticated user can read, instead of
+// listing Nodes: a namespace-scoped or read-only credential can't list
+// cluster-scoped resources, and that used to mark a working cluster as
+// unavailable.
+func (d *Discovery) Ping() error {
 	if d.clientset == nil {
-		return false
+		return fmt.Errorf("kubernetes client not initialized")
 	}
 
-	// 2s was sized for a local/in-cluster API server. For a Clusters
-	// direct-connect target reached over the public internet, that's often
-	// shorter than a single real round trip (TLS handshake + auth + list),
-	// so a perfectly reachable remote cluster would fail this check on
-	// nothing but ordinary latency and get marked "error". 8s comfortably
-	// covers a normal home/office connection while still catching a
-	// genuinely unreachable endpoint well before the 30s discovery timeout.
+	// 8s covers a remote API server over an ordinary home/office connection
+	// (TLS handshake + auth) while still catching an unreachable endpoint well
+	// before the 30s discovery timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	// Try to list nodes as a connectivity check
-	_, err := d.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{Limit: 1})
-	return err == nil
+	if _, err := d.clientset.Discovery().RESTClient().Get().AbsPath("/version").Do(ctx).Raw(); err != nil {
+		return fmt.Errorf("cannot reach Kubernetes API server %s: %w", d.config.Host, err)
+	}
+	return nil
 }
 
-// DiscoverAll performs a complete Kubernetes discovery
+// Skipped returns the resource kinds the last DiscoverAll pass could not list
+// because the credential lacks RBAC access to them.
+func (d *Discovery) Skipped() []string {
+	return d.skipped
+}
+
+// DiscoverAll performs a complete Kubernetes discovery. A resource kind the
+// credential isn't allowed to list (403) is skipped and recorded in Skipped()
+// instead of failing the whole pass, so a narrowly scoped kubeconfig still
+// gets a canvas. Any other error (network, timeout, 5xx) fails the pass.
 func (d *Discovery) DiscoverAll() (*models.Cluster, []models.Node, []models.Namespace, []models.Deployment, []models.StatefulSet, []models.DaemonSet, []models.Job, []models.CronJob, []models.Pod, []models.K8sService, []models.Ingress, []models.ConfigMap, []models.Secret, []models.PersistentVolumeClaim, []models.PersistentVolume, []models.StorageClass, []models.Event, error) {
 	d.connectedContexts = 0
-	if !d.IsAvailable() {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Kubernetes is not available")
+	d.skipped = nil
+	fail := func(err error) (*models.Cluster, []models.Node, []models.Namespace, []models.Deployment, []models.StatefulSet, []models.DaemonSet, []models.Job, []models.CronJob, []models.Pod, []models.K8sService, []models.Ingress, []models.ConfigMap, []models.Secret, []models.PersistentVolumeClaim, []models.PersistentVolume, []models.StorageClass, []models.Event, error) {
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
-	// Get cluster info
-	cluster, err := d.GetClusterInfo(context.Background())
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get cluster info: %w", err)
+	if err := d.Ping(); err != nil {
+		return fail(err)
 	}
 
-	// Get nodes
-	nodes, err := d.GetNodes(context.Background())
-	if err != nil {
-		return cluster, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get nodes: %w", err)
+	ctx := context.Background()
+	var firstErr error
+	// check records a 403/404 as skipped and keeps any other error as the
+	// pass's error.
+	check := func(kind string, err error) {
+		if err == nil || firstErr != nil {
+			return
+		}
+		if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+			d.skipped = append(d.skipped, kind)
+			return
+		}
+		firstErr = fmt.Errorf("failed to get %s: %w", kind, err)
 	}
 
-	// Get namespaces
-	namespaces, err := d.GetNamespaces(context.Background())
+	cluster, err := d.GetClusterInfo(ctx)
 	if err != nil {
-		return cluster, nodes, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get namespaces: %w", err)
+		return fail(fmt.Errorf("failed to get cluster info: %w", err))
 	}
 
-	// Get workloads across all namespaces
-	deployments, err := d.GetDeployments(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get deployments: %w", err)
-	}
+	nodes, err := d.GetNodes(ctx)
+	check("nodes", err)
+	namespaces, err := d.GetNamespaces(ctx)
+	check("namespaces", err)
+	deployments, err := d.GetDeployments(ctx, "")
+	check("deployments", err)
+	statefulsets, err := d.GetStatefulSets(ctx, "")
+	check("statefulsets", err)
+	daemonsets, err := d.GetDaemonSets(ctx, "")
+	check("daemonsets", err)
+	jobs, err := d.GetJobs(ctx, "")
+	check("jobs", err)
+	cronjobs, err := d.GetCronJobs(ctx, "")
+	check("cronjobs", err)
+	pods, err := d.GetPods(ctx, "")
+	check("pods", err)
+	services, err := d.GetServices(ctx, "")
+	check("services", err)
+	ingresses, err := d.GetIngresses(ctx, "")
+	check("ingresses", err)
+	configmaps, err := d.GetConfigMaps(ctx, "")
+	check("configmaps", err)
+	secrets, err := d.GetSecrets(ctx, "")
+	check("secrets", err)
+	pvcs, err := d.GetPVCs(ctx, "")
+	check("persistentvolumeclaims", err)
+	pvs, err := d.GetPVs(ctx)
+	check("persistentvolumes", err)
+	storageclasses, err := d.GetStorageClasses(ctx)
+	check("storageclasses", err)
+	events, err := d.GetEvents(ctx, "")
+	check("events", err)
 
-	statefulsets, err := d.GetStatefulSets(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get statefulsets: %w", err)
+	if firstErr != nil {
+		return fail(firstErr)
 	}
-
-	daemonsets, err := d.GetDaemonSets(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get daemonsets: %w", err)
-	}
-
-	jobs, err := d.GetJobs(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get jobs: %w", err)
-	}
-
-	cronjobs, err := d.GetCronJobs(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get cronjobs: %w", err)
-	}
-
-	// Get pods
-	pods, err := d.GetPods(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get pods: %w", err)
-	}
-
-	// Get services and ingress
-	services, err := d.GetServices(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get services: %w", err)
-	}
-
-	ingresses, err := d.GetIngresses(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get ingresses: %w", err)
-	}
-
-	// Get config and secrets
-	configmaps, err := d.GetConfigMaps(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get configmaps: %w", err)
-	}
-
-	secrets, err := d.GetSecrets(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, nil, nil, nil, nil, nil, fmt.Errorf("failed to get secrets: %w", err)
-	}
-
-	// Get storage
-	pvcs, err := d.GetPVCs(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, nil, nil, nil, nil, fmt.Errorf("failed to get pvcs: %w", err)
-	}
-
-	pvs, err := d.GetPVs(context.Background())
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, nil, nil, nil, fmt.Errorf("failed to get pvs: %w", err)
-	}
-
-	storageclasses, err := d.GetStorageClasses(context.Background())
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, nil, nil, fmt.Errorf("failed to get storageclasses: %w", err)
-	}
-
-	// Get events
-	events, err := d.GetEvents(context.Background(), "")
-	if err != nil {
-		return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, storageclasses, nil, fmt.Errorf("failed to get events: %w", err)
+	// Nothing workload-level was readable: the canvas would be empty with no
+	// explanation, so report it as an error the UI can show.
+	if contains(d.skipped, "pods") && contains(d.skipped, "deployments") {
+		return fail(fmt.Errorf("credential cannot list pods or deployments cluster-wide (RBAC forbidden)"))
 	}
 
 	d.connectedContexts = 1
 	return cluster, nodes, namespaces, deployments, statefulsets, daemonsets, jobs, cronjobs, pods, services, ingresses, configmaps, secrets, pvcs, pvs, storageclasses, events, nil
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // ConnectedContexts returns how many local kubeconfig contexts were

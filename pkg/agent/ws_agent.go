@@ -52,6 +52,13 @@ type WSConfig struct {
 	// file. Clusters virtual agents use a per-cluster stable ID so the relay
 	// can resume their session across restarts, same as a real VM agent.
 	MachineIDOverride string
+	// ResumeSecret and OnResumeSecret let a MachineIDOverride agent keep its
+	// session's resume secret across agent restarts within one process. A
+	// real VM agent persists the secret to disk; a Clusters virtual agent
+	// doesn't, and without this a restarted agent reconnects with no secret
+	// and the relay rejects it as a hijack attempt.
+	ResumeSecret   string
+	OnResumeSecret func(secret string)
 
 	// HostnameOverride, when set, is sent as HELLO's hostname instead of
 	// os.Hostname(). Clusters virtual agents run in-process on the machine
@@ -141,7 +148,7 @@ func NewWSAgent(cfg *WSConfig) (*WSAgent, error) {
 		cfg.RefreshSeconds = 5
 	}
 
-	agentResumeSecret := ""
+	agentResumeSecret := cfg.ResumeSecret
 	if cfg.MachineIDOverride == "" {
 		agentResumeSecret = loadResumeSecret()
 	}
@@ -199,6 +206,9 @@ func (a *WSAgent) setResumeSecret(secret string) {
 	a.resumeSecretMu.Unlock()
 	if a.cfg.MachineIDOverride == "" {
 		saveResumeSecret(secret)
+	}
+	if a.cfg.OnResumeSecret != nil {
+		a.cfg.OnResumeSecret(secret)
 	}
 }
 
@@ -267,6 +277,7 @@ func (a *WSAgent) Run(ctx context.Context) error {
 	}
 	if err != nil {
 		log.Printf("initial discovery error: %v", err)
+		a.sendDiscoveryError(err)
 	} else {
 		if err := a.sendSnapshot(graph); err != nil {
 			log.Printf("failed to send initial snapshot: %v", err)
@@ -298,10 +309,18 @@ func (a *WSAgent) Run(ctx context.Context) error {
 			}
 			if err != nil {
 				log.Printf("discovery error: %v", err)
+				if !a.hasLastGraph() {
+					a.sendDiscoveryError(err)
+				}
 				continue
 			}
-			diff := a.computeDiff(graph)
-			if diff != nil {
+			if !a.hasLastGraph() {
+				// The first pass failed, so browsers never got a snapshot and
+				// a diff would have nothing to apply to.
+				if err := a.sendSnapshot(graph); err != nil {
+					log.Printf("failed to send snapshot: %v", err)
+				}
+			} else if diff := a.computeDiff(graph); diff != nil {
 				if err := a.sendDiff(diff); err != nil {
 					log.Printf("failed to send diff: %v", err)
 				}
@@ -552,6 +571,23 @@ func (a *WSAgent) collectAndFormatGraph(ctx context.Context) (*models.InfraSnaps
 	}
 
 	return snap, &graph, nil
+}
+
+func (a *WSAgent) hasLastGraph() bool {
+	a.lastGraphMu.RLock()
+	defer a.lastGraphMu.RUnlock()
+	return a.lastGraph != nil
+}
+
+// sendDiscoveryError tells browsers why no canvas has arrived yet, so they
+// show the error instead of an endless "Discovering infrastructure…".
+func (a *WSAgent) sendDiscoveryError(err error) {
+	if sendErr := a.send("DISCOVERY_ERROR", map[string]interface{}{
+		"message":      err.Error(),
+		"retrySeconds": a.cfg.RefreshSeconds,
+	}); sendErr != nil {
+		log.Printf("failed to send discovery error: %v", sendErr)
+	}
 }
 
 func (a *WSAgent) sendSnapshot(graph *output.GraphOutput) error {
