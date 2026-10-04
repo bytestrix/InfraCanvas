@@ -91,7 +91,7 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
   useEffect(() => {
     if (targetNode) fetchLogs()
     return () => { if (unsubRef.current) unsubRef.current() }
-  }, [fetchLogs])
+  }, [fetchLogs, targetNode])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

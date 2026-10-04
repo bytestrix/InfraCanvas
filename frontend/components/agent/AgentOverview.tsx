@@ -125,7 +125,8 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
     }
   }, [nodes])
 
-  const hostMeta = d.host?.metadata ?? {}
+  // Memoized so the `{}` fallback keeps one identity across renders (displayIp depends on it).
+  const hostMeta = useMemo(() => d.host?.metadata ?? {}, [d.host])
   const cpuPct  = typeof hostMeta.cpu_percent    === 'number' ? Math.round(hostMeta.cpu_percent)    : null
   const memPct  = typeof hostMeta.memory_percent === 'number' ? Math.round(hostMeta.memory_percent) : null
   const diskPct = typeof hostMeta.disk_percent   === 'number' ? Math.round(hostMeta.disk_percent)   : null
