@@ -42,6 +42,13 @@
   --spinner-tip:   #525252;
 }
 
+/* ─── Status colors (same in both themes) ───────────────────────────────────  */
+:root {
+  --healthy:   #22c55e;
+  --degraded:  #f59e0b;
+  --unhealthy: #ef4444;
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────────  */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -233,4 +240,15 @@ html, body {
     background: rgba(0,0,0,0.4);
     z-index: 50;
   }
+}
+
+/* ─── Machines / Clusters pages ─────────────────────────────────────────────  */
+.fleet-page { padding: 28px 36px; }
+.fleet-card { border: 1px solid var(--line); transition: border-color 0.1s; }
+.fleet-card:hover,
+.fleet-card[data-active="true"] { border-color: var(--line3); }
+
+@media (max-width: 720px) {
+  /* Leave room for the fixed sidebar toggle in the top-left corner. */
+  .fleet-page { padding: 56px 16px 24px; }
 }

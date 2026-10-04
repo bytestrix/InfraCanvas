@@ -211,6 +211,10 @@ export interface SessionInfo {
   paired: boolean
   local: boolean
   readOnly?: boolean
+  // First pairing with this hub, and the last message or disconnect.
+  // Go sends 0001-01-01T00:00:00Z when unset; older servers omit them.
+  pairedAt?: string
+  lastSeen?: string
 }
 
 // ─── Node Color Map ───────────────────────────────────────────────────────────

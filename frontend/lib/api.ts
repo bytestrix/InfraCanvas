@@ -55,6 +55,14 @@ export async function addCluster(kubeconfig: string, name?: string, context?: st
   return res.json()
 }
 
+// Lists kubeconfig cluster connections (context, API server, added date).
+// Answers 503 when the server runs without the cluster manager.
+export async function fetchClusters(): Promise<ClusterEntry[]> {
+  const res = await fetch('/api/clusters', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`clusters: HTTP ${res.status}`)
+  return res.json()
+}
+
 export async function removeCluster(id: string): Promise<void> {
   const res = await fetch(`/api/clusters/${id}`, { method: 'DELETE' })
   if (!res.ok && res.status !== 204) throw new Error(`clusters: HTTP ${res.status}`)
