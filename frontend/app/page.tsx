@@ -6,6 +6,8 @@ import { connectVM, disconnectVM } from '@/lib/wsManager'
 import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, removeCluster, renameCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
+import MachinesView from '@/components/fleet/MachinesView'
+import ClustersView from '@/components/fleet/ClustersView'
 import { LogoMark } from '@/components/Logo'
 import { useTheme } from '@/hooks/useTheme'
 import { AlertCircle, X } from 'lucide-react'
@@ -18,6 +20,20 @@ const LOCAL_KUBECONFIG_NOTICE_KEY = 'ic-local-kubeconfig-autodiscovery-notice-v1
 // The websocket/store key for a machine: the hub's own agent uses the
 // 'local' alias, remote agents their session id.
 const machineKey = (m: SessionInfo) => (m.local ? LOCAL_KEY : m.id)
+
+// The sidebar lists show this many entries; the rest are on the
+// Machines / Clusters pages.
+const SIDEBAR_LIST_LIMIT = 5
+
+// First SIDEBAR_LIST_LIMIT entries, with the active one swapped in when it
+// would be cut off, so what you're viewing never drops out of the sidebar.
+function capList(list: SessionInfo[], activeKey: string): SessionInfo[] {
+  if (list.length <= SIDEBAR_LIST_LIMIT) return list
+  const head = list.slice(0, SIDEBAR_LIST_LIMIT)
+  if (head.some(m => machineKey(m) === activeKey)) return head
+  const active = list.find(m => machineKey(m) === activeKey)
+  return active ? [...head.slice(0, SIDEBAR_LIST_LIMIT - 1), active] : head
+}
 
 // All values are CSS variables — update automatically when data-theme changes
 const T = {
@@ -36,7 +52,7 @@ const H = { healthy:'#22c55e', degraded:'#f59e0b', unhealthy:'#ef4444' }
 const MONO = "var(--font-geist-mono,'Geist Mono','JetBrains Mono',ui-monospace,monospace)"
 const SANS = "var(--font-geist,'Geist',ui-sans-serif,system-ui,sans-serif)"
 
-type View = 'overview' | 'canvas' | 'audit'
+type View = 'overview' | 'canvas' | 'machines' | 'clusters' | 'audit'
 
 const IcAudit = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -55,6 +71,12 @@ const IcCanvas = () => (
     <rect x="1" y="2" width="14" height="10" rx="1.5"/>
     <path d="M5 12v2M11 12v2M3 14h10"/>
     <path d="M5 7h6M8 5v4" strokeLinecap="round"/>
+  </svg>
+)
+const IcMachines = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="1.5" y="2" width="13" height="5" rx="1.2"/><rect x="1.5" y="9" width="13" height="5" rx="1.2"/>
+    <path d="M4.5 4.5h.01M4.5 11.5h.01" strokeLinecap="round" strokeWidth="2"/>
   </svg>
 )
 const IcClusters = () => (
@@ -132,6 +154,12 @@ export default function App() {
     setActiveKey(key)
   }
 
+  // Opening a machine from its card shows it on Overview.
+  const openMachine = (m: SessionInfo) => {
+    selectMachine(m)
+    setView('overview')
+  }
+
   const [showAddMachine, setShowAddMachine] = useState(false)
   const [showAddCluster, setShowAddCluster] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -153,17 +181,30 @@ export default function App() {
       <div className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`} style={{ display:'flex', background:T.bg }}>
         <Sidebar vm={vm} view={view} onViewChange={(v) => { setView(v); setSidebarOpen(false) }}
           machines={machineList} clusters={clusterList} activeKey={activeKey}
-          onSelectMachine={(m) => { selectMachine(m); setSidebarOpen(false) }}
+          onSelectMachine={(m) => {
+            selectMachine(m)
+            if (view === 'machines' || view === 'clusters') setView('overview')
+            setSidebarOpen(false)
+          }}
           onAddMachine={() => { setShowAddMachine(true); setSidebarOpen(false) }}
           onAddCluster={() => { setShowAddCluster(true); setSidebarOpen(false) }}
           onRemoveCluster={handleRemoveCluster} />
       </div>
       <main style={{ overflow:'hidden', minWidth:0, height:'100vh', display:'flex', flexDirection:'column' }}>
-        <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')}
-          clusterSession={machines.find(m => machineKey(m) === activeKey && m.kind === 'cluster')}
-          onRemoveCluster={handleRemoveCluster}
-          onRenameCluster={handleRenameCluster}
-          onToggleClusterReadOnly={handleToggleClusterReadOnly} />
+        {view === 'machines' ? (
+          <MachinesView machines={machineList} isActive={m => machineKey(m) === activeKey}
+            onOpen={openMachine} onAddMachine={() => setShowAddMachine(true)} />
+        ) : view === 'clusters' ? (
+          <ClustersView clusters={clusterList} isActive={m => machineKey(m) === activeKey}
+            onOpen={openMachine} onAddCluster={() => setShowAddCluster(true)}
+            onToggleReadOnly={handleToggleClusterReadOnly} onRemove={handleRemoveCluster} />
+        ) : (
+          <MainContent vm={vm} vmKey={activeKey} view={view} onSwitchToCanvas={() => setView('canvas')}
+            clusterSession={machines.find(m => machineKey(m) === activeKey && m.kind === 'cluster')}
+            onRemoveCluster={handleRemoveCluster}
+            onRenameCluster={handleRenameCluster}
+            onToggleClusterReadOnly={handleToggleClusterReadOnly} />
+        )}
       </main>
       {showAddMachine && <AddMachineModal onClose={() => setShowAddMachine(false)} />}
       {showAddCluster && <AddClusterModal onClose={() => setShowAddCluster(false)} />}
@@ -470,14 +511,20 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
   const hostname  = vm?.hostname ?? null
   const { theme, toggle } = useTheme()
 
-  const navItems: { id: View; label: string; Icon: () => JSX.Element }[] = [
+  const navItems: { id: View; label: string; Icon: () => JSX.Element; count?: number }[] = [
     { id: 'overview', label: 'Overview', Icon: IcOverview },
     { id: 'canvas',   label: 'Canvas',   Icon: IcCanvas   },
+    { id: 'machines', label: 'Machines', Icon: IcMachines, count: machines.length },
+    { id: 'clusters', label: 'Clusters', Icon: IcClusters, count: clusters.length },
     { id: 'audit',    label: 'Audit',    Icon: IcAudit    },
   ]
 
   return (
-    <aside style={{ borderRight:`1px solid ${T.line}`, display:'flex', flexDirection:'column', padding:'16px 10px 12px', background:T.bg }}>
+    // flex:1 + minWidth:0 pin the sidebar to its column (200px, or the 240px
+    // mobile drawer). Without them one long hostname or context name widens
+    // it past the column, hiding the RO/RW and remove controls and letting the
+    // closed mobile drawer cover the menu button.
+    <aside style={{ flex:1, minWidth:0, borderRight:`1px solid ${T.line}`, display:'flex', flexDirection:'column', padding:'16px 10px 12px', background:T.bg }}>
       {/* Brand */}
       <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0 6px 20px' }}>
         <LogoMark size={40} />
@@ -489,7 +536,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
 
       {/* Nav */}
       <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
-        {navItems.map(({ id, label, Icon }) => {
+        {navItems.map(({ id, label, Icon, count }) => {
           const active = view === id
           return (
             <button key={id} onClick={() => onViewChange(id)} style={{
@@ -505,6 +552,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
             >
               <Icon />
               <span>{label}</span>
+              {!!count && <span style={{ marginLeft:'auto', fontSize:10.5, fontFamily:MONO, color:T.ink4 }}>{count}</span>}
             </button>
           )
         })}
@@ -526,7 +574,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
             >+</button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
-            {machines.map((m) => {
+            {capList(machines, activeKey).map((m) => {
               const key = machineKey(m)
               const active = key === activeKey
               return (
@@ -549,6 +597,9 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                 </button>
               )
             })}
+            {machines.length > SIDEBAR_LIST_LIMIT && (
+              <ViewAllButton count={machines.length} onClick={() => onViewChange('machines')} />
+            )}
           </div>
         </div>
       )}
@@ -569,7 +620,7 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
             >+</button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
-            {clusters.map((m) => {
+            {capList(clusters, activeKey).map((m) => {
               const key = machineKey(m)
               const active = key === activeKey
               return (
@@ -644,6 +695,9 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
                 </button>
               )
             })}
+            {clusters.length > SIDEBAR_LIST_LIMIT && (
+              <ViewAllButton count={clusters.length} onClick={() => onViewChange('clusters')} />
+            )}
           </div>
           {removeError && (
             <div style={{ margin:'6px 8px 0', fontSize:10.5, color:'#ef4444', fontFamily:MONO }}>
@@ -719,6 +773,19 @@ function Sidebar({ vm, view, onViewChange, machines, clusters, activeKey, onSele
         )}
       </div>
     </aside>
+  )
+}
+
+function ViewAllButton({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      display:'flex', alignItems:'center', width:'100%', height:26, padding:'0 8px', borderRadius:7,
+      border:'none', cursor:'pointer', background:'transparent', textAlign:'left',
+      fontSize:11.5, color:T.ink3, fontFamily:SANS,
+    }}
+      onMouseEnter={e=>{ (e.currentTarget as any).style.color=T.ink; (e.currentTarget as any).style.background=T.surface }}
+      onMouseLeave={e=>{ (e.currentTarget as any).style.color=T.ink3; (e.currentTarget as any).style.background='transparent' }}
+    >View all ({count}) →</button>
   )
 }
 

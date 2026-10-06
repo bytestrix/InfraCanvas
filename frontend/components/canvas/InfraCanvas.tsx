@@ -417,12 +417,17 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
     setNodes(withPickers)
     setEdges(le)
-  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes])
+    // spotlightKey is read above but left out of the deps on purpose. A spotlight
+    // toggle only restyles nodes (the effect below); re-running layout for it would
+    // reset any node positions the user has dragged. With React 19.2+ this read can
+    // move into a useEffectEvent and the suppression can go.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- spotlightKey, see above
+  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes, setNodes, setEdges])
 
   // ── Re-apply spotlight without re-running layout ───────────────────────────
   useEffect(() => {
     setNodes((prev) => applySpotlight(prev, spotlightKey, viewMode))
-  }, [spotlightKey, viewMode])
+  }, [spotlightKey, viewMode, setNodes])
 
   // ── Spotlight helpers ──────────────────────────────────────────────────────
 
