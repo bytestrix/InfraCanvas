@@ -55,6 +55,30 @@ export async function addCluster(kubeconfig: string, name?: string, context?: st
   return res.json()
 }
 
+export interface AddClustersResult {
+  added: ClusterEntry[]
+  failed: { context: string; error: string }[]
+}
+
+// Connects several contexts from one kubeconfig in a single call, each as its
+// own cluster named after its context. Each context is checked on its own, so
+// one unreachable cluster doesn't block the rest: the server answers 201 when
+// at least one was added and 400 when none were, listing per-context errors
+// in `failed` either way. Other errors (bad kubeconfig, read-only mode) come
+// back as plain text and are thrown.
+export async function addClusters(kubeconfig: string, contexts: string[], readOnly?: boolean): Promise<AddClustersResult> {
+  const res = await fetch('/api/clusters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kubeconfig, contexts, readOnly }),
+  })
+  const text = await res.text()
+  let body: Partial<AddClustersResult> | null = null
+  try { body = JSON.parse(text) } catch { /* plain-text error */ }
+  if (body && Array.isArray(body.added) && Array.isArray(body.failed)) return body as AddClustersResult
+  throw new Error(text.trim() || `clusters: HTTP ${res.status}`)
+}
+
 // Lists kubeconfig cluster connections (context, API server, added date).
 // Answers 503 when the server runs without the cluster manager.
 export async function fetchClusters(): Promise<ClusterEntry[]> {

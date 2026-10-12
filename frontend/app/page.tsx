@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVMStore } from '@/store/vmStore'
 import { connectVM, disconnectVM } from '@/lib/wsManager'
-import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, removeCluster, renameCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
+import { fetchSessions, fetchJoinInfo, type JoinInfo, addCluster, addClusters, type AddClustersResult, removeCluster, renameCluster, type ClusterContextOption, previewClusterPermissions, type PermissionPreview, setClusterReadOnly, fetchAuditLog, type AuditEntry } from '@/lib/api'
 import InfraCanvas from '@/components/canvas/InfraCanvas'
 import AgentOverview from '@/components/agent/AgentOverview'
 import MachinesView from '@/components/fleet/MachinesView'
@@ -307,13 +307,16 @@ function AddMachineModal({ onClose }: { onClose: () => void }) {
 function AddClusterModal({ onClose }: { onClose: () => void }) {
   const [kubeconfig, setKubeconfig] = useState('')
   const [contexts, setContexts] = useState<ClusterContextOption[] | null>(null)
-  const [selected, setSelected] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [readOnly, setReadOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [preview, setPreview] = useState<PermissionPreview | null>(null)
-  const [previewFor, setPreviewFor] = useState('') // which context the current preview is for
-  const [previewBusy, setPreviewBusy] = useState(false)
+  // Per-context results of the last Connect that didn't fully succeed.
+  const [failures, setFailures] = useState<AddClustersResult['failed']>([])
+  const [addedCount, setAddedCount] = useState(0)
+  // Permission previews by context name; null means the check failed.
+  const [previews, setPreviews] = useState<Record<string, PermissionPreview | null>>({})
+  const [previewing, setPreviewing] = useState('') // context being checked right now
 
   const onFile = async (file: File) => {
     setKubeconfig(await file.text())
@@ -328,7 +331,8 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
       const res = await addCluster(kubeconfig)
       if ('contexts' in res) {
         setContexts(res.contexts)
-        setSelected(res.contexts.find(c => c.current)?.name ?? res.contexts[0]?.name ?? '')
+        const initial = res.contexts.find(c => c.current)?.name ?? res.contexts[0]?.name
+        setSelected(new Set(initial ? [initial] : []))
       } else {
         onClose() // shouldn't happen (server always returns contexts first), but handle gracefully
       }
@@ -339,37 +343,53 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const loadPreview = async (contextName: string) => {
-    setPreviewBusy(true)
-    setPreview(null)
-    try {
-      const p = await previewClusterPermissions(kubeconfig, contextName)
-      setPreview(p)
-      setPreviewFor(contextName)
-    } catch {
-      // Non-fatal — connecting still works without a preview, just skip showing one.
-    } finally {
-      setPreviewBusy(false)
-    }
-  }
+  const toggle = (name: string) => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    return next
+  })
+  const allSelected = !!contexts && contexts.length > 0 && contexts.every(c => selected.has(c.name))
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(contexts?.map(c => c.name)))
 
   const connect = async () => {
-    if (!selected) return
+    if (!contexts || selected.size === 0) return
+    // Send them in the kubeconfig's order, not the order they were ticked.
+    const names = contexts.map(c => c.name).filter(n => selected.has(n))
     setBusy(true)
     setError('')
+    setFailures([])
     try {
-      await addCluster(kubeconfig, selected, selected, readOnly)
-      onClose()
+      const res = await addClusters(kubeconfig, names, readOnly)
+      if (res.failed.length === 0) {
+        onClose()
+        return
+      }
+      // Leave only the failed contexts ticked so Connect retries just those.
+      setSelected(new Set(res.failed.map(f => f.context)))
+      setFailures(res.failed)
+      setAddedCount(n => n + res.added.length)
     } catch (e: any) {
       setError(e.message ?? 'Failed to connect cluster')
+    } finally {
       setBusy(false)
     }
   }
 
+  // Check what each ticked context's credential can do, one context at a
+  // time, so "select all" on a large kubeconfig doesn't run every check at
+  // once. Results are kept, so unticking and re-ticking doesn't check again.
   useEffect(() => {
-    if (selected && selected !== previewFor) loadPreview(selected)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected])
+    if (!contexts || previewing) return
+    const next = contexts.find(c => selected.has(c.name) && !(c.name in previews))
+    if (!next) return
+    setPreviewing(next.name)
+    previewClusterPermissions(kubeconfig, next.name)
+      .then(p => setPreviews(prev => ({ ...prev, [next.name]: p })))
+      // Non-fatal: connecting still works without a preview, just skip showing one.
+      .catch(() => setPreviews(prev => ({ ...prev, [next.name]: null })))
+      .finally(() => setPreviewing(''))
+  }, [contexts, selected, previews, previewing, kubeconfig])
 
   return (
     <div onClick={onClose} style={{
@@ -418,60 +438,66 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
         {contexts && (
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             <div style={{ fontSize:12, color:T.ink3 }}>
-              {contexts.length > 1 ? 'This kubeconfig has multiple contexts, pick the one to connect:' : 'Confirm the cluster to connect:'}
+              {contexts.length > 1 ? 'This kubeconfig has multiple contexts. Pick the ones to connect; each becomes its own cluster:' : 'Confirm the cluster to connect:'}
             </div>
-            {contexts.map(c => (
-              <label key={c.name} style={{
-                display:'flex', alignItems:'center', gap:9, padding:'8px 10px', borderRadius:8,
-                border:`1px solid ${selected === c.name ? T.line2 : T.line}`,
-                background: selected === c.name ? T.bg : 'transparent', cursor:'pointer',
-              }}>
-                <input type="radio" name="context" checked={selected === c.name} onChange={() => setSelected(c.name)} />
-                <div style={{ minWidth:0 }}>
-                  <div style={{ fontSize:12.5, color:T.ink, fontFamily:MONO }}>{c.name}</div>
-                  <div style={{ fontSize:11, color:T.ink4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.serverUrl}</div>
-                </div>
+            {contexts.length > 1 && (
+              <label style={{ display:'flex', alignItems:'center', gap:9, padding:'2px 10px', fontSize:12, color:T.ink2, cursor:'pointer' }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                  ref={el => { if (el) el.indeterminate = selected.size > 0 && !allSelected }} />
+                Select all ({contexts.length})
               </label>
-            ))}
-
-            {previewBusy && (
-              <div style={{ fontSize:11.5, color:T.ink4, padding:'6px 2px' }}>Checking what this credential can do…</div>
             )}
-            {preview && previewFor === selected && (
-              <div style={{ borderRadius:9, border:`1px solid ${T.line}`, background:T.bg, padding:'10px 12px', display:'flex', flexDirection:'column', gap:6 }}>
-                <div style={{ fontSize:11, color:T.ink3, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>What this credential can do</div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                  {[
-                    ['View pods/deployments', preview.canView],
-                    ['Open a terminal (exec)', preview.canExec],
-                    ['Restart / kill pods', preview.canRestartOrKill],
-                    ['Scale / edit deployments', preview.canScaleOrEdit],
-                    ['Read Secret contents', preview.canViewSecrets],
-                  ].map(([label, allowed]) => (
-                    <span key={label as string} style={{
-                      fontSize:10.5, fontFamily:MONO, padding:'2px 8px', borderRadius:20,
-                      background: allowed ? 'rgba(34,197,94,0.1)' : T.bg,
-                      border: `1px solid ${allowed ? 'rgba(34,197,94,0.3)' : T.line2}`,
-                      color: allowed ? '#22c55e' : T.ink4,
-                    }}>{allowed ? '✓' : '—'} {label}</span>
-                  ))}
-                </div>
-                {preview.warnings?.map(w => (
-                  <div key={w} style={{ fontSize:11, color:'#f59e0b', lineHeight:1.4 }}>⚠ {w}</div>
-                ))}
-              </div>
-            )}
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:'45vh', overflowY:'auto' }}>
+              {contexts.map(c => {
+                const checked = selected.has(c.name)
+                const preview = previews[c.name]
+                return (
+                  <div key={c.name} style={{
+                    borderRadius:8, border:`1px solid ${checked ? T.line2 : T.line}`,
+                    background: checked ? T.bg : 'transparent',
+                  }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:9, padding:'8px 10px', cursor:'pointer' }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggle(c.name)} />
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:12.5, color:T.ink, fontFamily:MONO }}>{c.name}</div>
+                        <div style={{ fontSize:11, color:T.ink4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.serverUrl}</div>
+                      </div>
+                    </label>
+                    {checked && previewing === c.name && (
+                      <div style={{ fontSize:11.5, color:T.ink4, padding:'0 10px 8px 32px' }}>Checking what this credential can do…</div>
+                    )}
+                    {checked && preview && <PermissionSummary preview={preview} />}
+                  </div>
+                )
+              })}
+            </div>
 
             <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:T.ink2, cursor:'pointer', padding:'2px 2px' }}>
               <input type="checkbox" checked={readOnly} onChange={e => setReadOnly(e.target.checked)} />
-              Connect as read-only: blocks every action and terminal session on this cluster, even outside global read-only mode. Can be changed later.
+              Connect as read-only: blocks every action and terminal session on {selected.size > 1 ? 'these clusters' : 'this cluster'}, even outside global read-only mode. Can be changed later.
             </label>
           </div>
         )}
 
-        {error && (
+        {(error || failures.length > 0) && (
           <div style={{ fontSize:12, color:'#ef4444', padding:'8px 10px', borderRadius:8, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)' }}>
             {error}
+            {failures.length > 0 && (
+              <>
+                <div style={{ marginBottom:4 }}>
+                  {addedCount > 0
+                    ? `${addedCount} connected. ${failures.length === 1
+                      ? '1 failed and is still ticked, so Connect retries it:'
+                      : `${failures.length} failed and are still ticked, so Connect retries them:`}`
+                    : "Couldn't connect:"}
+                </div>
+                {failures.map(f => (
+                  <div key={f.context} style={{ lineHeight:1.5, wordBreak:'break-word' }}>
+                    <span style={{ fontFamily:MONO }}>{f.context}</span>: {f.error}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -479,20 +505,48 @@ function AddClusterModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} style={{
             fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor:'pointer',
             border:`1px solid ${T.line2}`, background:'transparent', color:T.ink2, fontFamily:SANS,
-          }}>Cancel</button>
+          }}>{addedCount > 0 ? 'Close' : 'Cancel'}</button>
           {!contexts ? (
             <button onClick={listContexts} disabled={!kubeconfig.trim() || busy} style={{
               fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor: kubeconfig.trim() ? 'pointer' : 'default',
               border:'none', background:T.ink, color:T.bg, fontFamily:SANS, opacity: busy ? 0.6 : 1,
             }}>{busy ? 'Reading…' : 'Continue'}</button>
           ) : (
-            <button onClick={connect} disabled={!selected || busy} style={{
-              fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor: selected ? 'pointer' : 'default',
-              border:'none', background:T.ink, color:T.bg, fontFamily:SANS, opacity: busy ? 0.6 : 1,
-            }}>{busy ? 'Connecting…' : 'Connect'}</button>
+            <button onClick={connect} disabled={selected.size === 0 || busy} style={{
+              fontSize:12.5, padding:'6px 14px', borderRadius:7, cursor: selected.size > 0 ? 'pointer' : 'default',
+              border:'none', background:T.ink, color:T.bg, fontFamily:SANS, opacity: busy || selected.size === 0 ? 0.6 : 1,
+            }}>{busy ? 'Connecting…' : selected.size > 1 ? `Connect ${selected.size} clusters` : 'Connect'}</button>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// What one context's credential can do, from POST /api/clusters/preview.
+function PermissionSummary({ preview }: { preview: PermissionPreview }) {
+  return (
+    <div style={{ padding:'0 10px 10px 32px', display:'flex', flexDirection:'column', gap:6 }}>
+      <div style={{ fontSize:11, color:T.ink3, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>What this credential can do</div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+        {[
+          ['View pods/deployments', preview.canView],
+          ['Open a terminal (exec)', preview.canExec],
+          ['Restart / kill pods', preview.canRestartOrKill],
+          ['Scale / edit deployments', preview.canScaleOrEdit],
+          ['Read Secret contents', preview.canViewSecrets],
+        ].map(([label, allowed]) => (
+          <span key={label as string} style={{
+            fontSize:10.5, fontFamily:MONO, padding:'2px 8px', borderRadius:20,
+            background: allowed ? 'rgba(34,197,94,0.1)' : T.bg,
+            border: `1px solid ${allowed ? 'rgba(34,197,94,0.3)' : T.line2}`,
+            color: allowed ? 'var(--healthy)' : T.ink4,
+          }}>{allowed ? '✓' : '—'} {label}</span>
+        ))}
+      </div>
+      {preview.warnings?.map(w => (
+        <div key={w} style={{ fontSize:11, color:'var(--degraded)', lineHeight:1.4 }}>⚠ {w}</div>
+      ))}
     </div>
   )
 }
