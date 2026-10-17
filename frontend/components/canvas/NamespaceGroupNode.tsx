@@ -6,44 +6,88 @@ import { InfraNodeData } from './InfraNode'
 import NodeSvgIcon from './NodeSvgIcon'
 
 /**
- * Namespace group node — a standalone card, same footprint as InfraNode.
- * Every caller constructs it with a fixed 220×100 (see buildGroupedGraph /
- * buildFlatFlowElements), so it sizes itself explicitly rather than via
- * width/height:'100%' — ReactFlow doesn't apply the node's width/height
- * data fields as inline CSS on the wrapper, so percentage sizing here
- * collapsed the whole card to a few pixels (nothing but Handles and
- * absolutely-positioned children contribute to intrinsic size).
+ * Namespace header for the grouped canvas.
+ *
+ * Namespaces used to be bundled into an `Namespaces ×3` group node, so this
+ * card was rarely on screen and its empty lower half went unnoticed. It is now
+ * the anchor each namespace's child groups stack beneath, which makes it the
+ * most looked-at node on the canvas — so it states what it contains rather
+ * than rendering as a titled void.
+ *
+ * Fixed 280×76 for the same reason the old card was fixed: ReactFlow does not
+ * apply a node's width/height data fields as inline CSS on the wrapper, so
+ * percentage sizing collapses the card to nothing.
  */
+const NS_HEADER_W = 280
+const NS_HEADER_H = 76
+
 export default function NamespaceGroupNode({ data, selected }: NodeProps<InfraNodeData>) {
-  const healthDot = data.health === 'healthy' ? 'var(--ink)' : data.health === 'degraded' ? 'var(--ink3)' : 'var(--line3)'
+  const healthDot = data.health === 'healthy' ? '#22c55e'
+    : data.health === 'degraded' ? '#f59e0b'
+    : data.health === 'unhealthy' ? '#ef4444' : '#6b7280'
+
+  const groups = data.childSummary?.groups ?? 0
+  const resources = data.childSummary?.resources ?? 0
 
   return (
     <div style={{
-      width: 220, height: 100, borderRadius: 10,
-      border: `1px dashed ${selected ? 'var(--ink2)' : 'var(--line2)'}`,
-      background: 'var(--surface-2)',
+      width: NS_HEADER_W, height: NS_HEADER_H, borderRadius: 10,
+      border: `1px solid ${selected ? 'var(--ink2)' : 'var(--line2)'}`,
+      background: 'var(--surface)',
       position: 'relative', boxSizing: 'border-box', pointerEvents: 'all',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+      overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
     }}>
-      <Handle type="target" position={Position.Top} style={{ background: 'var(--line2)', border: '1px solid var(--line)', width: 7, height: 7 }} />
+      {/* Identity accent */}
+      <div style={{ height: 2, width: '100%', background: healthDot, opacity: 0.85 }} />
+
+      <Handle type="target" position={Position.Top}
+        style={{ background: 'var(--line2)', border: '1px solid var(--surface)', width: 6, height: 6 }} />
 
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 30,
-        display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px',
-        borderBottom: `1px dashed ${selected ? 'var(--line2)' : 'var(--line)'}`,
-        borderRadius: '9px 9px 0 0',
-        background: 'var(--surface)',
+        flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        gap: 3, padding: '0 12px',
       }}>
-        <NodeSvgIcon type="namespace" size={12} />
-        <span style={{
-          fontSize: 10,
-          fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
-          color: 'var(--ink2)', fontWeight: 600, letterSpacing: '0.02em',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{data.label}</span>
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: healthDot, marginLeft: 'auto', flexShrink: 0 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <NodeSvgIcon type="namespace" size={13} />
+          <span style={{
+            fontSize: 12.5, fontWeight: 650, color: 'var(--ink)',
+            letterSpacing: '-0.01em', flex: 1, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{data.label}</span>
+        </div>
+
+        {/* What lives in here — the reason to look at this node at all. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 10, color: 'var(--ink4)',
+          fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
+        }}>
+          {resources === 0 ? (
+            <span>empty</span>
+          ) : (
+            <>
+              <span>{resources} resource{resources === 1 ? '' : 's'}</span>
+              {/* A namespace holding a single pod renders that pod by name
+                  instead of a `Pods ×1` card, so it has resources but no
+                  bundled groups. Showing "· 0 groups" there is both noise and
+                  wrong. */}
+              {groups > 0 && (
+                <>
+                  <span style={{ color: 'var(--ink5)' }}>·</span>
+                  <span>{groups} group{groups === 1 ? '' : 's'}</span>
+                </>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} style={{ background: 'var(--line2)', border: '1px solid var(--line)', width: 7, height: 7 }} />
+      <Handle type="source" position={Position.Bottom}
+        style={{ background: 'var(--line2)', border: '1px solid var(--surface)', width: 6, height: 6 }} />
     </div>
   )
 }
+
+export { NS_HEADER_W, NS_HEADER_H }

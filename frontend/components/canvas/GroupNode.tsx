@@ -11,7 +11,7 @@ import NodeSvgIcon from './NodeSvgIcon'
  * Clicking opens a GroupDrawer (handled in InfraCanvas via onNodeClick).
  */
 const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
-  const { groupType, label, count, healthCounts, isCritical, onOpenPicker } = data
+  const { groupType, label, count, healthCounts, isCritical, namespace, onOpenPicker } = data
 
   const total = Math.max(count, 1)
   const pHealthy   = (healthCounts.healthy   / total) * 100
@@ -84,7 +84,22 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
           )}
         </div>
 
-        {/* Row 2: health summary */}
+        {/* Row 2: owning namespace. A namespace-scoped group like `Pods x8`
+            sits beneath its namespace on the canvas, but the edge alone does
+            not say which one at a glance — this makes the node state it. */}
+        {namespace && (
+          <div style={{
+            fontSize: 10, color: 'var(--ink4)', marginBottom: 6,
+            display: 'flex', alignItems: 'center', gap: 4,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
+          }}>
+            <span style={{ color: 'var(--ink5)' }}>in</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{namespace}</span>
+          </div>
+        )}
+
+        {/* Row 3: health summary */}
         <div style={{ display: 'flex', gap: 8 }}>
           {healthCounts.healthy > 0 && (
             <span style={{ fontSize: 10, color: '#22c55e', fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)' }}>

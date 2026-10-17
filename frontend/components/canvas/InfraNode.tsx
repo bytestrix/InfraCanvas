@@ -14,6 +14,8 @@ export interface InfraNodeData {
   selected?: boolean
   /** Present only on nodes that have a "•••" drill-down menu (currently: host). */
   onOpenPicker?: (nodeId: string, e: React.MouseEvent) => void
+  /** Namespace headers only: what this namespace is parent of. */
+  childSummary?: { groups: number; resources: number }
 }
 
 const HEALTH_DOT: Record<NodeHealth, string> = {

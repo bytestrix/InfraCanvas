@@ -238,11 +238,13 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       const hc = (h: string) => detailNodes.filter(n => n.health === h).length
       return {
         id: 'group:issues',
+        key: 'issues',
         type: detailNodes[0]?.type ?? 'unknown',
         label: 'Issues',
         count: detailNodes.length,
         healthCounts: { healthy: hc('healthy'), degraded: hc('degraded'), unhealthy: hc('unhealthy'), unknown: hc('unknown') },
         nodes: detailNodes,
+        namespace: '',
       }
     }
     if (!detailTile) return null
@@ -257,11 +259,15 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
     const hc = (h: string) => detailNodes.filter(n => n.health === h).length
     return {
       id: `group:${nodeType}`,
+      key: nodeType,
       type: nodeType,
       label: detailTile.name ?? detailTile.typeLabel,
       count: detailNodes.length,
       healthCounts: { healthy: hc('healthy'), degraded: hc('degraded'), unhealthy: hc('unhealthy'), unknown: hc('unknown') },
       nodes: detailNodes,
+      // This synthetic group stands in for a bare resource type, not a
+      // namespace-scoped one, so it carries no namespace.
+      namespace: '',
     }
   }, [selectedId, detailTile, detailNodes])
 
