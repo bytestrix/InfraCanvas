@@ -22,8 +22,7 @@ import {
   type GraphEdge,
   getNodeColor,
 } from '@/types'
-import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
-import { MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
+import { applyNamespaceHierarchyLayout } from '@/lib/layout'
 import { buildHubMap, applyHubRadialLayout, ORB_CELL_W, ORB_CELL_H } from '@/lib/hubMap'
 import MapNode from './MapNode'
 import { MapRoot, MapHub, MapOrb } from './MapOrbs'
@@ -44,7 +43,7 @@ import GroupDrawer from './GroupDrawer'
 import NodePickerMenu from './NodePickerMenu'
 import NodeDetailPanel from './NodeDetailPanel'
 import LogsPanel from './LogsPanel'
-import TerminalPanel from './TerminalPanel'
+import { useTerminalStore } from '@/store/terminalStore'
 import {
   ArrowLeft,
   RefreshCw,
@@ -53,12 +52,12 @@ import {
   Layers,
   Filter,
   Rows3,
-  Network,
   Waypoints,
   Server,
   AlertTriangle,
   Download,
   Search,
+  X,
 } from 'lucide-react'
 
 // ─── Filter groups ────────────────────────────────────────────────────────────
@@ -79,7 +78,7 @@ const FILTER_GROUPS = {
   },
   docker: {
     label: 'Docker',
-    color: '#22c55e',
+    color: '#10b981',
     types: ['container', 'container_runtime', 'image', 'image_group', 'volume', 'network'],
   },
   host: {
@@ -156,7 +155,7 @@ function buildFlatFlowElements(
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: 'var(--line2)' },
       style: { stroke: 'var(--line2)', strokeWidth: 1.5 },
-      labelStyle: { fill: 'var(--ink3)', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
+      labelStyle: { fill: 'var(--ink4)', fontSize: 9, fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' },
       labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.9 },
     }))
 
@@ -179,6 +178,8 @@ const nodeTypes: NodeTypes = {
 
 interface InfraCanvasProps {
   vm: VMState
+  // Optional — when omitted, the back button is hidden. In single-VM
+  // local mode there is no parent view to return to.
   onBack?: () => void
 }
 
@@ -186,30 +187,19 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
-  const [viewMode, setViewMode] = useState<'map' | 'grouped' | 'flat'>('map')
+  const [viewMode, setViewMode] = useState<'map' | 'grouped'>('grouped')
   // Toolbar chips (Kubernetes / Docker / Host / ...) — unchanged, existing
   // behaviour: toggling one on immediately shows every type in that category.
   // Kept separate from the "•••" picker tree below on purpose.
   // Default to 'host' for Machines (VM agents always report one), but
-  // Clusters connections (kubeconfig direct-connect) report no host node at
-  // all — defaulting to 'host' there hides everything on first load ("No
-  // nodes to display"). Fall back to 'k8s' when there's no host.
+  // Clusters connections (kubeconfig direct-connect / relay pod) report no
+  // host node at all — defaulting to 'host' there hides everything on first
+  // load ("No nodes to display"). Fall back to 'k8s' when there's no host.
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(() => {
     const hasHost = vm.graph?.nodes?.some((n) => n.type === 'host')
     return new Set<FilterKey>([hasHost ? 'host' : 'k8s'])
   })
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-
-  // Live node count per filter category, for the chip badges.
-  const filterCounts = useMemo(() => {
-    const source = vm.graph?.nodes ?? []
-    const out = {} as Record<FilterKey, number>
-    for (const key of Object.keys(FILTER_GROUPS) as FilterKey[]) {
-      const types = new Set<string>(FILTER_GROUPS[key].types as readonly string[])
-      out[key] = source.reduce((sum, n) => (types.has(n.type) ? sum + 1 : sum), 0)
-    }
-    return out
-  }, [vm.graph])
 
   // ── "•••" drill-down tree: host → category → type → individual ────────────
   // Tier 1: categories with a single summary node on canvas (e.g. "Kubernetes
@@ -229,27 +219,73 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     | null
   >(null)
   const [drawerGroup, setDrawerGroup] = useState<GroupInfo | null>(null)
-  const [drawerInitialFilter, setDrawerInitialFilter] = useState<string | undefined>(undefined)
+  // Namespace focus — dim the canvas to a single namespace. A pod group
+  // spans every namespace, so "which pods do I care about" needs its own
+  // axis next to the type filters.
+  const [nsFocus, setNsFocus] = useState<string | null>(null)
   const [groupsMap, setGroupsMap] = useState<Map<string, GroupInfo>>(new Map())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const refreshingRef = useRef(false)
+  const [alertDismissed, setAlertDismissed] = useState(false)
+  const [hideDegraded, setHideDegraded] = useState(false)
+
+  // Live node count per filter category, for the chip badges. Mirrors the
+  // "Hide degraded" toggle so a chip never advertises nodes that are hidden.
+  const filterCounts = useMemo(() => {
+    const source = hideDegraded
+      ? (vm.graph?.nodes ?? []).filter((n) => n.health !== 'degraded' && n.health !== 'unhealthy')
+      : (vm.graph?.nodes ?? [])
+    const out = {} as Record<FilterKey, number>
+    for (const key of Object.keys(FILTER_GROUPS) as FilterKey[]) {
+      const types = new Set<string>(FILTER_GROUPS[key].types as readonly string[])
+      out[key] = source.reduce((sum, n) => (types.has(n.type) ? sum + 1 : sum), 0)
+    }
+    return out
+  }, [vm.graph, hideDegraded])
   const [showLogs, setShowLogs] = useState(false)
-  const [showTerminal, setShowTerminal] = useState(false)
-  const [terminalLayer, setTerminalLayer] = useState<'docker' | 'lxd' | 'host' | 'kubernetes'>('docker')
+  const { openTerminal } = useTerminalStore()
   const canvasWrapRef = useRef<HTMLDivElement>(null)
 
+  // Spotlight: which filter key to dim everything else for (null = no spotlight)
   const [spotlightKey, setSpotlightKey] = useState<FilterKey | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
-  // Node awaiting a pan-to, set when a search reveals something currently
-  // hidden by a filter. Consumed by the effect below once it renders.
-  const pendingFocusId = useRef<string | null>(null)
 
+  // ReactFlow instance — for programmatic pan/zoom
   const rfRef = useRef<ReactFlowInstance | null>(null)
 
+  // Right panel resize
+  const [panelWidth, setPanelWidth] = useState(340)
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startW: panelWidth }
+    const onMove = (mv: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = dragRef.current.startX - mv.clientX
+      const next = Math.min(700, Math.max(240, dragRef.current.startW + delta))
+      setPanelWidth(next)
+    }
+    const onUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [panelWidth])
+
+  // Cache last found node so the panel doesn't flicker closed during graph refreshes
+  const selectedNodeCache = useRef<GraphNode | null>(null)
   const selectedNode = useMemo(() => {
-    if (!selectedNodeId || !vm.graph) return null
-    return vm.graph.nodes.find((n) => n.id === selectedNodeId) ?? null
+    if (!selectedNodeId) {
+      selectedNodeCache.current = null
+      return null
+    }
+    if (!vm.graph) return selectedNodeCache.current
+    const found = vm.graph.nodes.find((n) => n.id === selectedNodeId) ?? null
+    if (found) selectedNodeCache.current = found
+    return found ?? selectedNodeCache.current
   }, [selectedNodeId, vm.graph])
 
   // ── Build + layout whenever graph/filters/viewMode changes ────────────────
@@ -266,13 +302,44 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     }
     const visibleTypes = new Set<string>(['host', ...toolbarTypes, ...revealedTypes])
 
+    let sourceNodes = hideDegraded
+      ? vm.graph.nodes.filter((n) => n.health !== 'degraded' && n.health !== 'unhealthy')
+      : vm.graph.nodes
+
+    // Namespace focus filters the graph rather than dimming it. Dimming left
+    // every cross-namespace group half-faded, which read as a broken canvas
+    // rather than a focus. Filtering here means the groups are rebuilt from
+    // the focused namespace only, so "Pods ×12" is that namespace's pods and
+    // not the cluster total. Unnamespaced nodes (cluster, k8s node, host,
+    // containers) are structural context and always stay.
+    if (nsFocus) {
+      sourceNodes = sourceNodes.filter((n) => {
+        // Keep only the focused namespace node itself, so the canvas says
+        // which namespace it is filtered to instead of listing all of them.
+        if (n.type === 'namespace') return n.label === nsFocus
+        const ns = n.metadata?.namespace
+        return ns === undefined || ns === null || ns === '' || ns === nsFocus
+      })
+    }
+
+    const sourceNodeIds = new Set(sourceNodes.map((n) => n.id))
+    let sourceEdges = vm.graph.edges.filter((e) => sourceNodeIds.has(e.source) && sourceNodeIds.has(e.target))
+    if (hideDegraded) {
+      const okIds = new Set(
+        vm.graph.nodes
+          .filter((n) => n.health !== 'degraded' && n.health !== 'unhealthy')
+          .map((n) => n.id),
+      )
+      sourceEdges = sourceEdges.filter((e) => okIds.has(e.source) && okIds.has(e.target))
+    }
+
     let flowNodes: Node[]
     let flowEdges: Edge[]
 
     if (viewMode === 'grouped') {
       const { nodes: gn, edges: ge, groups } = buildGroupedGraph(
-        vm.graph.nodes,
-        vm.graph.edges,
+        sourceNodes,
+        sourceEdges,
         visibleTypes,
         expandedGroups,
         expandedNodeIds,
@@ -281,11 +348,11 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // Category-summary nodes: one per revealed-but-not-fully-drilled
       // category (e.g. "Kubernetes ×82"), sitting between host and the
       // type-level groups that appear once you drill into that summary.
-      const hostNode = vm.graph.nodes.find((n) => n.type === 'host')
-      // Clusters connections (kubeconfig direct-connect) report no host node —
-      // fall back to the cluster node as the canvas root anchor so category
-      // summaries and orphans still attach to something instead of floating.
-      const rootAnchor = hostNode ?? vm.graph.nodes.find((n) => n.type === 'cluster')
+      const hostNode = sourceNodes.find((n) => n.type === 'host')
+      // Clusters connections (kubeconfig direct-connect / relay pod) report no
+      // host node — fall back to the cluster node as the canvas root anchor so
+      // category summaries and orphans still attach to something.
+      const rootAnchor = hostNode ?? sourceNodes.find((n) => n.type === 'cluster')
       const categoryNodes: Node[] = []
       const categoryEdges: Edge[] = []
       for (const key of revealedCategories) {
@@ -293,7 +360,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         const catTypes = FILTER_GROUPS[key].types
         const remainingTypes = catTypes.filter((t) => !revealedTypes.has(t))
         if (remainingTypes.length === 0) continue // fully drilled, nothing left to summarize
-        const remainingNodes = vm.graph.nodes.filter((n) => remainingTypes.includes(n.type as any))
+        const remainingNodes = sourceNodes.filter((n) => remainingTypes.includes(n.type as any))
         if (remainingNodes.length === 0) continue
         const hc = countHealth(remainingNodes)
         const cid = categoryNodeId(key)
@@ -322,8 +389,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             type: 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
             style: { stroke: '#2d2d52', strokeWidth: 1.5 },
-            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
-            labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.9 },
+            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' },
+            labelBgStyle: { fill: '#070711', fillOpacity: 0.9 },
           })
         }
       }
@@ -358,7 +425,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         let anchorId: string | undefined
         if (category === 'k8s') anchorId = findIndividualByType('cluster') ?? categoryNodeId('k8s')
         else if (category === 'docker') anchorId = findIndividualByType('container_runtime') ?? categoryNodeId('docker')
-        if (!anchorId || anchorId === n.id || !flowNodeIds.has(anchorId)) anchorId = hostNode?.id
+        if (!anchorId || anchorId === n.id || !flowNodeIds.has(anchorId)) anchorId = rootAnchor?.id
 
         if (anchorId && anchorId !== n.id) {
           flowEdges.push({
@@ -369,8 +436,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             type: 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
             style: { stroke: '#2d2d52', strokeWidth: 1.5, strokeDasharray: '3 3' },
-            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'Geist Mono, JetBrains Mono, monospace' },
-            labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.9 },
+            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' },
+            labelBgStyle: { fill: '#070711', fillOpacity: 0.9 },
           })
           hasIncoming.add(n.id)
         }
@@ -379,13 +446,18 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       setGroupsMap(groups)
     } else {
       const { nodes: fn, edges: fe } = buildFlatFlowElements(
-        vm.graph.nodes,
-        vm.graph.edges,
+        sourceNodes,
+        sourceEdges,
         activeFilters,
       )
-      // The map draws every resource with the compact disc-and-label node;
-      // `buildFlatFlowElements` emits the card nodes used by the tree view.
+      // The map draws every resource with the compact disc-and-label node.
+      // `buildFlatFlowElements` emits `infraNode` (and `namespaceGroup`) for
+      // the hierarchy tree, so swap the type here rather than duplicating the
+      // whole builder.
       if (viewMode === 'map') {
+        // The map is a containment hierarchy: platform → resource type →
+        // namespace → its members. Synthetic parent/child nodes and edges are
+        // added here; `applyHierarchyLayout` positions them.
         const h = buildHubMap(
           fn.map((n) => ({ ...n, type: 'mapOrb', width: ORB_CELL_W, height: ORB_CELL_H })) as Node[],
           fe as Edge[],
@@ -405,31 +477,51 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       return
     }
 
+    // Grouped mode: fixed zone positions — no layout algorithm needed
+    // Flat mode: rooted dagre for proper hierarchy
     let ln: Node[]
     let le: Edge[]
     if (viewMode === 'map') {
-      // Every node on screen, arranged as a hub-and-spokes map. Deterministic
-      // by design: snapshots arrive every 15s and a re-randomised layout would
-      // make the whole map jump on every refresh.
+      // Structured map: nodes bucketed by the thing that owns them (namespace
+      // for k8s, type otherwise), each bucket a labelled grid of individual
+      // nodes. A free radial layout loses all structure once the graph is big
+      // — 189 identical discs in a circle is as unreadable as the count cards
+      // it replaced. Deterministic, so a 15s refresh never reshuffles it.
       ln = applyHubRadialLayout(flowNodes, flowEdges).nodes
-      le = flowEdges.map((e) => ({
-        ...e,
-        label: undefined,
-        type: 'straight',
-        style: { stroke: '#3a3a52', strokeWidth: 1, strokeDasharray: '2 4', opacity: 0.75 },
-        markerEnd: undefined,
-      }))
-    } else if (viewMode === 'grouped') {
-      // Namespace-scoped hierarchy: namespaced resources nest under the
-      // namespace that owns them, everything else keeps the zone/tier grid.
+      // Three kinds of line, drawn differently so the structure is legible:
+      // containment is the solid spine, the type→member reach is dashed (it
+      // spans levels, so solid would read as false parentage), and the
+      // original snapshot edges stay faint in the background.
+      le = flowEdges.map((e) => {
+        const kind = (e as { kind?: string }).kind
+        if (kind === 'contain') {
+          return {
+            ...e, label: undefined, type: 'straight' as const,
+            style: { stroke: '#4b5280', strokeWidth: 1.1, opacity: 0.55 },
+            markerEnd: undefined,
+          }
+        }
+        if (kind === 'ns-link') {
+          return {
+            ...e, label: undefined, type: 'straight' as const,
+            style: { stroke: '#6d6d94', strokeWidth: 1.1, strokeDasharray: '3 5', opacity: 0.55 },
+            markerEnd: undefined,
+          }
+        }
+        return {
+          ...e, label: undefined, type: 'straight' as const,
+          style: { stroke: '#2a2a3a', strokeWidth: 1, strokeDasharray: '2 5', opacity: 0.16 },
+          markerEnd: undefined,
+        }
+      })
+    } else {
+      // Namespace-scoped tree: namespaced resources nest under the namespace
+      // that owns them, everything else keeps the zone/tier grid.
       ln = applyNamespaceHierarchyLayout(flowNodes, flowEdges).nodes
       le = flowEdges
-    } else {
-      const laid = applyRootedDagreLayout(flowNodes, flowEdges, { rankdir: 'TB', ranksep: 120, nodesep: 70 })
-      ln = laid.nodes
-      le = laid.edges
     }
 
+    // Apply spotlight opacity if active
     const finalNodes = applySpotlight(ln, spotlightKey, viewMode)
 
     // Wire the "•••" picker onto the host node and every group node. Defined
@@ -468,25 +560,30 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
     setNodes(withPickers)
     setEdges(le)
-    // spotlightKey is read above but left out of the deps on purpose. A spotlight
-    // toggle only restyles nodes (the effect below); re-running layout for it would
-    // reset any node positions the user has dragged. With React 19.2+ this read can
-    // move into a useEffectEvent and the suppression can go.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- spotlightKey, see above
-  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes, setNodes, setEdges])
+  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes, hideDegraded, nsFocus])
 
   // ── Re-apply spotlight without re-running layout ───────────────────────────
   useEffect(() => {
     setNodes((prev) => applySpotlight(prev, spotlightKey, viewMode))
-  }, [spotlightKey, viewMode, setNodes])
+  }, [spotlightKey, viewMode, nsFocus])
 
   // ── Spotlight helpers ──────────────────────────────────────────────────────
 
+  /**
+   * Which namespace does this flow node belong to?
+   * - a namespace node is its own namespace, keyed by its label
+   * - any other namespaced node carries metadata.namespace
+   * - a collapsed type group resolves only when every member shares one
+   *   namespace; a group spanning namespaces stays unlabelled so it dims
+   *   rather than falsely claiming to be in one place
+   */
   function applySpotlight(
     allNodes: Node[],
     key: FilterKey | null,
-    mode: 'map' | 'grouped' | 'flat',
+    mode: 'map' | 'grouped',
   ): Node[] {
+    // Namespace focus is a real graph filter (see the build effect), not a
+    // dim, so only the type spotlight has any say over opacity here.
     if (!key) return allNodes.map((n) => ({ ...n, style: { ...n.style, opacity: 1 } }))
 
     const spotTypes = new Set<string>(FILTER_GROUPS[key].types)
@@ -502,22 +599,28 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     })
   }
 
+  // ── Filter toggle — first click activates, second spotlights, third deactivates
   function handleFilterClick(key: FilterKey) {
     if (!activeFilters.has(key)) {
+      // Activate it
       setActiveFilters((prev) => new Set([...prev, key]))
       setSpotlightKey(null)
       return
     }
     if (spotlightKey === key) {
+      // Already spotlit → clear spotlight
       setSpotlightKey(null)
     } else {
+      // Active but not spotlit → spotlight it
       setSpotlightKey(key)
+      // Zoom to those nodes
       zoomToFilterGroup(key)
     }
   }
 
   function handleFilterRightClick(e: React.MouseEvent, key: FilterKey) {
     e.preventDefault()
+    // Right-click = deactivate (if more than 1 active)
     setActiveFilters((prev) => {
       const next = new Set(prev)
       if (next.size > 1) next.delete(key)
@@ -526,68 +629,14 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     if (spotlightKey === key) setSpotlightKey(null)
   }
 
-  function zoomToFilterGroup(key: FilterKey) {
-    if (!rfRef.current) return
-    const types = new Set<string>(FILTER_GROUPS[key].types)
-    const matchIds = nodes
-      .filter((n) => {
-        const t = n.type === 'groupNode'
-          ? (n.data as GroupNodeData).groupType
-          : (n.data as InfraNodeData)?.nodeType ?? ''
-        return types.has(t)
-      })
-      .map((n) => n.id)
-    if (matchIds.length === 0) return
-    rfRef.current.fitView({ nodes: matchIds.map((id) => ({ id })), duration: 500, padding: 0.3 })
-  }
-
-  function handleRefresh() {
-    setIsRefreshing(true)
-    sendCommand(vm.code, 'refresh')
-    setTimeout(() => setIsRefreshing(false), 2000)
-  }
-
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.type === 'groupNode') {
-      const gdata = node.data as GroupNodeData
-      // Groups are keyed by scope: `group:pod@kube-system` is a different node
-      // from `group:pod@local-path-storage`, so the canvas id resolves the
-      // group rather than the bare type.
-      const group = groupsMap.get(`group:${gdata.groupKey ?? gdata.groupType}`)
-      if (group) {
-        setSelectedNodeId(null)
-        setDrawerGroup(group)
-        setDrawerInitialFilter(undefined)
-        setShowLogs(false)
-        setShowTerminal(false)
-      }
-    } else {
-      setDrawerGroup(null)
-      setSelectedNodeId((prev) => {
-        if (prev !== node.id) { setShowLogs(false); setShowTerminal(false) }
-        return node.id
-      })
-    }
-  }, [groupsMap])
-
-  function handleSelectNodeFromDrawer(nodeId: string) {
-    const groupEntry = [...groupsMap.entries()].find(
-      ([, g]) => g.nodes.some((n) => n.id === nodeId)
-    )
-    if (groupEntry && rfRef.current) {
-      const groupCanvasId = `group:${groupEntry[0]}`
-      const rfNode = rfRef.current.getNode(groupCanvasId)
-      if (rfNode) {
-        rfRef.current.setCenter(
-          rfNode.position.x + (rfNode.width ?? 260) / 2,
-          rfNode.position.y + (rfNode.height ?? 92) / 2,
-          { zoom: 1.8, duration: 600 },
-        )
-      }
-    }
-    setDrawerGroup(null)
-    setSelectedNodeId(nodeId)
-  }
+  // ── Search + reveal ────────────────────────────────────────────────────────
+  // Searches the whole graph, not just the currently visible slice, so a
+  // node hidden by a filter is still findable. Selecting a hidden match
+  // activates its category and expands its type group so it renders, then
+  // pans to it.
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const pendingFocusId = useRef<string | null>(null)
 
   const searchMatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -606,31 +655,31 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     // Either the category is switched on, or this type was drilled into
     // individually via a "•••" picker.
     if (!activeFilters.has(cat) && !revealedTypes.has(node.type)) return true
-    // Non-singleton types render as one group node unless the whole group is
-    // expanded, or this specific node was picked out of it.
+    // A non-singleton type renders as namespace-scoped groups unless the whole
+    // type is expanded (which collapses every scope at once), or this specific
+    // node was picked out of its group.
     if (!expandedGroups.has(`group:${node.type}`)) {
       return !expandedNodeIds.has(node.id)
     }
     return false
   }
 
-  function handleSelectSearchResult(nodeId: string) {
-    setSearchQuery('')
-    setSearchFocused(false)
-    const node = vm.graph?.nodes.find((n) => n.id === nodeId)
-    if (!node) return
-    // A match hidden by the current filter used to do nothing visible when
-    // selected. Activate its category and expand its type group first, then
-    // pan to it once React has rendered it.
+  function revealAndFocus(node: GraphNode) {
+    // Namespace focus filters the graph, so a match sitting in another
+    // namespace would never render. Clear the focus rather than silently
+    // panning to nothing.
+    const ns = node.metadata?.namespace
+    if (nsFocus && typeof ns === 'string' && ns && ns !== nsFocus) setNsFocus(null)
+
     const cat = TYPE_TO_CATEGORY[node.type]
-    if (cat && !activeFilters.has(cat)) {
-      setActiveFilters((prev) => new Set([...prev, cat]))
-    }
+    if (cat) setActiveFilters((prev) => (prev.has(cat) ? prev : new Set([...prev, cat])))
+    // A non-singleton type only renders individual nodes once its group is
+    // expanded, so expanding here is what actually makes the node appear.
     if (!SINGLETON_TYPES.has(node.type) && node.type !== 'cluster') {
       setExpandedGroups((prev) => new Set([...prev, `group:${node.type}`]))
     }
     setSpotlightKey(null)
-    pendingFocusId.current = nodeId
+    pendingFocusId.current = node.id
   }
 
   // Centre on the node once React has actually rendered it. Runs after the
@@ -641,21 +690,104 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     const rfNode = rfRef.current.getNode(id)
     if (!rfNode) return // not mounted yet; the next render will retry
     pendingFocusId.current = null
-    setDrawerGroup(null)
     setSelectedNodeId(id)
-    rfRef.current.setCenter(
-      rfNode.position.x + (rfNode.width ?? 220) / 2,
-      rfNode.position.y + (rfNode.height ?? 60) / 2,
-      { zoom: 1.8, duration: 600 },
-    )
+    rfRef.current.setCenter(rfNode.position.x + (rfNode.width ?? 0) / 2,
+      rfNode.position.y + (rfNode.height ?? 0) / 2, { zoom: 1.1, duration: 500 })
   }, [nodes, selectedNodeId])
+
+  function zoomToFilterGroup(key: FilterKey) {
+    if (!rfRef.current) return
+    const types = new Set<string>(FILTER_GROUPS[key].types)
+    const matchIds = nodes
+      .filter((n) => {
+        const t = n.type === 'groupNode'
+          ? (n.data as GroupNodeData).groupType
+          : (n.data as InfraNodeData)?.nodeType ?? ''
+        return types.has(t)
+      })
+      .map((n) => n.id)
+    if (matchIds.length === 0) return
+    rfRef.current.fitView({ nodes: matchIds.map((id) => ({ id })), duration: 500, padding: 0.3 })
+  }
+
+  // Clear isRefreshing when a new snapshot arrives after refresh was requested
+  const snapshotTimestamp = vm.graph?.snapshot?.timestamp
+  useEffect(() => {
+    if (refreshingRef.current) {
+      refreshingRef.current = false
+      setIsRefreshing(false)
+    }
+  }, [snapshotTimestamp])
+
+  function handleRefresh() {
+    refreshingRef.current = true
+    setIsRefreshing(true)
+    sendCommand(vm.code, 'refresh')
+    // Fallback: clear after 30s if no snapshot arrives
+    setTimeout(() => {
+      if (refreshingRef.current) {
+        refreshingRef.current = false
+        setIsRefreshing(false)
+      }
+    }, 30_000)
+  }
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    if (node.type === 'groupNode') {
+      const gdata = node.data as GroupNodeData
+      // Groups are keyed by scope: `group:pod@kube-system` is a different node
+      // from `group:pod@local-path-storage`, so the canvas id resolves the
+      // group rather than the bare type.
+      const group = groupsMap.get(`group:${gdata.groupKey ?? gdata.groupType}`)
+      if (group) {
+        setSelectedNodeId(null)
+        setDrawerGroup(group)
+        setShowLogs(false)
+      }
+    } else {
+      // A namespace is a container, not a thing with an inspector: its detail
+      // panel is a single metadata row and nothing actionable. Clicking one
+      // filters the canvas down to it instead of opening that empty panel.
+      if (node.type === 'namespaceGroup') {
+        const ns = (node.data as InfraNodeData)?.label
+        if (ns) setNsFocus((prev) => (prev === ns ? null : ns))
+        setDrawerGroup(null)
+        setSelectedNodeId(null)
+        setShowLogs(false)
+        return
+      }
+      setDrawerGroup(null)
+      setSelectedNodeId((prev) => {
+        if (prev !== node.id) { setShowLogs(false) }
+        return node.id
+      })
+    }
+  }, [groupsMap])
+
+  function handleSelectNodeFromDrawer(nodeId: string) {
+    // Open the node detail panel for this specific item — same setters
+    // handleNodeClick uses for a direct canvas click. The drawer must close:
+    // it and NodeDetailPanel dock in the same right-side slot.
+    // Picking a namespace from the drawer focuses it on the canvas, same as
+    // clicking the namespace node — no near-empty inspector for a container.
+    const raw = vm.graph?.nodes.find((n) => n.id === nodeId)
+    if (raw?.type === 'namespace') {
+      setNsFocus((prev) => (prev === raw.label ? null : raw.label))
+      setDrawerGroup(null)
+      setSelectedNodeId(null)
+      setShowLogs(false)
+      return
+    }
+    setDrawerGroup(null)
+    setSelectedNodeId(nodeId)
+    setShowLogs(false)
+  }
 
   function handlePaneClick() {
     setSelectedNodeId(null)
     setDrawerGroup(null)
     setSpotlightKey(null)
     setShowLogs(false)
-    setShowTerminal(false)
   }
 
   // ── Export helpers ─────────────────────────────────────────────────────────
@@ -663,7 +795,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     if (!canvasWrapRef.current) return
     try {
       const { toPng } = await import('html-to-image')
-      const dataUrl = await toPng(canvasWrapRef.current, { backgroundColor: 'var(--bg)', pixelRatio: 2 })
+      const dataUrl = await toPng(canvasWrapRef.current, { backgroundColor: '#08080E', pixelRatio: 2 })
       const a = document.createElement('a')
       a.href = dataUrl
       a.download = `${vm.hostname ?? vm.code}-canvas.png`
@@ -683,21 +815,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     a.download = `${vm.hostname ?? vm.code}-graph.json`
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  async function handleExportSVG() {
-    if (!canvasWrapRef.current) return
-    try {
-      const { toSvg } = await import('html-to-image')
-      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0A0A0A'
-      const dataUrl = await toSvg(canvasWrapRef.current, { backgroundColor: bg })
-      const a = document.createElement('a')
-      a.href = dataUrl
-      a.download = `${vm.hostname ?? vm.code}-canvas.svg`
-      a.click()
-    } catch (err) {
-      console.error('[export] SVG failed', err)
-    }
   }
 
   // ── Critical alert banner ──────────────────────────────────────────────────
@@ -727,45 +844,74 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   }
 
   return (
-    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
 
       {/* ── Top bar ──────────────────────────────────────────────── */}
       <div style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
-        padding: '8px 14px', minHeight: 50, zIndex: 10,
-        background: 'var(--surface)', borderBottom: '1px solid var(--line)',
-        backdropFilter: 'blur(12px)',
+        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
+        padding: '0 14px', height: 46, zIndex: 10,
+        // The title truncates so a long agent id never forces the bar wider
+        // (that was what made it scroll). Kept as a fallback rather than
+        // `hidden`: hiding silently clipped Export/Refresh/chips out of
+        // reach on narrower windows instead of letting them scroll.
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        background: 'var(--bg)', borderBottom: '1px solid var(--line2)',
       }}>
         {onBack && (
           <>
             <button onClick={onBack} style={ICON_BTN}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink2)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink3)' }}>
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink4)' }}>
               <ArrowLeft size={15} />
             </button>
             <div style={DIVIDER} />
           </>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Server size={13} color="var(--ink2)" strokeWidth={1.5} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{vm.hostname ?? vm.code}</span>
-          <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: 'var(--line)', color: 'var(--ink2)', border: '1px solid var(--line2)', fontFamily: 'monospace' }}>
-            {vm.code}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
+          <Server size={13} color="var(--ink3)" style={{ flexShrink: 0 }} />
+          <span
+            title={vm.hostname ?? vm.code}
+            style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.015em',
+              // Truncate rather than wrap: a 36-char agent id used to break the
+              // header onto two lines and push the toolbar out of view.
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              minWidth: 0, maxWidth: 220,
+            }}
+          >
+            {vm.hostname ?? vm.code}
           </span>
+          {/* Only worth showing when it adds information. Cluster connections
+              have no hostname, so both slots rendered the same id twice. */}
+          {vm.hostname && vm.hostname !== vm.code && (
+            <span
+              title={vm.code}
+              style={{
+                fontSize: 10, padding: '1px 7px', borderRadius: 20, background: 'var(--line)',
+                color: 'var(--ink3)', border: '1px solid #2A2A2A',
+                fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
+                maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {vm.code}
+            </span>
+          )}
         </div>
 
         {stats && (
           <>
             <div style={DIVIDER} />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink3)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink4)' }}>
               <GitBranch size={11} /><span style={{ color: 'var(--ink2)' }}>{stats.totalNodes}</span> nodes
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink3)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink4)' }}>
               <Layers size={11} /><span style={{ color: 'var(--ink2)' }}>{stats.totalEdges}</span> edges
             </span>
             {snapshot?.collectionDuration != null && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink3)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink4)' }}>
                 <Clock size={11} /><span style={{ color: 'var(--ink2)' }}>{fmt(snapshot.collectionDuration)}</span>
               </span>
             )}
@@ -776,19 +922,44 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         {/* Spotlight hint */}
         {spotlightKey && (
-          <span style={{ fontSize: 10, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+          <span style={{ fontSize: 10, color: 'var(--ink2)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ink)', display: 'inline-block' }} />
             Spotlight: {FILTER_GROUPS[spotlightKey].label}
-            <button onClick={() => setSpotlightKey(null)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', padding: 0, fontSize: 11 }}>✕</button>
+            <button onClick={() => setSpotlightKey(null)} style={{ background: 'none', border: 'none', color: 'var(--ink3)', cursor: 'pointer', padding: 0, fontSize: 11 }}>✕</button>
           </span>
         )}
 
-        {/* Search */}
+        {/* View mode toggle */}
+        <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid #1E1E1E', borderRadius: 7, padding: 2 }}>
+          {([
+            ['map', 'Map', 'Radial map: root, type hubs, resources'],
+            ['grouped', 'Grouped', 'Namespace tree with per-type counts'],
+          ] as const).map(([m, Label, hint]) => (
+            <button key={m} onClick={() => setViewMode(m)} title={hint}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                fontSize: 11, fontWeight: viewMode === m ? 600 : 400,
+                background: viewMode === m ? 'var(--line2)' : 'transparent',
+                color: viewMode === m ? 'var(--ink)' : 'var(--ink4)',
+                transition: 'all 0.1s',
+              }}>
+              {m === 'map' ? <Waypoints size={11} /> : <Rows3 size={11} />}
+              {Label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search — searches the whole graph, including nodes the current
+            filter is hiding, and reveals the match when selected. */}
         <div style={{ position: 'relative' }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8,
-            padding: '4px 8px', width: 180,
+            padding: '4px 8px',
+            // Shrinks before the chips do, so a narrow window compresses the
+            // search box rather than pushing Export off the end of the bar.
+            width: 'auto', minWidth: 110, maxWidth: 180, flex: '0 1 180px',
           }}>
             <Search size={12} color="var(--ink4)" />
             <input
@@ -797,7 +968,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchMatches.length > 0) handleSelectSearchResult(searchMatches[0].id)
+                if (e.key === 'Enter' && searchMatches.length > 0) {
+                  setSearchQuery(''); setSearchFocused(false); revealAndFocus(searchMatches[0])
+                }
                 if (e.key === 'Escape') { setSearchQuery(''); setSearchFocused(false) }
               }}
               placeholder="Search nodes…"
@@ -809,7 +982,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           </div>
           {searchFocused && searchQuery && (
             <div style={{
-              position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: 260, maxHeight: 320,
+              position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: 300, maxHeight: 320,
               overflowY: 'auto', background: 'var(--surface)', border: '1px solid var(--line)',
               borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.25)', zIndex: 50,
             }}>
@@ -819,28 +992,28 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                 searchMatches.map((n) => {
                   const hidden = isNodeHidden(n)
                   return (
-                  <button
-                    key={n.id}
-                    onMouseDown={() => handleSelectSearchResult(n.id)}
-                    style={{
-                      display: 'flex', width: '100%', textAlign: 'left', alignItems: 'center', gap: 8,
-                      padding: '6px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
-                      fontSize: 12, color: 'var(--ink)',
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: getNodeColor(n.type) }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.label}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink4)', flexShrink: 0 }}>{n.type}</span>
-                    {hidden && (
-                      <span
-                        title="Not visible under the current filter. Click to reveal it."
-                        style={{ fontSize: 9, flexShrink: 0, padding: '1px 5px', borderRadius: 4,
-                          border: '1px solid var(--line2)', color: 'var(--ink3)' }}
-                      >
-                        hidden
-                      </span>
-                    )}
-                  </button>
+                    <button
+                      key={n.id}
+                      onMouseDown={() => { setSearchQuery(''); setSearchFocused(false); revealAndFocus(n) }}
+                      style={{
+                        display: 'flex', width: '100%', textAlign: 'left', alignItems: 'center', gap: 8,
+                        padding: '6px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+                        fontSize: 12, color: 'var(--ink)',
+                      }}
+                    >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: getNodeColor(n.type) }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.label}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink4)', flexShrink: 0 }}>{n.type}</span>
+                      {hidden && (
+                        <span
+                          title="Not visible under the current filter. Click to reveal it."
+                          style={{ fontSize: 9, flexShrink: 0, padding: '1px 5px', borderRadius: 4,
+                            border: '1px solid var(--line2)', color: 'var(--ink3)' }}
+                        >
+                          hidden
+                        </span>
+                      )}
+                    </button>
                   )
                 })
               )}
@@ -850,33 +1023,31 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         <div style={DIVIDER} />
 
-        {/* View mode toggle */}
-        <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: 2 }}>
-          {(['map', 'grouped', 'flat'] as const).map((m) => (
-            <button key={m} onClick={() => setViewMode(m)}
-              title={m === 'map' ? 'Map: every resource as a node' : m === 'grouped' ? 'Grouped: one card per type' : 'Flat: full hierarchy'}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                fontSize: 11, fontWeight: viewMode === m ? 600 : 400,
-                background: viewMode === m ? 'var(--line)' : 'transparent',
-                color: viewMode === m ? 'var(--ink)' : 'var(--ink3)',
-                transition: 'all 0.15s',
-              }}>
-              {m === 'flat' ? <Network size={11} /> : m === 'map' ? <Waypoints size={11} /> : <Rows3 size={11} />}
-              {m === 'map' ? 'Map' : m === 'grouped' ? 'Grouped' : 'Flat'}
-            </button>
-          ))}
-        </div>
-
-        <div style={DIVIDER} />
+        {/* Namespace focus indicator. Dimming the canvas is invisible
+            feedback unless you say what caused it. */}
+        {nsFocus && (
+          <button
+            onClick={() => setNsFocus(null)}
+            title={`Canvas is focused on namespace "${nsFocus}". Click to clear.`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+              background: 'var(--line)', color: 'var(--ink)',
+              border: '1px solid var(--line2)', transition: 'all 0.1s',
+            }}
+          >
+            <span style={{ color: 'var(--ink4)' }}>ns</span>
+            <span style={{ fontWeight: 600 }}>{nsFocus}</span>
+            <X size={10} color="var(--ink3)" />
+          </button>
+        )}
 
         {/* Filter chips — every chip uses identical styling. The previous two
-            rows styled the second group with a dashed border, which read as
-            disabled even though the chips were live. Differing by position
-            only. */}
+            rows styled the second group with --ink3 text and a dashed border,
+            which read as disabled even though the chips were live. Differing
+            by position only. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Filter size={11} color="var(--ink3)" />
+          <Filter size={11} color="var(--ink4)" />
           {TOOLBAR_ORDER.map((key, i) => {
             const g = FILTER_GROUPS[key]
             const active = activeFilters.has(key)
@@ -896,18 +1067,17 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                     padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     fontWeight: active ? 600 : 400,
-                    background: spotlit ? g.color : active ? `${g.color}22` : 'transparent',
-                    color: spotlit ? '#fff' : active ? g.color : 'var(--ink3)',
-                    border: `1px solid ${spotlit ? g.color : active ? `${g.color}40` : 'var(--line)'}`,
-                    transition: 'all 0.15s',
+                    background: spotlit ? 'var(--ink)' : active ? 'var(--line)' : 'transparent',
+                    color: spotlit ? 'var(--bg)' : active ? 'var(--ink)' : 'var(--ink4)',
+                    border: `1px solid ${spotlit ? 'var(--ink)' : active ? 'var(--line2)' : 'var(--line)'}`,
+                    transition: 'all 0.1s',
                   }}>
                   {g.label}
                   {/* Counts on every chip. A chip with no number gives no
                       reason to click it — the number is the call to action. */}
                   <span style={{
                     fontSize: 10, fontVariantNumeric: 'tabular-nums',
-                    color: spotlit ? '#fff' : count ? 'var(--ink3)' : 'var(--line2)',
-                    opacity: active ? 0.85 : 1,
+                    color: spotlit ? 'var(--bg)' : active ? 'var(--ink3)' : count ? 'var(--ink3)' : 'var(--line2)',
                   }}>
                     {count}
                   </span>
@@ -920,9 +1090,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         <div style={DIVIDER} />
 
         <button onClick={handleRefresh}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink2)', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid #1E1E1E', background: 'transparent', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', transition: 'all 0.1s' }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.color = 'var(--ink)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink2)' }}>
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink3)' }}>
           <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           Refresh
         </button>
@@ -939,21 +1109,20 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               const menu = document.getElementById('export-menu')
               if (menu) menu.style.display = menu.style.display === 'none' ? 'flex' : 'none'
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink2)', fontSize: 11, cursor: 'pointer', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid #1E1E1E', background: 'transparent', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', transition: 'all 0.1s' }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.color = 'var(--ink)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink2)' }}>
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink3)' }}>
             <Download size={12} /> Export
           </button>
-          <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', minWidth: 130, zIndex: 50, boxShadow: '0 12px 32px rgba(0,0,0,0.12)' }}>
+          <div id="export-menu" style={{ display: 'none', flexDirection: 'column', position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, overflow: 'hidden', minWidth: 130, zIndex: 50 }}>
             {[
               { label: 'Export PNG', action: () => { handleExportPNG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
-              { label: 'Export SVG', action: () => { handleExportSVG(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
               { label: 'Export JSON', action: () => { handleExportJSON(); const m = document.getElementById('export-menu'); if (m) m.style.display = 'none' } },
             ].map(({ label, action }) => (
               <button key={label} onClick={action}
-                style={{ padding: '9px 14px', background: 'transparent', border: 'none', color: 'var(--ink2)', fontSize: 12, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.12s' }}
+                style={{ padding: '9px 14px', background: 'transparent', border: 'none', color: 'var(--ink3)', fontSize: 12, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.1s' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--line)'; e.currentTarget.style.color = 'var(--ink)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink2)' }}>
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink3)' }}>
                 {label}
               </button>
             ))}
@@ -962,37 +1131,43 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       </div>
 
       {/* ── Critical alert banner ─────────────────────────────────── */}
-      {criticalGroups.length > 0 && (
+      {criticalGroups.length > 0 && !alertDismissed && (
         <div style={{
           flexShrink: 0,
-          background: 'rgba(248,113,113,0.07)',
-          borderBottom: '1px solid rgba(248,113,113,0.18)',
-          padding: '5px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
+          background: 'var(--surface)',
+          borderBottom: '1px solid #2A2A2A',
+          padding: '6px 16px',
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <AlertTriangle size={13} color="#ef4444" strokeWidth={1.5} />
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <AlertTriangle size={13} color="var(--ink3)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             {criticalGroups.map((a) => (
               <button
                 key={a.id}
-                onClick={() => {
-                  const g = groupsMap.get(a.id)
-                  if (g) { setDrawerGroup(g); setDrawerInitialFilter('degraded'); setSelectedNodeId(null) }
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '3px 10px', borderRadius: 6,
-                  border: '1px solid rgba(248,113,113,0.25)',
-                  background: 'rgba(248,113,113,0.08)',
-                  cursor: 'pointer', fontSize: 11, color: '#fca5a5',
-                }}
+                onClick={() => { const g = groupsMap.get(a.id); if (g) { setDrawerGroup(g); setSelectedNodeId(null) } }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, color: 'var(--ink2)' }}
               >
-                ⚠ {a.label}: <strong>{a.degraded} degraded</strong>, view &amp; act →
+                <strong>{a.label}</strong>: {a.degraded} degraded
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setHideDegraded((v) => !v)}
+            style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+              background: hideDegraded ? 'var(--line)' : 'transparent',
+              border: '1px solid #2A2A2A', color: 'var(--ink2)',
+            }}
+          >
+            {hideDegraded ? 'Show degraded' : 'Hide degraded'}
+          </button>
+          <button
+            onClick={() => setAlertDismissed(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink4)', padding: '2px 4px', fontSize: 14, lineHeight: 1 }}
+            title="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -1001,15 +1176,15 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {!vm.graph ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2.5px solid rgba(250,250,250,0.08)', borderTopColor: 'var(--ink2)' }} className="animate-spin" />
-              <p style={{ fontSize: 13, color: 'var(--ink3)' }}>Loading infrastructure graph…</p>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid #1E1E1E', borderTopColor: 'var(--ink)' }} className="animate-spin" />
+              <p style={{ fontSize: 12, color: 'var(--ink4)', fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' }}>Loading graph…</p>
             </div>
           </div>
         ) : nodes.length === 0 ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>No nodes to display</p>
-              <p style={{ fontSize: 13, color: 'var(--ink3)' }}>Try enabling more filter categories</p>
+              <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)', marginBottom: 6 }}>No nodes to display</p>
+              <p style={{ fontSize: 12, color: 'var(--ink4)' }}>Enable more filter categories above</p>
             </div>
           </div>
         ) : (
@@ -1028,14 +1203,11 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             maxZoom={2.5}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(255,255,255,0.04)" />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(255,255,255,0.04)" />
             <Controls style={{ bottom: 80, left: 16 }} showInteractive={false} />
             <MiniMap
-              nodeColor={(n) => {
-                if (n.type === 'groupNode') return getNodeColor((n.data as GroupNodeData).groupType)
-                return getNodeColor((n.data as InfraNodeData)?.nodeType, (n.data as InfraNodeData)?.health)
-              }}
-              maskColor="rgba(0,0,0,0.5)"
+              nodeColor={() => 'var(--line)'}
+              maskColor="rgba(0,0,0,0.4)"
               style={{ bottom: 16, right: 16, width: 160, height: 100 }}
             />
           </ReactFlow>
@@ -1044,10 +1216,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         {drawerGroup && (
           <GroupDrawer
             group={drawerGroup}
-            vmCode={vm.code}
-            initialHealthFilter={drawerInitialFilter}
-            onClose={() => { setDrawerGroup(null); setDrawerInitialFilter(undefined) }}
+            onClose={() => setDrawerGroup(null)}
             onSelectNode={handleSelectNodeFromDrawer}
+            onFocusNamespace={setNsFocus}
           />
         )}
 
@@ -1119,40 +1290,49 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           />
         )}
 
-        {selectedNode && !drawerGroup && (
-          <NodeDetailPanel
-            node={selectedNode}
-            vmCode={vm.code}
-            onClose={() => { setSelectedNodeId(null); setShowLogs(false); setShowTerminal(false) }}
-            onShowLogs={['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset', 'service'].includes(selectedNode.type) ? () => { setShowLogs(true); setShowTerminal(false) } : undefined}
-            onShowTerminal={['container', 'host', 'pod'].includes(selectedNode.type) ? () => {
-              setTerminalLayer(
-                  selectedNode.type === 'host' ? 'host'
-                      : selectedNode.type === 'pod' ? 'kubernetes'
-                          : (['lxd', 'incus'].includes(String(selectedNode.metadata?.runtime ?? '').toLowerCase()) ? 'lxd' : 'docker'),
-              )
-              setShowTerminal(true)
-              setShowLogs(false)
-            } : undefined}
-          />
+        {selectedNode && !drawerGroup && !showLogs && (
+          <>
+            {/* Drag resize handle — sits on left edge of panel */}
+            <div
+              onMouseDown={onResizeMouseDown}
+              style={{
+                position: 'absolute', right: panelWidth - 3, top: 0, bottom: 0, width: 6, zIndex: 40,
+                cursor: 'col-resize',
+                background: 'transparent',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(250,250,250,0.15)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            />
+            <NodeDetailPanel
+              node={selectedNode}
+              vmCode={vm.code}
+              width={panelWidth}
+              onClose={() => { setSelectedNodeId(null); setShowLogs(false) }}
+              onShowLogs={['container', 'pod', 'host', 'deployment', 'statefulset', 'daemonset', 'service'].includes(selectedNode.type) ? () => { setShowLogs(true) } : undefined}
+              onShowTerminal={['container', 'host', 'pod'].includes(selectedNode.type) ? () => {
+                const layer = selectedNode.type === 'host' ? 'host' : selectedNode.type === 'pod' ? 'kubernetes' : 'docker'
+                openTerminal({
+                  label: selectedNode.label,
+                  vmLabel: vm.code,
+                  vmCode: vm.code,
+                  node: selectedNode,
+                  layer,
+                  namespace: selectedNode.metadata?.namespace,
+                })
+              } : undefined}
+            />
+          </>
         )}
 
-        {selectedNode && showLogs && !showTerminal && (
+        {selectedNode && showLogs && (
           <LogsPanel
             node={selectedNode}
             vmCode={vm.code}
+            panelWidth={0}
             onClose={() => setShowLogs(false)}
-            allNodes={vm.graph?.nodes ?? []}
-            allEdges={vm.graph?.edges ?? []}
-          />
-        )}
-
-        {selectedNode && showTerminal && !showLogs && (
-          <TerminalPanel
-            node={selectedNode}
-            vmCode={vm.code}
-            layer={terminalLayer}
-            onClose={() => setShowTerminal(false)}
+            allNodes={vm.graph?.nodes}
+            allEdges={vm.graph?.edges}
           />
         )}
       </div>
@@ -1160,25 +1340,25 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       {/* ── Status bar ───────────────────────────────────────────── */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 14px', height: 24, background: 'var(--bg)', borderTop: '1px solid var(--line)',
+        padding: '0 14px', height: 22, background: 'var(--bg)', borderTop: '1px solid #1E1E1E',
+        fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {viewMode === 'grouped' && groupsMap.size > 0 && (
-            <span style={{ fontSize: 10, color: 'var(--ink4)' }}>
-              {groupsMap.size} groups · click card to drill down · right-click filter to hide
+            <span style={{ fontSize: 10, color: 'var(--line2)' }}>
+              {groupsMap.size} groups · click to drill down
             </span>
           )}
           {stats && Object.entries(stats.nodesByType)
-            .sort(([, a], [, b]) => b - a).slice(0, 4)
+            .sort(([, a], [, b]) => b - a).slice(0, 5)
             .map(([type, count]) => (
-              <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--ink4)' }}>
-                <span style={{ color: getNodeColor(type) }}>●</span>
+              <span key={type} style={{ fontSize: 10, color: 'var(--line3)' }}>
                 {type}:{count}
               </span>
             ))}
         </div>
         {snapshot?.timestamp && (
-          <span style={{ fontSize: 10, color: 'var(--ink4)', fontFamily: 'Geist Mono, JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: 10, color: 'var(--line2)' }}>
             {new Date(snapshot.timestamp).toLocaleTimeString()}
           </span>
         )}
@@ -1192,9 +1372,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
 const ICON_BTN: React.CSSProperties = {
   width: 28, height: 28, borderRadius: 7, border: 'none',
-  background: 'transparent', color: 'var(--ink3)', cursor: 'pointer',
+  background: 'transparent', color: 'var(--ink4)', cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  transition: 'background 0.15s, color 0.15s',
+  transition: 'background 0.1s, color 0.1s',
 }
 
 const DIVIDER: React.CSSProperties = {
@@ -1210,16 +1390,15 @@ function LastUpdated({ ts }: { ts: number | null }) {
   if (!ts) return null
   const sec = Math.max(0, Math.floor((now - ts) / 1000))
   const label =
-    sec < 5         ? 'just now' :
-    sec < 60        ? `${sec}s ago` :
-    sec < 3600      ? `${Math.floor(sec / 60)}m ago` :
-                      `${Math.floor(sec / 3600)}h ago`
+    sec < 5    ? 'just now' :
+    sec < 60   ? `${sec}s ago` :
+    sec < 3600 ? `${Math.floor(sec / 60)}m ago` :
+                 `${Math.floor(sec / 3600)}h ago`
   const stale = sec >= 60
-  const color = stale ? '#f59e0b' : 'var(--ink3)'
   return (
     <span
       title={`Last updated ${new Date(ts).toLocaleTimeString()}`}
-      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color, fontFamily: 'Geist Mono, JetBrains Mono, monospace' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: stale ? 'var(--ink2)' : 'var(--ink4)', fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' }}
     >
       <Clock size={10} />
       {label}

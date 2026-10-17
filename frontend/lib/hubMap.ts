@@ -122,7 +122,12 @@ export function buildHubMap(nodes: Node[], edges: Edge[]): HubMapResult {
 
   // One hub per type. Biggest types first so they get the roomiest arc.
   const hubs: Hub[] = [...byType.keys()]
-    .map((t) => ({ type: t, items: (byType.get(t) ?? []).slice().sort(byLabel) }))
+    // Sorted by namespace first, then name. Every deployment in a hub belongs
+    // to some namespace, and grouping those runs together is what turns a
+    // hub's cluster from "30 unrelated dots" into "these are `cs`, these are
+    // `ingress-nginx`" — which is also what makes the link back to the
+    // namespace node short enough to read.
+    .map((t) => ({ type: t, items: (byType.get(t) ?? []).slice().sort(byNsThenLabel) }))
     .sort((a, b) => b.items.length - a.items.length)
 
   for (const h of hubs) {
@@ -161,6 +166,19 @@ export function buildHubMap(nodes: Node[], edges: Edge[]): HubMapResult {
   }
 
   return { nodes: out, edges: [...outEdges, ...edges] }
+}
+
+function nsNameOf(n: Node): string {
+  const m = n.data as { metadata?: Record<string, unknown> }
+  const ns = m?.metadata?.namespace
+  return typeof ns === 'string' ? ns : '~'
+}
+
+function byNsThenLabel(a: Node, b: Node): number {
+  const na = nsNameOf(a)
+  const nb = nsNameOf(b)
+  if (na !== nb) return na < nb ? -1 : 1
+  return byLabel(a, b)
 }
 
 function byLabel(a: Node, b: Node): number {
