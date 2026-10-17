@@ -12,6 +12,7 @@
 
 import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
+import { GROUP_NODE_WIDTH, GROUP_NODE_HEIGHT } from './graphPreprocess'
 
 export const NODE_WIDTH = 220
 export const NODE_HEIGHT = 100
@@ -236,6 +237,185 @@ export function applyGroupedZoneLayout(nodes: Node[]): Node[] {
   }
 
   return result
+}
+
+// ─── Namespace-scoped hierarchy layout ────────────────────────────────────────
+
+/**
+ * Lays the grouped canvas out as a namespace hierarchy instead of a flat grid.
+ *
+ * The flat grid bucketed every resource type into its own row, so `Pods ×9`
+ * sat on the same tier as `DaemonSets ×2` with nothing saying which namespace
+ * either belonged to. Grouping keys are already namespace-scoped by
+ * `buildGroupedGraph`, so all this has to do is honour that: each namespace
+ * gets its own column with its scoped child groups stacked beneath it, and
+ * every node that is *not* namespace-scoped keeps the existing zone/tier rows.
+ *
+ * Each namespace column is sized to the widest child row it has to hold, so
+ * two namespaces with different numbers of resource types cannot overlap.
+ */
+const NS_COL_X_START = 200
+const NS_COL_GAP = 120
+// The namespace hierarchy lays its rows out itself rather than via the zone
+// tier table, so it needs its own row metrics. Values match the grouped
+// canvas: node height plus a gap.
+const ROW_H = 150
+const ROW_START_Y = 60
+const NS_COL_MIN_W = 560        // one group node plus breathing room
+const NS_HEADER_H = 130         // vertical space reserved above a child row
+
+export function applyNamespaceHierarchyLayout(
+  nodes: Node[],
+  edges: Edge[],
+): { nodes: Node[]; edges: Edge[] } {
+  const nsNodes = nodes.filter((n) => n.data?.nodeType === 'namespace')
+  const nsIdSet = new Set(nsNodes.map((n) => n.id))
+  const nsNames = new Set(nsNodes.map((n) => String(n.data?.label ?? '')))
+
+  // Partition every node into either "belongs under a namespace" or "free".
+  //
+  // Both scoped group nodes AND individually-rendered namespaced nodes belong
+  // under their namespace. The second case matters: a namespace holding a
+  // single pod renders that pod by name instead of a redundant `Pods ×1`
+  // box, and without nesting it here that node lands in the far corner of the
+  // grid with nothing connecting it to the namespace that owns it.
+  const scoped = new Map<string, Node[]>()
+  const rest: Node[] = []
+  for (const n of nodes) {
+    if (nsIdSet.has(n.id)) continue
+
+    const d = n.data as {
+      namespace?: string
+      metadata?: Record<string, unknown>
+      nodeType?: string
+      groupType?: string
+    }
+    const fromGroup = typeof d?.namespace === 'string' ? d.namespace : ''
+    const fromMeta = typeof d?.metadata?.namespace === 'string' ? String(d.metadata.namespace) : ''
+    const ns = fromGroup || fromMeta
+
+    if (ns && nsNames.has(ns)) {
+      scoped.set(ns, [...(scoped.get(ns) ?? []), n])
+    } else {
+      rest.push(n)
+    }
+  }
+
+  // No namespaces on the canvas → nothing to nest under, keep the flat grid.
+  if (nsNodes.length === 0) {
+    return { nodes: applyGroupedZoneLayout(nodes), edges }
+  }
+
+  // Namespace columns are laid out first and the grid is pushed below them.
+  // The grid keeps its own zone/tier maths untouched; only its vertical
+  // offset is computed, from the real height of the hierarchy above, so the
+  // two can never overlap no matter how many namespaces or resource types a
+  // cluster has.
+  const out: Node[] = []
+  let hierarchyBottom = ROW_START_Y
+
+  // One column per namespace, in a stable order so the layout does not
+  // reshuffle between refreshes.
+  const nsOrder = nsNodes
+    .map((ns) => ({ ns: ns, name: String(ns.data?.label ?? '') }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  let cursorX = NS_COL_X_START
+  for (const { ns, name } of nsOrder) {
+    const children = scoped.get(name) ?? []
+
+    // Group children by resource type so `Pods ×8` and
+    // `DaemonSets ×2` stack rather than interleave. Individually-rendered
+    // namespaced nodes group by their own type for the same reason.
+    const byType = new Map<string, Node[]>()
+    for (const c of children) {
+      const cd = c.data as { groupType?: string; nodeType?: string }
+      const t = cd?.groupType ?? cd?.nodeType ?? c.type ?? ''
+      byType.set(t, [...(byType.get(t) ?? []), c])
+    }
+
+    // Widest row decides the column width, so columns never overlap.
+    let widest = NS_COL_MIN_W
+    for (const [, row] of byType) {
+      widest = Math.max(widest, rowW(row))
+    }
+
+    const colX = cursorX
+    const colCX = colX + widest / 2
+    const nsNode = nsNodes.find((x) => x.id === ns.id)!
+    let colBottom = ROW_START_Y + (nsNode.height ?? NS_HEADER_H)
+    // Centre the header over its children rather than pinning it to the
+    // column's left edge — otherwise the containment edges fan out sideways
+    // and the hierarchy reads as a diagonal.
+    out.push({
+      ...nsNode,
+      position: { x: colCX - (nsNode.width ?? NODE_WIDTH) / 2, y: ROW_START_Y },
+    })
+
+    // Children in rows beneath the namespace header. Types are ordered by
+    // name so the column does not reshuffle between refreshes.
+    const orderedTypes = [...byType.keys()].sort()
+    let childY = ROW_START_Y + NS_HEADER_H
+    for (const type of orderedTypes) {
+      const row = byType.get(type)!
+      let cursor = colCX - rowW(row) / 2
+      for (const child of row) {
+        const w = child.width ?? GROUP_NODE_WIDTH
+        out.push({ ...child, position: { x: cursor, y: childY } })
+        cursor += w + ZONE_CELL_W
+      }
+      // Tallest node in this row decides how far the column reaches down.
+      const rowH = Math.max(...row.map((c) => c.height ?? GROUP_NODE_HEIGHT))
+      colBottom = Math.max(colBottom, childY + rowH)
+      childY += ROW_H
+    }
+
+    hierarchyBottom = Math.max(hierarchyBottom, colBottom)
+
+    cursorX += widest + NS_COL_GAP
+  }
+
+  // Any scoped group whose namespace node was filtered out (or not present in
+  // this snapshot) would otherwise vanish entirely. Park those on a trailing
+  // row so they stay visible and drillable rather than silently disappearing.
+  const placed = new Set(out.map((n) => n.id))
+  const orphans = orphanScopedGroups(scoped, placed)
+  let oy = hierarchyBottom + ROW_H
+  for (const orphan of orphans) {
+    out.push({ ...orphan, position: { x: NS_COL_X_START, y: oy } })
+    oy += ROW_H
+  }
+  hierarchyBottom = oy
+
+  // Everything not owned by a namespace keeps the existing zone/tier grid,
+  // offset below the finished hierarchy.
+  const gridOffsetY = hierarchyBottom + ROW_H - ROW_START_Y
+  if (rest.length > 0) {
+    for (const n of applyGroupedZoneLayout(rest)) {
+      out.push({ ...n, position: { x: n.position.x, y: n.position.y + gridOffsetY } })
+    }
+  }
+
+  return { nodes: out, edges }
+}
+
+/** Total width of one child row, gaps included. */
+function rowW(row: Node[]): number {
+  let w = 0
+  row.forEach((n, i) => { w += (n.width ?? GROUP_NODE_WIDTH) + (i > 0 ? ZONE_CELL_W : 0) })
+  return w
+}
+
+/** Scoped groups whose namespace has no node on the canvas. */
+function orphanScopedGroups(
+  scoped: Map<string, Node[]>,
+  placed: Set<string>,
+): Node[] {
+  const out: Node[] = []
+  for (const [, list] of scoped) {
+    for (const n of list) if (!placed.has(n.id)) out.push(n)
+  }
+  return out
 }
 
 // ─── Namespace-grouped layout ─────────────────────────────────────────────────

@@ -14,6 +14,7 @@
 import { MarkerType, type Node, type Edge } from 'reactflow'
 import { type GraphNode, type GraphEdge, type NodeHealth, getNodeColor, getNodeIcon } from '@/types'
 import { type InfraNodeData } from '@/components/canvas/InfraNode'
+import { NS_HEADER_W, NS_HEADER_H } from '@/components/canvas/NamespaceGroupNode'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,22 +26,30 @@ export interface HealthCounts {
 }
 
 export interface GroupInfo {
-  id: string          // "group:container"
-  type: string        // "container"
-  label: string       // "Containers"
+  id: string          // "group:container" or "group:pod@kube-system"
+  /** Group key: `type`, or `type@namespace` for namespaced resources. */
+  key: string
+  type: string        // "container" / "pod"
+  label: string       // "Containers" / "Pods"
   count: number
   healthCounts: HealthCounts
   nodes: GraphNode[]
+  /** Owning namespace, or '' when this group is not namespaced. */
+  namespace: string
 }
 
 export interface GroupNodeData {
   groupType: string
+  /** Group key: `type`, or `type@namespace`. Unique per canvas node. */
+  groupKey: string
   label: string
   count: number
   healthCounts: HealthCounts
   color: string
   icon: string
   isCritical: boolean  // >50% degraded/unhealthy → pulse dot
+  /** Owning namespace, shown as a subtitle so the node states where it lives. */
+  namespace: string
   /** Opens the "•••" drill-down menu listing this group's individual members. */
   onOpenPicker?: (nodeId: string, e: React.MouseEvent) => void
 }
@@ -48,12 +57,72 @@ export interface GroupNodeData {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Types that always render as individual nodes (logically unique / 1 instance) */
-const SINGLETON_TYPES = new Set([
+export const SINGLETON_TYPES = new Set([
   'host',
   'cluster',
   'container_runtime',
   'image_group',
+  // Namespaces are the anchors the k8s hierarchy hangs off. Bundling them
+  // into one "Namespaces ×3" node is what forced every namespace-scoped
+  // resource into a flat type group, because the parent that explained
+  // ownership was itself hidden inside a group. They render individually.
+  'namespace',
 ])
+
+/**
+ * Types that live inside a Kubernetes namespace.
+ *
+ * Grouping these by type alone is what made the canvas unreadable: 9 pods
+ * spread over 2 namespaces collapsed into one `Pods ×9` node, so the split
+ * (8 in kube-system, 1 in local-path-storage) was only visible by opening a
+ * side drawer. Scoping the group key by namespace makes the canvas show the
+ * real shape of the cluster at a glance.
+ */
+export const NAMESPACE_SCOPED_TYPES = new Set([
+  'pod',
+  'deployment',
+  'statefulset',
+  'daemonset',
+  'job',
+  'cronjob',
+  'k8s_service',
+  'ingress',
+  'pvc',
+])
+
+/** Namespace a node belongs to, or '' when it is not namespaced. */
+export function namespaceOf(node: GraphNode): string {
+  const ns = node.metadata?.namespace
+  return typeof ns === 'string' && ns ? ns : ''
+}
+
+/**
+ * Group key for a type: `type` for global resources, `type@namespace` for
+ * namespaced ones. Scoped groups nest under their namespace node.
+ */
+export function groupKeyFor(type: string, namespace: string): string {
+  return NAMESPACE_SCOPED_TYPES.has(type) && namespace ? `${type}@${namespace}` : type
+}
+
+/** Group id (canvas-level) for a group key. Unscoped types keep the legacy
+ *  `group:<type>` form so existing expansion state keeps working. */
+export function groupIdFor(key: string): string {
+  return `group:${key}`
+}
+
+/**
+ * The "ctx:<name>/" cluster prefix an entity id carries, or '' for the
+ * primary cluster. Mirrors the backend multi-cluster ID scheme, so the same
+ * namespace name in two clusters stays two distinct namespaces instead of
+ * being merged into one group.
+ */
+function clusterKeyOf(id: string): string {
+  if (id.startsWith('ctx:')) {
+    const i = id.indexOf('/')
+    if (i >= 0) return id.slice(0, i + 1)
+  }
+  return ''
+}
 
 const TYPE_LABELS: Record<string, string> = {
   host: 'Host',
@@ -167,22 +236,30 @@ export function buildGroupedGraph(
   // 1. Filter to visible types
   const filtered = rawNodes.filter((n) => visibleTypes.has(n.type))
 
-  // 2. Bucket by type
-  const byType = new Map<string, GraphNode[]>()
+  // 2. Bucket by group key. Namespaced resources bucket by `type@namespace`
+  //    so each namespace owns its own child groups; everything else buckets
+  //    by type alone, exactly as before.
+  const byKey = new Map<string, GraphNode[]>()
   for (const n of filtered) {
-    const bucket = byType.get(n.type) ?? []
+    const key = groupKeyFor(n.type, namespaceOf(n))
+    const bucket = byKey.get(key) ?? []
     bucket.push(n)
-    byType.set(n.type, bucket)
+    byKey.set(key, bucket)
   }
 
   // 3. Decide: individual vs group
   const groups = new Map<string, GroupInfo>()
   const individualIds = new Set<string>()
 
-  for (const [type, nodes] of byType) {
-    const gid = `group:${type}`
+  for (const [key, nodes] of byKey) {
+    const type = nodes[0].type
+    const namespace = namespaceOf(nodes[0])
+    const gid = groupIdFor(key)
     const singleton = SINGLETON_TYPES.has(type) || nodes.length === 1
-    const wholeTypeExpanded = expandedGroups.has(gid)
+    // A whole type being expanded still expands every one of its scoped
+    // groups — `group:pod` is the user-facing switch, the scoped ids are the
+    // internal bookkeeping.
+    const wholeTypeExpanded = expandedGroups.has(`group:${type}`) || expandedGroups.has(gid)
 
     if (singleton || wholeTypeExpanded) {
       for (const n of nodes) individualIds.add(n.id)
@@ -197,13 +274,15 @@ export function buildGroupedGraph(
 
     if (remaining.length > 0) {
       const hc = countHealth(remaining)
-      groups.set(type, {
+      groups.set(gid, {
         id: gid,
+        key,
         type,
         label: getGroupLabel(type),
         count: remaining.length,
         healthCounts: hc,
         nodes: remaining,
+        namespace,
       })
     }
   }
@@ -214,35 +293,61 @@ export function buildGroupedGraph(
   // Individual nodes
   for (const n of filtered) {
     if (!individualIds.has(n.id)) continue
+
+    // A namespace header states what it is parent of. Counting the scoped
+    // groups built above is enough — `Pods ×8` contributes one group and
+    // eight resources — and a namespace holding a single pod has no group at
+    // all (it renders the pod by name), so count those directly too.
+    let childSummary: { groups: number; resources: number } | undefined
+    if (n.type === 'namespace') {
+      let groupCount = 0
+      let resourceCount = 0
+      for (const [, g] of groups) {
+        if (g.namespace !== n.label) continue
+        groupCount++
+        resourceCount += g.count
+      }
+      for (const id of individualIds) {
+        if (id === n.id) continue
+        const c = filtered.find((x) => x.id === id)
+        if (c && namespaceOf(c) === n.label) resourceCount++
+      }
+      childSummary = { groups: groupCount, resources: resourceCount }
+    }
+
+    const isNs = n.type === 'namespace'
     flowNodes.push({
       id: n.id,
-      type: n.type === 'namespace' ? 'namespaceGroup' : 'infraNode',
+      type: isNs ? 'namespaceGroup' : 'infraNode',
       position: { x: 0, y: 0 },
       data: {
         nodeType: n.type,
         label: n.label,
         health: normalizeNodeHealth(n),
         metadata: n.metadata,
+        ...(childSummary ? { childSummary } : {}),
       } as InfraNodeData,
-      width: 220,
-      height: 100,
+      width: isNs ? NS_HEADER_W : 220,
+      height: isNs ? NS_HEADER_H : 100,
     })
   }
 
   // Group nodes
-  for (const [type, g] of groups) {
+  for (const [, g] of groups) {
     flowNodes.push({
       id: g.id,
       type: 'groupNode',
       position: { x: 0, y: 0 },
       data: {
-        groupType: type,
+        groupType: g.type,
+        groupKey: g.key,
         label: g.label,
         count: g.count,
         healthCounts: g.healthCounts,
-        color: getNodeColor(type),
-        icon: getNodeIcon(type),
+        color: getNodeColor(g.type),
+        icon: getNodeIcon(g.type),
         isCritical: isCriticalGroup(g.healthCounts, g.count),
+        namespace: g.namespace,
       } as GroupNodeData,
       width: GROUP_NODE_WIDTH,
       height: GROUP_NODE_HEIGHT,
@@ -252,7 +357,7 @@ export function buildGroupedGraph(
   // 5. Build canvas ID map (raw nodeId → canvas nodeId)
   const toCanvas = new Map<string, string>()
   for (const id of individualIds) toCanvas.set(id, id)
-  for (const [type, g] of groups) {
+  for (const g of groups.values()) {
     for (const n of g.nodes) toCanvas.set(n.id, g.id)
   }
 
@@ -315,6 +420,34 @@ export function buildGroupedGraph(
         } else {
           bundle.set(key, { source: src, target: tgt, edgeType: e.type, count: 1 })
         }
+      }
+    }
+  }
+
+  // Scoped groups hang off the namespace that owns them. The raw
+  // `namespace → pod` CONTAINS edges usually carry this on their own once
+  // each pod maps to a namespace-scoped canvas id, but discovery data is not
+  // guaranteed to emit them for every resource type, so the ownership edge is
+  // stated explicitly. Without it a `Pods ×8` node sits on the canvas with
+  // nothing indicating it belongs to kube-system.
+  //
+  // Runs *after* the raw-edge loop on purpose: inserting first would let the
+  // real edges increment the synthetic entry and inflate the bundled `×N`.
+  if (filtered.some((n) => n.type === 'namespace')) {
+    // namespace label + cluster prefix → its canvas node id
+    const nsCanvasByName = new Map<string, string>()
+    for (const n of filtered) {
+      if (n.type !== 'namespace') continue
+      nsCanvasByName.set(clusterKeyOf(n.id) + ' ' + String(n.label ?? ''), n.id)
+    }
+
+    for (const [, g] of groups) {
+      if (!g.namespace) continue
+      const nsId = nsCanvasByName.get(clusterKeyOf(g.nodes[0].id) + ' ' + g.namespace)
+      if (!nsId || nsId === g.id || !canvasIds.has(nsId)) continue
+      const key = `${nsId}→${g.id}→CONTAINS`
+      if (!bundle.has(key)) {
+        bundle.set(key, { source: nsId, target: g.id, edgeType: 'CONTAINS', count: 1 })
       }
     }
   }

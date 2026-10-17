@@ -22,7 +22,7 @@ import {
   type GraphEdge,
   getNodeColor,
 } from '@/types'
-import { applyRootedDagreLayout, applyGroupedZoneLayout } from '@/lib/layout'
+import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
 import { sendCommand } from '@/lib/wsManager'
 import {
   buildGroupedGraph,
@@ -31,6 +31,7 @@ import {
   isCriticalGroup,
   countHealth,
   getGroupLabel,
+  SINGLETON_TYPES,
 } from '@/lib/graphPreprocess'
 import InfraNode, { type InfraNodeData } from './InfraNode'
 import NamespaceGroupNode from './NamespaceGroupNode'
@@ -65,12 +66,11 @@ const FILTER_GROUPS = {
       'cluster', 'node', 'namespace',
       'deployment', 'statefulset', 'daemonset', 'job', 'cronjob',
       'k8s_service', 'ingress',
+      // Pods live in the Kubernetes category, not a separate one. Splitting
+      // them out meant the one chip a Kubernetes user clicks ("Kubernetes")
+      // silently excluded the resource they were looking for.
+      'pod',
     ],
-  },
-  pods: {
-    label: 'Pods',
-    color: '#22d3ee',
-    types: ['pod'],
   },
   docker: {
     label: 'Docker',
@@ -100,6 +100,9 @@ const FILTER_GROUPS = {
 } as const
 
 type FilterKey = keyof typeof FILTER_GROUPS
+
+/** Toolbar order. `i === 4` draws the divider after Services. */
+const TOOLBAR_ORDER = ['k8s', 'docker', 'host', 'services', 'storage', 'events'] as FilterKey[]
 
 /** category-summary node id, distinct from a type-level `group:${type}` id */
 function categoryNodeId(key: FilterKey) {
@@ -186,7 +189,18 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     const hasHost = vm.graph?.nodes?.some((n) => n.type === 'host')
     return new Set<FilterKey>([hasHost ? 'host' : 'k8s'])
   })
-  const [expandedGroups] = useState<Set<string>>(new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  // Live node count per filter category, for the chip badges.
+  const filterCounts = useMemo(() => {
+    const source = vm.graph?.nodes ?? []
+    const out = {} as Record<FilterKey, number>
+    for (const key of Object.keys(FILTER_GROUPS) as FilterKey[]) {
+      const types = new Set<string>(FILTER_GROUPS[key].types as readonly string[])
+      out[key] = source.reduce((sum, n) => (types.has(n.type) ? sum + 1 : sum), 0)
+    }
+    return out
+  }, [vm.graph])
 
   // ── "•••" drill-down tree: host → category → type → individual ────────────
   // Tier 1: categories with a single summary node on canvas (e.g. "Kubernetes
@@ -202,7 +216,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [pickerFor, setPickerFor] = useState<
     | { kind: 'host'; x: number; y: number }
     | { kind: 'category'; category: FilterKey; x: number; y: number }
-    | { kind: 'group'; groupType: string; x: number; y: number }
+    | { kind: 'group'; groupType: string; groupKey: string; x: number; y: number }
     | null
   >(null)
   const [drawerGroup, setDrawerGroup] = useState<GroupInfo | null>(null)
@@ -218,6 +232,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [spotlightKey, setSpotlightKey] = useState<FilterKey | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
+  // Node awaiting a pan-to, set when a search reveals something currently
+  // hidden by a filter. Consumed by the effect below once it renders.
+  const pendingFocusId = useRef<string | null>(null)
 
   const rfRef = useRef<ReactFlowInstance | null>(null)
 
@@ -371,7 +388,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     let ln: Node[]
     let le: Edge[]
     if (viewMode === 'grouped') {
-      ln = applyGroupedZoneLayout(flowNodes)
+      // Namespace-scoped hierarchy: namespaced resources nest under the
+      // namespace that owns them, everything else keeps the zone/tier grid.
+      ln = applyNamespaceHierarchyLayout(flowNodes, flowEdges).nodes
       le = flowEdges
     } else {
       const laid = applyRootedDagreLayout(flowNodes, flowEdges, { rankdir: 'TB', ranksep: 120, nodesep: 70 })
@@ -406,7 +425,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               if (isCategory) {
                 setPickerFor({ kind: 'category', category: gdata.groupType as FilterKey, x: e.clientX, y: e.clientY })
               } else {
-                setPickerFor({ kind: 'group', groupType: gdata.groupType, x: e.clientX, y: e.clientY })
+                setPickerFor({ kind: 'group', groupType: gdata.groupType, groupKey: gdata.groupKey ?? gdata.groupType, x: e.clientX, y: e.clientY })
               }
             },
           },
@@ -499,7 +518,10 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.type === 'groupNode') {
       const gdata = node.data as GroupNodeData
-      const group = groupsMap.get(gdata.groupType)
+      // Groups are keyed by scope: `group:pod@kube-system` is a different node
+      // from `group:pod@local-path-storage`, so the canvas id resolves the
+      // group rather than the bare type.
+      const group = groupsMap.get(`group:${gdata.groupKey ?? gdata.groupType}`)
       if (group) {
         setSelectedNodeId(null)
         setDrawerGroup(group)
@@ -541,24 +563,60 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     return vm.graph.nodes.filter((n) => n.label.toLowerCase().includes(q)).slice(0, 20)
   }, [searchQuery, vm.graph])
 
+  /**
+   * Would this node actually be on the canvas right now? Drives the
+   * "hidden by the current filter" hint next to a search result.
+   */
+  function isNodeHidden(node: GraphNode): boolean {
+    if (SINGLETON_TYPES.has(node.type)) return false
+    const cat = TYPE_TO_CATEGORY[node.type]
+    if (!cat) return true
+    // Either the category is switched on, or this type was drilled into
+    // individually via a "•••" picker.
+    if (!activeFilters.has(cat) && !revealedTypes.has(node.type)) return true
+    // Non-singleton types render as one group node unless the whole group is
+    // expanded, or this specific node was picked out of it.
+    if (!expandedGroups.has(`group:${node.type}`)) {
+      return !expandedNodeIds.has(node.id)
+    }
+    return false
+  }
+
   function handleSelectSearchResult(nodeId: string) {
     setSearchQuery('')
     setSearchFocused(false)
-    if (rfRef.current) {
-      const rfNode = rfRef.current.getNode(nodeId)
-      if (rfNode) {
-        rfRef.current.setCenter(
-          rfNode.position.x + (rfNode.width ?? 220) / 2,
-          rfNode.position.y + (rfNode.height ?? 60) / 2,
-          { zoom: 1.8, duration: 600 },
-        )
-        setDrawerGroup(null)
-        setSelectedNodeId(nodeId)
-        return
-      }
+    const node = vm.graph?.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    // A match hidden by the current filter used to do nothing visible when
+    // selected. Activate its category and expand its type group first, then
+    // pan to it once React has rendered it.
+    const cat = TYPE_TO_CATEGORY[node.type]
+    if (cat && !activeFilters.has(cat)) {
+      setActiveFilters((prev) => new Set([...prev, cat]))
     }
-    handleSelectNodeFromDrawer(nodeId)
+    if (!SINGLETON_TYPES.has(node.type) && node.type !== 'cluster') {
+      setExpandedGroups((prev) => new Set([...prev, `group:${node.type}`]))
+    }
+    setSpotlightKey(null)
+    pendingFocusId.current = nodeId
   }
+
+  // Centre on the node once React has actually rendered it. Runs after the
+  // filter/group changes above commit, which is when the node exists.
+  useEffect(() => {
+    const id = pendingFocusId.current
+    if (!id || !rfRef.current) return
+    const rfNode = rfRef.current.getNode(id)
+    if (!rfNode) return // not mounted yet; the next render will retry
+    pendingFocusId.current = null
+    setDrawerGroup(null)
+    setSelectedNodeId(id)
+    rfRef.current.setCenter(
+      rfNode.position.x + (rfNode.width ?? 220) / 2,
+      rfNode.position.y + (rfNode.height ?? 60) / 2,
+      { zoom: 1.8, duration: 600 },
+    )
+  }, [nodes, selectedNodeId])
 
   function handlePaneClick() {
     setSelectedNodeId(null)
@@ -612,13 +670,16 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
   // ── Critical alert banner ──────────────────────────────────────────────────
   const criticalGroups = useMemo(() => {
-    const alerts: Array<{ label: string; degraded: number; type: string }> = []
-    for (const [, g] of groupsMap) {
+    const alerts: Array<{ label: string; degraded: number; id: string }> = []
+    for (const [id, g] of groupsMap) {
       if (isCriticalGroup(g.healthCounts, g.count)) {
         alerts.push({
-          label: g.label,
+          // Scoped groups can repeat a label (three namespaces each with a
+          // degraded pod). Without the namespace the banner would say
+          // "Pods: 2 degraded" three times and read as a rendering bug.
+          label: g.namespace ? `${g.label} in ${g.namespace}` : g.label,
           degraded: g.healthCounts.degraded + g.healthCounts.unhealthy,
-          type: g.type,
+          id,
         })
       }
     }
@@ -723,7 +784,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
               {searchMatches.length === 0 ? (
                 <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--ink4)' }}>No matches</div>
               ) : (
-                searchMatches.map((n) => (
+                searchMatches.map((n) => {
+                  const hidden = isNodeHidden(n)
+                  return (
                   <button
                     key={n.id}
                     onMouseDown={() => handleSelectSearchResult(n.id)}
@@ -736,8 +799,18 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                     <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: getNodeColor(n.type) }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.label}</span>
                     <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink4)', flexShrink: 0 }}>{n.type}</span>
+                    {hidden && (
+                      <span
+                        title="Not visible under the current filter. Click to reveal it."
+                        style={{ fontSize: 9, flexShrink: 0, padding: '1px 5px', borderRadius: 4,
+                          border: '1px solid var(--line2)', color: 'var(--ink3)' }}
+                      >
+                        hidden
+                      </span>
+                    )}
                   </button>
-                ))
+                  )
+                })
               )}
             </div>
           )}
@@ -766,50 +839,48 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         <div style={DIVIDER} />
 
-        {/* Filter chips */}
+        {/* Filter chips — every chip uses identical styling. The previous two
+            rows styled the second group with a dashed border, which read as
+            disabled even though the chips were live. Differing by position
+            only. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Filter size={11} color="var(--ink3)" />
-          {(['k8s', 'docker', 'host', 'services'] as FilterKey[]).map((key) => {
+          {TOOLBAR_ORDER.map((key, i) => {
             const g = FILTER_GROUPS[key]
             const active = activeFilters.has(key)
             const spotlit = spotlightKey === key
+            const count = filterCounts[key]
             return (
-              <button key={key}
-                onClick={() => handleFilterClick(key)}
-                onContextMenu={(e) => handleFilterRightClick(e, key)}
-                title={active ? 'Click to spotlight · right-click to hide' : 'Click to show'}
-                style={{
-                  padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                  fontWeight: active ? 600 : 400,
-                  background: spotlit ? g.color : active ? `${g.color}22` : 'transparent',
-                  color: spotlit ? '#fff' : active ? g.color : 'var(--ink3)',
-                  border: `1px solid ${spotlit ? g.color : active ? `${g.color}40` : 'var(--line)'}`,
-                  transition: 'all 0.15s',
-                }}>
-                {g.label}
-              </button>
-            )
-          })}
-          <span style={{ width: 1, height: 13, background: 'var(--line)', display: 'inline-block', margin: '0 2px' }} />
-          {(['pods', 'storage', 'events'] as FilterKey[]).map((key) => {
-            const g = FILTER_GROUPS[key]
-            const active = activeFilters.has(key)
-            const spotlit = spotlightKey === key
-            return (
-              <button key={key}
-                onClick={() => handleFilterClick(key)}
-                onContextMenu={(e) => handleFilterRightClick(e, key)}
-                title={active ? 'Click to spotlight · right-click to hide' : 'Click to show'}
-                style={{
-                  padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                  fontWeight: active ? 600 : 400,
-                  background: spotlit ? g.color : active ? `${g.color}18` : 'transparent',
-                  color: spotlit ? '#fff' : active ? g.color : 'var(--ink3)',
-                  border: `1px dashed ${spotlit ? g.color : active ? `${g.color}35` : 'var(--line)'}`,
-                  transition: 'all 0.15s',
-                }}>
-                {g.label}
-              </button>
+              <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {i === 4 && (
+                  <span style={{ width: 1, height: 13, background: 'var(--line)', display: 'inline-block', margin: '0 2px' }} />
+                )}
+                <button
+                  onClick={() => handleFilterClick(key)}
+                  onContextMenu={(e) => handleFilterRightClick(e, key)}
+                  title={`${g.label} — ${count} node${count === 1 ? '' : 's'}` + (count === 0 ? ' (none discovered)' : '')
+                    + (active ? ' · click to spotlight, right-click to hide' : ' · click to show')}
+                  style={{
+                    padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontWeight: active ? 600 : 400,
+                    background: spotlit ? g.color : active ? `${g.color}22` : 'transparent',
+                    color: spotlit ? '#fff' : active ? g.color : 'var(--ink3)',
+                    border: `1px solid ${spotlit ? g.color : active ? `${g.color}40` : 'var(--line)'}`,
+                    transition: 'all 0.15s',
+                  }}>
+                  {g.label}
+                  {/* Counts on every chip. A chip with no number gives no
+                      reason to click it — the number is the call to action. */}
+                  <span style={{
+                    fontSize: 10, fontVariantNumeric: 'tabular-nums',
+                    color: spotlit ? '#fff' : count ? 'var(--ink3)' : 'var(--line2)',
+                    opacity: active ? 0.85 : 1,
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              </span>
             )
           })}
         </div>
@@ -873,9 +944,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {criticalGroups.map((a) => (
               <button
-                key={a.type}
+                key={a.id}
                 onClick={() => {
-                  const g = groupsMap.get(a.type)
+                  const g = groupsMap.get(a.id)
                   if (g) { setDrawerGroup(g); setDrawerInitialFilter('degraded'); setSelectedNodeId(null) }
                 }}
                 style={{
@@ -1002,7 +1073,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
             ].label + ': pick individual nodes'}
             x={pickerFor.x}
             y={pickerFor.y}
-            items={(groupsMap.get(pickerFor.groupType)?.nodes ?? []).map((n) => ({
+            items={(groupsMap.get(`group:${pickerFor.groupKey}`)?.nodes ?? []).map((n) => ({
               key: n.id,
               label: n.label,
               checked: false,
