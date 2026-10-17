@@ -24,9 +24,9 @@ import {
 } from '@/types'
 import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
 import { MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
-import { applyStructuredMapLayout } from '@/lib/structuredMap'
+import { buildHierarchy, applyHierarchyLayout } from '@/lib/hierarchyMap'
 import MapNode from './MapNode'
-import MapLabel from './MapLabel'
+import { MapRoot, MapType } from './MapHierarchyNodes'
 import { sendCommand } from '@/lib/wsManager'
 import {
   buildGroupedGraph,
@@ -170,7 +170,8 @@ const nodeTypes: NodeTypes = {
   namespaceGroup: NamespaceGroupNode,
   groupNode: GroupNode,
   mapNode: MapNode,
-  mapLabel: MapLabel,
+  mapRoot: MapRoot,
+  mapType: MapType,
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -383,10 +384,17 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       )
       // The map draws every resource with the compact disc-and-label node;
       // `buildFlatFlowElements` emits the card nodes used by the tree view.
-      flowNodes = viewMode === 'map'
-        ? fn.map((n) => ({ ...n, type: 'mapNode', width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT }))
-        : fn
-      flowEdges = fe
+      if (viewMode === 'map') {
+        const h = buildHierarchy(
+          fn.map((n) => ({ ...n, type: 'mapNode', width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT })) as Node[],
+          fe as Edge[],
+        )
+        flowNodes = h.nodes
+        flowEdges = h.edges as Edge[]
+      } else {
+        flowNodes = fn
+        flowEdges = fe
+      }
       setGroupsMap(new Map())
     }
 
@@ -402,7 +410,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // Every node on screen, arranged as a hub-and-spokes map. Deterministic
       // by design: snapshots arrive every 15s and a re-randomised layout would
       // make the whole map jump on every refresh.
-      ln = applyStructuredMapLayout(flowNodes, flowEdges).nodes
+      ln = applyHierarchyLayout(flowNodes, flowEdges).nodes
       le = flowEdges.map((e) => ({
         ...e,
         label: undefined,
