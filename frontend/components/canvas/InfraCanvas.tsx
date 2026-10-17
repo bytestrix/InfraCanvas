@@ -23,8 +23,10 @@ import {
   getNodeColor,
 } from '@/types'
 import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
-import { applyRadialMapLayout, MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
+import { MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
+import { applyStructuredMapLayout } from '@/lib/structuredMap'
 import MapNode from './MapNode'
+import MapLabel from './MapLabel'
 import { sendCommand } from '@/lib/wsManager'
 import {
   buildGroupedGraph,
@@ -168,6 +170,7 @@ const nodeTypes: NodeTypes = {
   namespaceGroup: NamespaceGroupNode,
   groupNode: GroupNode,
   mapNode: MapNode,
+  mapLabel: MapLabel,
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -399,7 +402,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // Every node on screen, arranged as a hub-and-spokes map. Deterministic
       // by design: snapshots arrive every 15s and a re-randomised layout would
       // make the whole map jump on every refresh.
-      ln = applyRadialMapLayout(flowNodes, flowEdges).nodes
+      ln = applyStructuredMapLayout(flowNodes, flowEdges).nodes
       le = flowEdges.map((e) => ({
         ...e,
         label: undefined,
