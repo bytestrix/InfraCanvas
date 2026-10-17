@@ -24,9 +24,9 @@ import {
 } from '@/types'
 import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
 import { MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
-import { buildHierarchy, applyHierarchyLayout } from '@/lib/hierarchyMap'
+import { buildHubMap, applyHubRadialLayout, ORB_CELL_W, ORB_CELL_H } from '@/lib/hubMap'
 import MapNode from './MapNode'
-import { MapRoot, MapType } from './MapHierarchyNodes'
+import { MapRoot, MapHub, MapOrb } from './MapOrbs'
 import { sendCommand } from '@/lib/wsManager'
 import {
   buildGroupedGraph,
@@ -171,7 +171,8 @@ const nodeTypes: NodeTypes = {
   groupNode: GroupNode,
   mapNode: MapNode,
   mapRoot: MapRoot,
-  mapType: MapType,
+  mapHub: MapHub,
+  mapOrb: MapOrb,
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -385,8 +386,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // The map draws every resource with the compact disc-and-label node;
       // `buildFlatFlowElements` emits the card nodes used by the tree view.
       if (viewMode === 'map') {
-        const h = buildHierarchy(
-          fn.map((n) => ({ ...n, type: 'mapNode', width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT })) as Node[],
+        const h = buildHubMap(
+          fn.map((n) => ({ ...n, type: 'mapOrb', width: ORB_CELL_W, height: ORB_CELL_H })) as Node[],
           fe as Edge[],
         )
         flowNodes = h.nodes
@@ -410,7 +411,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // Every node on screen, arranged as a hub-and-spokes map. Deterministic
       // by design: snapshots arrive every 15s and a re-randomised layout would
       // make the whole map jump on every refresh.
-      ln = applyHierarchyLayout(flowNodes, flowEdges).nodes
+      ln = applyHubRadialLayout(flowNodes, flowEdges).nodes
       le = flowEdges.map((e) => ({
         ...e,
         label: undefined,
