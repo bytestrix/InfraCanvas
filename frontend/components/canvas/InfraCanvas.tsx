@@ -23,6 +23,8 @@ import {
   getNodeColor,
 } from '@/types'
 import { applyRootedDagreLayout, applyNamespaceHierarchyLayout } from '@/lib/layout'
+import { applyRadialMapLayout, MAP_NODE_WIDTH, MAP_NODE_HEIGHT } from '@/lib/radialMap'
+import MapNode from './MapNode'
 import { sendCommand } from '@/lib/wsManager'
 import {
   buildGroupedGraph,
@@ -50,6 +52,7 @@ import {
   Filter,
   Rows3,
   Network,
+  Waypoints,
   Server,
   AlertTriangle,
   Download,
@@ -164,6 +167,7 @@ const nodeTypes: NodeTypes = {
   infraNode: InfraNode,
   namespaceGroup: NamespaceGroupNode,
   groupNode: GroupNode,
+  mapNode: MapNode,
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -177,7 +181,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
-  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped')
+  const [viewMode, setViewMode] = useState<'map' | 'grouped' | 'flat'>('map')
   // Toolbar chips (Kubernetes / Docker / Host / ...) — unchanged, existing
   // behaviour: toggling one on immediately shows every type in that category.
   // Kept separate from the "•••" picker tree below on purpose.
@@ -374,7 +378,11 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         vm.graph.edges,
         activeFilters,
       )
-      flowNodes = fn
+      // The map draws every resource with the compact disc-and-label node;
+      // `buildFlatFlowElements` emits the card nodes used by the tree view.
+      flowNodes = viewMode === 'map'
+        ? fn.map((n) => ({ ...n, type: 'mapNode', width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT }))
+        : fn
       flowEdges = fe
       setGroupsMap(new Map())
     }
@@ -387,7 +395,19 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
     let ln: Node[]
     let le: Edge[]
-    if (viewMode === 'grouped') {
+    if (viewMode === 'map') {
+      // Every node on screen, arranged as a hub-and-spokes map. Deterministic
+      // by design: snapshots arrive every 15s and a re-randomised layout would
+      // make the whole map jump on every refresh.
+      ln = applyRadialMapLayout(flowNodes, flowEdges).nodes
+      le = flowEdges.map((e) => ({
+        ...e,
+        label: undefined,
+        type: 'straight',
+        style: { stroke: '#3a3a52', strokeWidth: 1, strokeDasharray: '2 4', opacity: 0.75 },
+        markerEnd: undefined,
+      }))
+    } else if (viewMode === 'grouped') {
       // Namespace-scoped hierarchy: namespaced resources nest under the
       // namespace that owns them, everything else keeps the zone/tier grid.
       ln = applyNamespaceHierarchyLayout(flowNodes, flowEdges).nodes
@@ -453,7 +473,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   function applySpotlight(
     allNodes: Node[],
     key: FilterKey | null,
-    mode: 'grouped' | 'flat',
+    mode: 'map' | 'grouped' | 'flat',
   ): Node[] {
     if (!key) return allNodes.map((n) => ({ ...n, style: { ...n.style, opacity: 1 } }))
 
@@ -820,9 +840,9 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
         {/* View mode toggle */}
         <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: 2 }}>
-          {(['grouped', 'flat'] as const).map((m) => (
+          {(['map', 'grouped', 'flat'] as const).map((m) => (
             <button key={m} onClick={() => setViewMode(m)}
-              title={m === 'grouped' ? 'Grouped: one card per type' : 'Flat: every node'}
+              title={m === 'map' ? 'Map: every resource as a node' : m === 'grouped' ? 'Grouped: one card per type' : 'Flat: full hierarchy'}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -831,8 +851,8 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
                 color: viewMode === m ? 'var(--ink)' : 'var(--ink3)',
                 transition: 'all 0.15s',
               }}>
-              {m === 'grouped' ? <Rows3 size={11} /> : <Network size={11} />}
-              {m === 'grouped' ? 'Grouped' : 'Flat'}
+              {m === 'flat' ? <Network size={11} /> : m === 'map' ? <Waypoints size={11} /> : <Rows3 size={11} />}
+              {m === 'map' ? 'Map' : m === 'grouped' ? 'Grouped' : 'Flat'}
             </button>
           ))}
         </div>
