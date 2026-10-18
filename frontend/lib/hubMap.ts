@@ -135,7 +135,7 @@ export function buildHubMap(nodes: Node[], edges: Edge[]): HubMapResult {
     out.push({
       id: hid, type: 'mapHub',
       position: { x: 0, y: 0 },
-      data: { label: typeLabel(h.type), kind: h.type, count: h.items.length, color: HUB_COLOR[h.type] ?? '#64748b' },
+      data: { label: typeLabel(h.type), kind: h.type, count: h.items.length, color: HUB_COLOR[h.type] ?? '#64748b', degree: h.items.length },
       width: HUB_D + 16, height: HUB_D + 28,
     } as Node)
     const platform = PLATFORM[h.type]
@@ -143,7 +143,25 @@ export function buildHubMap(nodes: Node[], edges: Edge[]): HubMapResult {
     for (const it of h.items) add(hid, it.id)
   }
 
-  out.push(...nodes)
+  // Connection count per node, so size can reflect connectivity: a namespace
+  // with 40 pods under it should read as more important than a namespace with
+  // one, without anyone having to hover to find out.
+  // The `hm:` tree edges we just added are structural, not real connections,
+  // so a node's displayed degree comes from the snapshot's own edges only.
+  const realDegree = new Map<string, number>()
+  for (const n of nodes) realDegree.set(n.id, 0)
+  for (const e of edges) {
+    if (e.id?.startsWith('hm:')) continue
+    if (realDegree.has(e.source)) realDegree.set(e.source, (realDegree.get(e.source) ?? 0) + 1)
+    if (realDegree.has(e.target)) realDegree.set(e.target, (realDegree.get(e.target) ?? 0) + 1)
+  }
+
+  out.push(
+    ...nodes.map((n) => ({
+      ...n,
+      data: { ...(n.data as Meta), degree: realDegree.get(n.id) ?? 0 },
+    })),
+  )
 
   for (const [p, kids] of tree) {
     for (const k of kids) outEdges.push({ id: `hm:${p}→${k}`, source: p, target: k, kind: 'contain' } as Edge)
@@ -259,7 +277,7 @@ export function applyHubRadialLayout(
     return la < lb ? -1 : la > lb ? 1 : 0
   })
 
-  const radii = ordered.map((h) => Math.max(60, (hubRadius.get(h) ?? 0) + 40))
+  const radii = ordered.map((h) => Math.max(90, (hubRadius.get(h) ?? 0) + 60))
   let R = 300
   const fits = (r: number) =>
     radii.reduce((a, x) => a + Math.asin(Math.min(0.97, x / r)), 0) <= Math.PI * 0.88
