@@ -124,3 +124,92 @@ func TestAddSameContextTwiceUpdatesInPlace(t *testing.T) {
 		t.Fatalf("want 2 clusters, got %d", len(entries))
 	}
 }
+
+func TestAddManyConnectsEachContext(t *testing.T) {
+	m := newTestManager(t)
+	stubPing(t, nil)
+
+	// "dev" twice: duplicates are connected once.
+	added, failed, err := m.AddMany([]byte(testKubeconfig), []string{"dev", "other", "dev"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failed) != 0 {
+		t.Fatalf("unexpected failures: %+v", failed)
+	}
+	if len(added) != 2 {
+		t.Fatalf("want 2 added, got %d", len(added))
+	}
+
+	entries, err := m.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("want 2 clusters, got %d", len(entries))
+	}
+	ids := map[string]bool{}
+	for _, e := range entries {
+		if e.Name != e.ContextName {
+			t.Errorf("entry %s: name %q, want its context name", e.ID, e.Name)
+		}
+		if !e.ReadOnly {
+			t.Errorf("entry %s: readOnly not applied", e.ContextName)
+		}
+		ids[e.ID] = true
+	}
+	if len(ids) != 2 {
+		t.Errorf("entries share an ID: %+v", entries)
+	}
+
+	// Adding the same contexts again updates in place, like Add.
+	if _, _, err := m.AddMany([]byte(testKubeconfig), []string{"dev", "other"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := m.List(); len(entries) != 2 {
+		t.Fatalf("re-adding created duplicates: %d entries", len(entries))
+	}
+}
+
+func TestAddManyReportsFailuresPerContext(t *testing.T) {
+	m := newTestManager(t)
+	stubPing(t, nil)
+
+	added, failed, err := m.AddMany([]byte(testKubeconfig), []string{"dev", "missing"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(added) != 1 || added[0].ContextName != "dev" {
+		t.Fatalf("want only dev added, got %+v", added)
+	}
+	if len(failed) != 1 || failed[0].Context != "missing" || failed[0].Error == "" {
+		t.Fatalf("want one failure for missing, got %+v", failed)
+	}
+}
+
+func TestAddManyUnreachableIsNotPersisted(t *testing.T) {
+	m := newTestManager(t)
+	stubPing(t, errors.New("connection refused"))
+
+	added, failed, err := m.AddMany([]byte(testKubeconfig), []string{"dev", "other"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added == nil || len(added) != 0 {
+		t.Fatalf("want empty, non-nil added, got %#v", added)
+	}
+	if len(failed) != 2 {
+		t.Fatalf("want 2 failures, got %+v", failed)
+	}
+	s, err := runstate.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Clusters) != 0 {
+		t.Fatalf("unreachable clusters were persisted: %+v", s.Clusters)
+	}
+
+	if _, _, err := m.AddMany([]byte("not yaml: ["), []string{"dev"}, false); err == nil {
+		t.Error("expected error for invalid kubeconfig")
+	}
+}

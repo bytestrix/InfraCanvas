@@ -670,8 +670,18 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 type addClusterRequest struct {
 	Kubeconfig string `json:"kubeconfig"` // raw kubeconfig YAML/JSON text
 	Name       string `json:"name,omitempty"`
-	Context    string `json:"context,omitempty"` // omit to get the context picker back instead of creating
-	ReadOnly   bool   `json:"readOnly,omitempty"`
+	Context    string `json:"context,omitempty"` // omit (and contexts) to get the context picker back instead of creating
+	// Contexts connects several contexts in one call, each as its own cluster
+	// named after its context. Mutually exclusive with Context and Name.
+	Contexts []string `json:"contexts,omitempty"`
+	ReadOnly bool     `json:"readOnly,omitempty"`
+}
+
+// addClustersResponse is the body for POST /api/clusters with `contexts`.
+// The status is 201 when at least one context was added, 400 when none were.
+type addClustersResponse struct {
+	Added  []clustermgr.Entry      `json:"added"`
+	Failed []clustermgr.AddFailure `json:"failed"`
 }
 
 // updateClusterRequest is the body for PATCH /api/clusters/{id}.
@@ -713,7 +723,7 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if req.Context == "" {
+		if req.Context == "" && len(req.Contexts) == 0 {
 			// Pure parse — clientcmd.Load never touches the network or runs an
 			// exec credential plugin, so this is safe to allow even read-only.
 			contexts, err := clustermgr.ParseContexts([]byte(req.Kubeconfig))
@@ -731,6 +741,35 @@ func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
 		// same as any other write.
 		if s.readOnly {
 			http.Error(w, "read-only mode: adding clusters is disabled", http.StatusForbidden)
+			return
+		}
+
+		if len(req.Contexts) > 0 {
+			if req.Context != "" {
+				http.Error(w, "set context or contexts, not both", http.StatusBadRequest)
+				return
+			}
+			if req.Name != "" {
+				http.Error(w, "name can't be used with contexts: each cluster is named after its context", http.StatusBadRequest)
+				return
+			}
+			for _, c := range req.Contexts {
+				if c == "" {
+					http.Error(w, "contexts must not contain an empty name", http.StatusBadRequest)
+					return
+				}
+			}
+			added, failed, err := s.clusterMgr.AddMany([]byte(req.Kubeconfig), req.Contexts, req.ReadOnly)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if len(added) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+			} else {
+				w.WriteHeader(http.StatusCreated)
+			}
+			_ = json.NewEncoder(w).Encode(addClustersResponse{Added: added, Failed: failed})
 			return
 		}
 
