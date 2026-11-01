@@ -6,10 +6,6 @@ import { MoreVertical } from 'lucide-react'
 import { type GroupNodeData } from '@/lib/graphPreprocess'
 import NodeSvgIcon from './NodeSvgIcon'
 
-/**
- * GroupNode — renders a collapsed type-group on the canvas.
- * Clicking opens a GroupDrawer (handled in InfraCanvas via onNodeClick).
- */
 const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
   const { groupType, label, count, healthCounts, isCritical, namespace, onOpenPicker } = data
 
@@ -23,9 +19,9 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
     <div style={{
       width: 260,
       background: 'var(--surface)',
-      border: `1px solid ${selected ? 'var(--ink)' : hasBadHealth ? 'var(--line3)' : 'var(--line)'}`,
+      border: `1px solid ${selected ? 'var(--ink)' : hasBadHealth ? 'var(--line3)' : 'var(--line2)'}`,
       borderRadius: 10,
-      boxShadow: selected ? '0 0 0 1px var(--ink), 0 4px 20px rgba(0,0,0,0.15)' : '0 2px 12px rgba(0,0,0,0.1)',
+      boxShadow: selected ? '0 0 0 1px #FAFAFA, 0 4px 20px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.5)',
       position: 'relative',
       overflow: 'hidden',
       transition: 'border-color 0.12s, box-shadow 0.12s',
@@ -53,7 +49,7 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
       <div style={{ padding: '10px 12px 10px 12px' }}>
         {/* Row 1: icon + label + count */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--surface-2)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--surface-icon)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <NodeSvgIcon type={groupType} size={14} />
           </div>
           <span style={{
@@ -65,7 +61,7 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
             fontSize: 11, fontWeight: 700, color: 'var(--ink2)',
             background: 'var(--line)', border: '1px solid var(--line2)',
             borderRadius: 20, padding: '1px 8px', flexShrink: 0,
-            fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)',
+            fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
           }}>×{count}</span>
           {onOpenPicker && (
             <button
@@ -84,7 +80,7 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
           )}
         </div>
 
-        {/* Row 2: owning namespace. A namespace-scoped group like `Pods x8`
+        {/* Row 2: owning namespace. A namespace-scoped group like `Pods ×8`
             sits beneath its namespace on the canvas, but the edge alone does
             not say which one at a glance — this makes the node state it. */}
         {namespace && (
@@ -102,17 +98,17 @@ const GroupNode = memo(({ id, data, selected }: NodeProps<GroupNodeData>) => {
         {/* Row 3: health summary */}
         <div style={{ display: 'flex', gap: 8 }}>
           {healthCounts.healthy > 0 && (
-            <span style={{ fontSize: 10, color: '#22c55e', fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)' }}>
+            <span style={{ fontSize: 10, color: '#22c55e', fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' }}>
               {healthCounts.healthy} ok
             </span>
           )}
           {healthCounts.degraded > 0 && (
-            <span style={{ fontSize: 10, color: '#f59e0b', fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)' }}>
+            <span style={{ fontSize: 10, color: '#f59e0b', fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' }}>
               {healthCounts.degraded} warn
             </span>
           )}
           {healthCounts.unhealthy > 0 && (
-            <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)' }}>
+            <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' }}>
               {healthCounts.unhealthy} err
             </span>
           )}

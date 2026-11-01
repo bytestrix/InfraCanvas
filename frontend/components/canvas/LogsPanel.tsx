@@ -9,14 +9,14 @@ interface LogsPanelProps {
   node: GraphNode
   vmCode: string
   onClose: () => void
+  panelWidth?: number
   allNodes?: GraphNode[]
   allEdges?: GraphEdge[]
 }
 
-const MONO = 'var(--font-geist-mono,"Geist Mono","JetBrains Mono",ui-monospace,monospace)'
 const WORKLOAD_TYPES = new Set(['deployment', 'statefulset', 'daemonset'])
 
-export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdges = [] }: LogsPanelProps) {
+export default function LogsPanel({ node, vmCode, onClose, panelWidth = 340, allNodes = [], allEdges = [] }: LogsPanelProps) {
   const isWorkload = WORKLOAD_TYPES.has(node.type)
 
   // For workload nodes: find owned pods via OWNS edges
@@ -32,8 +32,9 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
   )
   const [pickerOpen, setPickerOpen] = useState(false)
   const [lines, setLines] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const requestIDRef = useRef<string>('')
   const unsubRef = useRef<(() => void) | null>(null)
@@ -85,54 +86,84 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
         : { tail: '200' },
     })
 
-    setTimeout(() => { setLoading(false); unsub() }, 35_000)
+    // Safety timeout
+    setTimeout(() => {
+      setLoading(false)
+      unsub()
+    }, 35_000)
   }, [targetNode, vmCode])
 
   useEffect(() => {
     if (targetNode) fetchLogs()
     return () => { if (unsubRef.current) unsubRef.current() }
-  }, [fetchLogs, targetNode])
+  }, [fetchLogs])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [lines])
 
-  function downloadLogs() {
+  function downloadLogs(ext: 'log' | 'txt') {
     const text = lines.join('\n')
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${targetNode?.label ?? node.label}-logs.txt`
+    a.download = `${targetNode?.label ?? node.label}-logs.${ext}`
     a.click()
     URL.revokeObjectURL(url)
+    setExportOpen(false)
   }
 
   return (
     <div style={{
-      position: 'absolute', left: 0, right: 0, bottom: 0,
-      height: `min(${isWorkload ? 352 : 320}px, 65vh)`,
-      background: 'var(--bg)', borderTop: '1px solid var(--line)',
+      position: 'absolute', left: 0, right: panelWidth, bottom: 0,
+      height: isWorkload ? 352 : 320,
+      background: 'var(--surface)', borderTop: '1px solid var(--line2)',
       display: 'flex', flexDirection: 'column', zIndex: 25,
-      boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
     }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0,
+        padding: '8px 14px', borderBottom: '1px solid #1E1E1E', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', fontFamily: MONO }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em' }}>
             LOGS
           </span>
-          <span style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: MONO }}>
+          <span style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: 'monospace' }}>
             {node.label}
           </span>
-          {loading && <Loader2 size={11} color="var(--ink2)" style={{ animation: 'spin 1s linear infinite' }} />}
+          {loading && <Loader2 size={11} color="var(--ink3)" style={{ animation: 'spin 1s linear infinite' }} />}
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {targetNode && <IconBtn onClick={fetchLogs} title="Refresh logs"><RefreshCw size={12} /></IconBtn>}
-          {targetNode && <IconBtn onClick={downloadLogs} title="Download"><Download size={12} /></IconBtn>}
+          <div style={{ position: 'relative' }}>
+            <IconBtn onClick={() => setExportOpen(o => !o)} title="Download" disabled={lines.length === 0}>
+              <Download size={12} />
+            </IconBtn>
+            {exportOpen && (
+              <>
+                <div
+                  onClick={() => setExportOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+                />
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 41,
+                  background: 'var(--surface)', border: '1px solid #2A2A2A', borderRadius: 6,
+                  padding: 4, minWidth: 132, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                }}>
+                  <div style={{
+                    fontSize: 9.5, color: 'var(--ink4)', textTransform: 'uppercase',
+                    letterSpacing: '0.08em', padding: '4px 8px 2px',
+                  }}>
+                    Export as
+                  </div>
+                  <ExportItem label=".log" hint="plain log file" onClick={() => downloadLogs('log')} />
+                  <ExportItem label=".txt" hint="text file" onClick={() => downloadLogs('txt')} />
+                </div>
+              </>
+            )}
+          </div>
           <IconBtn onClick={onClose} title="Close"><X size={12} /></IconBtn>
         </div>
       </div>
@@ -140,22 +171,22 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
       {/* Pod picker (workload nodes only) */}
       {isWorkload && (
         <div style={{
-          padding: '6px 14px', borderBottom: '1px solid var(--line)',
+          padding: '6px 14px', borderBottom: '1px solid #1E1E1E',
           display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
           background: 'var(--surface)',
         }}>
-          <span style={{ fontSize: 10, color: 'var(--ink4)', fontFamily: MONO, whiteSpace: 'nowrap' }}>POD</span>
+          <span style={{ fontSize: 10, color: 'var(--ink4)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>POD</span>
           {ownedPods.length === 0 ? (
-            <span style={{ fontSize: 11, color: 'var(--ink4)', fontFamily: MONO }}>No pods found for this {node.type}</span>
+            <span style={{ fontSize: 11, color: 'var(--ink4)', fontFamily: 'monospace' }}>No pods found for this {node.type}</span>
           ) : (
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setPickerOpen((p) => !p)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
-                  background: 'var(--bg)', border: '1px solid var(--line)',
+                  background: 'var(--bg)', border: '1px solid var(--line2)',
                   borderRadius: 5, padding: '3px 8px', cursor: 'pointer',
-                  color: 'var(--ink2)', fontFamily: MONO, fontSize: 11,
+                  color: 'var(--ink2)', fontFamily: 'monospace', fontSize: 11,
                 }}
               >
                 <span style={{
@@ -170,7 +201,7 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
               {pickerOpen && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, zIndex: 50,
-                  background: 'var(--bg)', border: '1px solid var(--line)',
+                  background: 'var(--bg)', border: '1px solid var(--line2)',
                   borderRadius: 6, marginTop: 2, minWidth: 220,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.3)', overflow: 'hidden',
                 }}>
@@ -184,7 +215,7 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
                         background: pod.id === selectedPod?.id ? 'var(--surface-2)' : 'transparent',
                         border: 'none', cursor: 'pointer', textAlign: 'left',
                         color: pod.id === selectedPod?.id ? 'var(--ink)' : 'var(--ink2)',
-                        fontFamily: MONO, fontSize: 11,
+                        fontFamily: 'monospace', fontSize: 11,
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = pod.id === selectedPod?.id ? 'var(--surface-2)' : 'transparent' }}
@@ -210,13 +241,15 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
       {/* Log output */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: '8px 14px',
-        fontFamily: MONO, fontSize: 11, lineHeight: '1.6',
+        fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 11, lineHeight: '1.6',
         color: 'var(--ink2)',
       }}>
         {!targetNode && (
           <div style={{ color: 'var(--ink4)', fontStyle: 'italic' }}>Select a pod above to view logs.</div>
         )}
-        {error && <div style={{ color: '#ef4444', marginBottom: 6 }}>Error: {error}</div>}
+        {error && (
+          <div style={{ color: '#ef4444', marginBottom: 6 }}>Error: {error}</div>
+        )}
         {targetNode && lines.length === 0 && !loading && !error && (
           <div style={{ color: 'var(--ink4)', fontStyle: 'italic' }}>No log output.</div>
         )}
@@ -231,20 +264,39 @@ export default function LogsPanel({ node, vmCode, onClose, allNodes = [], allEdg
   )
 }
 
-function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title?: string }) {
+function IconBtn({ children, onClick, title, disabled }: { children: React.ReactNode; onClick: () => void; title?: string; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       style={{
-        background: 'transparent', border: 'none', color: 'var(--ink3)',
-        cursor: 'pointer', padding: '3px 5px', borderRadius: 4,
+        background: 'transparent', border: 'none', color: disabled ? 'var(--ink4)' : 'var(--ink3)',
+        cursor: disabled ? 'not-allowed' : 'pointer', padding: '3px 5px', borderRadius: 4,
         display: 'flex', alignItems: 'center',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--ink2)'; e.currentTarget.style.background = 'var(--surface-2)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink3)'; e.currentTarget.style.background = 'transparent' }}
+      onMouseEnter={(e) => { if (disabled) return; e.currentTarget.style.color = 'var(--ink2)'; e.currentTarget.style.background = 'var(--surface-2)' }}
+      onMouseLeave={(e) => { if (disabled) return; e.currentTarget.style.color = 'var(--ink3)'; e.currentTarget.style.background = 'transparent' }}
     >
       {children}
+    </button>
+  )
+}
+
+function ExportItem({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
+        width: '100%', padding: '6px 8px', borderRadius: 4,
+        background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+    >
+      <span style={{ fontSize: 12, color: 'var(--ink)', fontFamily: 'monospace' }}>{label}</span>
+      <span style={{ fontSize: 10, color: 'var(--ink4)' }}>{hint}</span>
     </button>
   )
 }
@@ -260,6 +312,7 @@ function colorizeLog(line: string): React.ReactNode {
   if (/\binfo\b|INFO/i.test(trimmed)) {
     return <span style={{ color: '#60a5fa' }}>{line}</span>
   }
+  // Highlight timestamps (ISO-like patterns)
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     const dateEnd = trimmed.indexOf(' ', 20)
     if (dateEnd > 0) {

@@ -1,12 +1,12 @@
 // Single source of truth for all infrastructure node type SVG icons.
-// Used by: InfraNode (canvas), GroupDrawer (header), NodeDetailPanel (header).
+// Used by: InfraNode (canvas), AgentOverview (tiles), GroupDrawer (header), NodeDetailPanel (header).
 // Always pass `size` — default 16. Do NOT add emoji or text fallbacks here.
 
 const K8S    = '#326CE5'
 const DOCK   = '#2496ED'
 const PODMAN = '#892CA0'
-const INK2 = 'var(--ink2)'
-const INK3 = 'var(--ink3)'
+const INK2 = '#A1A1A1'
+const INK3 = '#6E6E6E'
 
 interface Props { type: string; size?: number }
 
@@ -140,13 +140,13 @@ export default function NodeSvgIcon({ type, size = 16 }: Props) {
       </svg>
     )
     case 'service': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={INK2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
       </svg>
     )
     case 'process': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={INK2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="5" y="5" width="14" height="14" rx="2.5"/>
         <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
       </svg>
