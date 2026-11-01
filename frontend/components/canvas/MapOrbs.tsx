@@ -42,18 +42,31 @@ const RING: Record<string, string> = {
   healthy: '#22c55e', degraded: '#f59e0b', unhealthy: '#ef4444', unknown: '#6b7280',
 }
 
-function Label({ text, size = 10.5, weight = 550 }: { text: string; size?: number; weight?: number }) {
+/**
+ * Label as a pill, not floating text. The old bare span looked like canvas
+ * grit next to the disc; a padded, rounded chip with a hairline border reads
+ * as part of the node. When the node is selected the chip takes its health
+ * ring colour, so the selection highlight covers the whole node, not just
+ * the disc.
+ */
+function Label({
+  text, size = 10.5, weight = 550, selected, ring,
+}: { text: string; size?: number; weight?: number; selected?: boolean; ring?: string }) {
   return (
     <span style={{
       fontSize: size, fontWeight: weight, color: 'var(--ink)',
       letterSpacing: '-0.01em',
+      display: 'block', maxWidth: '100%',
+      padding: '2px 8px', borderRadius: 8, lineHeight: 1.3,
+      background: selected && ring ? `${ring}1f` : 'rgba(255,255,255,0.04)',
+      border: `1px solid ${selected && ring ? ring : 'rgba(255,255,255,0.08)'}`,
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     }}>{text}</span>
   )
 }
 
 /** Centre: the platform. Sized by how much it owns. */
-export const MapRoot = memo(({ data, selected }: NodeProps<{ label: string; count: number; color: string }>) => {
+export const MapRoot = memo(({ data, selected }: NodeProps<{ label: string; count: number; color: string; kind?: string }>) => {
   const d = Math.round(Math.min(104, Math.max(76, 76 + Math.sqrt(Math.max(1, data.count)) * 2.4)))
   return (
     <div style={{
@@ -70,7 +83,9 @@ export const MapRoot = memo(({ data, selected }: NodeProps<{ label: string; coun
       }}>
         {data.label === 'Kubernetes'
           ? <Helm size={Math.round(d * 0.62)} />
-          : <span style={{ fontSize: 12, fontWeight: 750, color: '#0b0b12' }}>{data.label}</span>}
+          : data.kind
+            ? <NodeSvgIcon type={data.kind} size={Math.round(d * 0.58)} />
+            : <span style={{ fontSize: 12, fontWeight: 750, color: '#0b0b12' }}>{data.label}</span>}
       </div>
       <span style={{ fontSize: 11, fontWeight: 650, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
         {data.label}
@@ -143,7 +158,7 @@ export const MapOrb = memo(({ data, selected }: NodeProps<{ nodeType: string; la
         <NodeSvgIcon type={data.nodeType} size={Math.round(d * 0.5)} />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <Label text={data.label} />
+        <Label text={data.label} selected={selected} ring={ring} />
         <div style={{
           fontSize: 8.5, color: 'var(--ink4)', marginTop: 0,
           fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',

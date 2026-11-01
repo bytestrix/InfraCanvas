@@ -27,7 +27,7 @@ import { Node, Edge } from 'reactflow'
 
 export const ORB_D = 26
 export const ORB_CELL_W = 112
-export const ORB_CELL_H = 30
+export const ORB_CELL_H = 38
 export const HUB_D = 62
 export const ROOT_D = 84
 /** Radius of an orb's first ring around its hub — wide enough to hold 3 orbs. */
@@ -115,7 +115,16 @@ export function buildHubMap(nodes: Node[], edges: Edge[]): HubMapResult {
     out.push({
       id: rootId(p), type: 'mapRoot',
       position: { x: 0, y: 0 },
-      data: { label: p, count: total, color: p === 'Kubernetes' ? '#eab308' : p === 'Docker' ? '#2496ED' : '#64748b' },
+      data: {
+        label: p,
+        count: total,
+        color: p === 'Kubernetes' ? '#eab308' : p === 'Docker' ? '#2496ED' : '#64748b',
+        // Which engine mark the root disc carries. Kubernetes keeps its own
+        // helm (drawn in MapRoot); Docker and Podman reuse NodeSvgIcon's marks
+        // so the centre of each platform's map shows the actual engine, not
+        // the word for it.
+        kind: p === 'Docker' ? 'container_runtime' : p === 'Podman' ? 'podman' : p === 'Host' ? 'host' : '',
+      },
       width: ROOT_D + 16, height: ROOT_D + 30,
     } as Node)
   }
@@ -263,44 +272,127 @@ export function applyHubRadialLayout(
     hubRadius.set(hid, ring === 0 ? 0 : RING_R0 + (ring - 1) * (ORB_CELL_W + 40) + ORB_CELL_W / 2)
   }
 
-  // ── Hubs: ring around the root, each given an angular wedge big enough for
-  //    its own cluster ───────────────────────────────────────────────────────
+  // ── Hubs: ring around their platform root, each hub a wedge sized to its
+  //    cluster; then the roots themselves share a super-ring ─────────────────
   //
   // Equal spacing is not enough. A hub owning 55 pods has a cluster ~330px in
   // radius; a hub owning 1 cluster node is ~30px. Sharing the circle evenly
-  // puts the big cluster straight over the root and over its neighbours.
+  // puts the big cluster straight over the root and over its neighbours. So
+  // each hub claims a wedge, and the ring is grown until every wedge fits.
   //
-  // So each hub claims a wedge, and the ring is grown until every wedge fits.
-  const ordered = hubIds.slice().sort((a, b) => {
-    const la = String((byId.get(a)!.data as Meta)?.label ?? '')
-    const lb = String((byId.get(b)!.data as Meta)?.label ?? '')
+  // This runs once PER PLATFORM. A machine canvas has Kubernetes, Docker and
+  // Host roots at once, and stacking all three roots at the origin interleaved
+  // their hub clusters into one knot. Each platform lays its hubs out in
+  // private root-at-the-origin coordinates, then every root takes a slot on
+  // the super-ring and its constellation moves with it. A single-platform
+  // canvas has one root pinned at the origin — identical to the old output.
+
+  const byLabelStrict = (a: string, b: string) => {
+    const la = String((byId.get(a)?.data as Meta)?.label ?? '')
+    const lb = String((byId.get(b)?.data as Meta)?.label ?? '')
     return la < lb ? -1 : la > lb ? 1 : 0
-  })
+  }
 
-  const radii = ordered.map((h) => Math.max(90, (hubRadius.get(h) ?? 0) + 60))
-  let R = 300
-  const fits = (r: number) =>
-    radii.reduce((a, x) => a + Math.asin(Math.min(0.97, x / r)), 0) <= Math.PI * 0.88
-  let guard = 0
-  while (!fits(R) && guard++ < 60) R *= 1.12
+  // Group hubs under their root; hubs with no root at all form one extra
+  // platform-less constellation so they still lay out cleanly.
+  const claimed = new Set<string>()
+  const groups: { root: string | null; hubs: string[] }[] = []
+  for (const rid of rootIds) {
+    const hubs = (kids.get(rid) ?? []).filter((h) => hubIds.includes(h) && byId.has(h))
+    for (const h of hubs) claimed.add(h)
+    groups.push({ root: rid, hubs })
+  }
+  const unclaimed = hubIds.filter((h) => !claimed.has(h))
+  if (unclaimed.length) groups.push({ root: null, hubs: unclaimed })
 
-  let cursor = -Math.PI / 2
-  ordered.forEach((hid, i) => {
-    const half = Math.asin(Math.min(0.97, radii[i] / R))
-    const a = cursor + half          // centre this hub inside its own wedge
-    cursor += half * 2
-    const cx = Math.cos(a) * R
-    const cy = Math.sin(a) * R
-    pos.set(hid, { x: cx, y: cy })
-    const set = new Set(kids.get(hid) ?? [])
-    for (const [id, p] of pos) {
-      if (set.has(id)) pos.set(id, { x: p.x + cx, y: p.y + cy })
+  // Per platform: hubs at wedge positions in local (root-at-origin) coords;
+  // the hub's orbs move with it. Members recorded so the platform shifts as
+  // one block once the root has its super-ring position.
+  const members = new Map<string | null, Set<string>>()
+  const platformRadius = new Map<string | null, number>()
+  for (const { root, hubs } of groups) {
+    const set = new Set<string>(hubs)
+    members.set(root, set)
+    for (const hid of hubs) {
+      for (const c of kids.get(hid) ?? []) if (byId.has(c)) set.add(c)
     }
-  })
+    if (hubs.length === 0) { platformRadius.set(root, 200); continue }
 
-  for (const rid of rootIds) pos.set(rid, { x: 0, y: 0 })
-  // Any hub with no root above it still needs somewhere to sit.
-  for (const hid of ordered) if (!pos.has(hid)) pos.set(hid, { x: 0, y: 0 })
+    const orderedL = hubs.slice().sort(byLabelStrict)
+    const radiiL = orderedL.map((h) => Math.max(90, (hubRadius.get(h) ?? 0) + 60))
+    let R = 300
+    const fitsL = (r: number) =>
+      radiiL.reduce((a, x) => a + Math.asin(Math.min(0.97, x / r)), 0) <= Math.PI * 0.88
+    let guardL = 0
+    while (!fitsL(R) && guardL++ < 60) R *= 1.12
+    // The slot must hold the whole constellation, not just the hub ring: an
+    // orb sits at hub-distance plus its ring, so the true extent is the max
+    // hub distance to its outermost ring, not R alone.
+    let extent = R
+    for (const hid of orderedL) {
+      const lp = pos.get(hid)
+      if (!lp) continue
+      const dist = Math.hypot(lp.x, lp.y)
+      extent = Math.max(extent, dist + (hubRadius.get(hid) ?? 0))
+    }
+    platformRadius.set(root, extent)
+
+    let cursorL = -Math.PI / 2
+    orderedL.forEach((hid, i) => {
+      const half = Math.asin(Math.min(0.97, radiiL[i] / R))
+      const a = cursorL + half           // centre this hub inside its own wedge
+      cursorL += half * 2
+      const cxL = Math.cos(a) * R
+      const cyL = Math.sin(a) * R
+      pos.set(hid, { x: cxL, y: cyL })
+      const kidsSet = new Set(kids.get(hid) ?? [])
+      for (const [id, p] of pos) {
+        if (kidsSet.has(id)) pos.set(id, { x: p.x + cxL, y: p.y + cyL })
+      }
+    })
+  }
+
+  // ── Super-ring: one slot per platform, radius big enough for its cluster ──
+  const slots: { key: string; radius: number }[] = []
+  // +150, not +extent-padding: the extent measures to an orb's ring centre,
+  // but an orb's cell sticks out half its width (~56px) past that. Leaving
+  // 90 shows up as a few-pixel sliver overlap between neighbouring roots.
+  for (const rid of rootIds) slots.push({ key: rid, radius: (platformRadius.get(rid) ?? 300) + 150 })
+  if (members.has(null) && (members.get(null)?.size ?? 0) > 0) {
+    slots.push({ key: '__virtual__', radius: (platformRadius.get(null) ?? 300) + 150 })
+  }
+  slots.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+
+  let RS = 300
+  const fitsS = (r: number) =>
+    slots.reduce((a, x) => a + Math.asin(Math.min(0.97, x.radius / r)), 0) <= Math.PI * 0.88
+  let guardS = 0
+  while (!fitsS(RS) && guardS++ < 60) RS *= 1.12
+
+  const slotPos = new Map<string, { x: number; y: number }>()
+  let cursorS = -Math.PI / 2
+  slots.forEach((s, i) => {
+    const half = Math.asin(Math.min(0.97, s.radius / RS))
+    const a = cursorS + half
+    cursorS += half * 2
+    slotPos.set(s.key, { x: Math.cos(a) * RS, y: Math.sin(a) * RS })
+  })
+  // A single platform keeps its root exactly at the origin — the canvas reads
+  // as one map, not one of several.
+  if (slots.length === 1) slotPos.set(rootIds[0] ?? slots[0].key, { x: 0, y: 0 })
+
+  // Move every constellation onto its slot.
+  for (const { root } of groups) {
+    const off = slotPos.get(root ?? '__virtual__')
+    if (!off) continue
+    const movable = members.get(root)
+    if (!movable) continue
+    for (const id of movable) {
+      const p = pos.get(id)
+      if (p) pos.set(id, { x: p.x + off.x, y: p.y + off.y })
+    }
+  }
+  for (const rid of rootIds) pos.set(rid, slotPos.get(rid) ?? { x: 0, y: 0 })
 
   // ── Emit, centred on the origin ────────────────────────────────────────────
   const placed = nodes.filter((nd) => pos.has(nd.id))

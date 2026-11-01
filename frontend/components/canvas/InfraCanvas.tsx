@@ -11,6 +11,7 @@ import ReactFlow, {
   type Node,
   type Edge,
   type NodeTypes,
+  type NodeChange,
   type ReactFlowInstance,
   MarkerType,
 } from 'reactflow'
@@ -22,17 +23,14 @@ import {
   type GraphEdge,
   getNodeColor,
 } from '@/types'
-import { applyNamespaceHierarchyLayout } from '@/lib/layout'
 import { buildHubMap, applyHubRadialLayout, ORB_CELL_W, ORB_CELL_H } from '@/lib/hubMap'
 import MapNode from './MapNode'
 import { MapRoot, MapHub, MapOrb } from './MapOrbs'
 import { sendCommand } from '@/lib/wsManager'
 import {
-  buildGroupedGraph,
   type GroupInfo,
   type GroupNodeData,
   isCriticalGroup,
-  countHealth,
   getGroupLabel,
   SINGLETON_TYPES,
 } from '@/lib/graphPreprocess'
@@ -48,11 +46,10 @@ import {
   ArrowLeft,
   RefreshCw,
   Clock,
+  Link2,
   GitBranch,
   Layers,
   Filter,
-  Rows3,
-  Waypoints,
   Server,
   AlertTriangle,
   Download,
@@ -187,18 +184,13 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
-  const [viewMode, setViewMode] = useState<'map' | 'grouped'>('grouped')
-  // Toolbar chips (Kubernetes / Docker / Host / ...) — unchanged, existing
-  // behaviour: toggling one on immediately shows every type in that category.
-  // Kept separate from the "•••" picker tree below on purpose.
-  // Default to 'host' for Machines (VM agents always report one), but
-  // Clusters connections (kubeconfig direct-connect / relay pod) report no
-  // host node at all — defaulting to 'host' there hides everything on first
-  // load ("No nodes to display"). Fall back to 'k8s' when there's no host.
-  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(() => {
-    const hasHost = vm.graph?.nodes?.some((n) => n.type === 'host')
-    return new Set<FilterKey>([hasHost ? 'host' : 'k8s'])
-  })
+  // Toolbar chips (Kubernetes / Docker / Host / ...). NO narrowing on load:
+  // starting with a single active chip is why the canvas read as "only a few
+  // nodes are showing" — everything else sat behind a filter nobody knew
+  // existed. Every category is visible at first paint; narrowing is opt-in.
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
+    () => new Set<FilterKey>(Object.keys(FILTER_GROUPS) as FilterKey[]),
+  )
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   // ── "•••" drill-down tree: host → category → type → individual ────────────
@@ -229,6 +221,68 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   const refreshingRef = useRef(false)
   const [alertDismissed, setAlertDismissed] = useState(false)
   const [hideDegraded, setHideDegraded] = useState(false)
+
+  // Dragging a node should carry its connected nodes along — a hub with its
+  // spokes is one bundle, and dragging 40 dots one-by-one is the "usable"
+  // answer nobody wants. ON by default; plain single-node drag stays one
+  // toggle away in the toolbar.
+  const [groupDrag, setGroupDrag] = useState(true)
+  // Final positions of manually dragged nodes. The build effect repositions
+  // everything on every graph refresh (the agent pushes a snapshot every
+  // ~15s), so without this record any arrangement the user made would be
+  // silently reset within seconds. React Flow emits a change per dragged
+  // node, so group drags persist the whole bundle this way too.
+  const movedPositions = useRef<Map<string, { x: number; y: number }>>(new Map())
+  // The component is always mounted on both detail pages, so the mount-time
+  // `fitView` prop often runs against an empty graph (the snapshot arrives
+  // later). Fit once on the first non-empty layout instead.
+  const hadSnapshotRef = useRef(false)
+
+  // Capture manual drag endpoints so rebuilds can re-apply them.
+  const handleNodeChange = useCallback(
+    (changes: NodeChange[]) => {
+      for (const c of changes) {
+        if (c.type === 'position' && c.dragging === false && c.position) {
+          movedPositions.current.set(c.id, { x: c.position.x, y: c.position.y })
+        }
+      }
+      onNodesChange(changes)
+    },
+    [onNodesChange],
+  )
+
+  // On grab, select the node plus everything DOWNSTREAM of it, so React
+  // Flow's native multi-selection drag moves the bundle together.
+  //
+  // Downstream only, on purpose: "drag the parent and its children follow"
+  // also implies the reverse must never happen — grabbing a pod must not
+  // yank its hub, its namespace or the platform root out of place. Edges
+  // point parent→child in the map (hub→orb, namespace→member, plus the
+  // snapshot's own relationships), so a single forward walk is the bundle.
+  const handleNodeDragStart = useCallback(
+    (_: unknown, node: Node) => {
+      if (!groupDrag || !node) return
+      const kidsOf = new Map<string, string[]>()
+      for (const e of edges) {
+        if (e.source === e.target) continue
+        kidsOf.set(e.source, [...(kidsOf.get(e.source) ?? []), e.target])
+      }
+      const bundle = new Set<string>([node.id])
+      const frontier = [node.id]
+      while (frontier.length) {
+        for (const c of kidsOf.get(frontier.pop()!) ?? []) {
+          if (!bundle.has(c)) {
+            bundle.add(c)
+            frontier.push(c)
+          }
+        }
+      }
+      if (bundle.size > 1) {
+        setNodes((ns) => ns.map((n) => ({ ...n, selected: bundle.has(n.id) })))
+      }
+    },
+    [groupDrag, edges],
+  )
 
   // Live node count per filter category, for the chip badges. Mirrors the
   // "Hide degraded" toggle so a chip never advertises nodes that are hidden.
@@ -288,7 +342,7 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     return found ?? selectedNodeCache.current
   }, [selectedNodeId, vm.graph])
 
-  // ── Build + layout whenever graph/filters/viewMode changes ────────────────
+  // ── Build + layout whenever graph/filters change ────────────────────────
   useEffect(() => {
     if (!vm.graph) return
 
@@ -336,115 +390,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
     let flowNodes: Node[]
     let flowEdges: Edge[]
 
-    if (viewMode === 'grouped') {
-      const { nodes: gn, edges: ge, groups } = buildGroupedGraph(
-        sourceNodes,
-        sourceEdges,
-        visibleTypes,
-        expandedGroups,
-        expandedNodeIds,
-      )
-
-      // Category-summary nodes: one per revealed-but-not-fully-drilled
-      // category (e.g. "Kubernetes ×82"), sitting between host and the
-      // type-level groups that appear once you drill into that summary.
-      const hostNode = sourceNodes.find((n) => n.type === 'host')
-      // Clusters connections (kubeconfig direct-connect / relay pod) report no
-      // host node — fall back to the cluster node as the canvas root anchor so
-      // category summaries and orphans still attach to something.
-      const rootAnchor = hostNode ?? sourceNodes.find((n) => n.type === 'cluster')
-      const categoryNodes: Node[] = []
-      const categoryEdges: Edge[] = []
-      for (const key of revealedCategories) {
-        if (activeFilters.has(key)) continue // toolbar already fully expanded it
-        const catTypes = FILTER_GROUPS[key].types
-        const remainingTypes = catTypes.filter((t) => !revealedTypes.has(t))
-        if (remainingTypes.length === 0) continue // fully drilled, nothing left to summarize
-        const remainingNodes = sourceNodes.filter((n) => remainingTypes.includes(n.type as any))
-        if (remainingNodes.length === 0) continue
-        const hc = countHealth(remainingNodes)
-        const cid = categoryNodeId(key)
-        categoryNodes.push({
-          id: cid,
-          type: 'groupNode',
-          position: { x: 0, y: 0 },
-          data: {
-            groupType: key,
-            label: FILTER_GROUPS[key].label,
-            count: remainingNodes.length,
-            healthCounts: hc,
-            color: FILTER_GROUPS[key].color,
-            icon: '',
-            isCritical: isCriticalGroup(hc, remainingNodes.length),
-          } as GroupNodeData,
-          width: 260,
-          height: 90,
-        })
-        if (rootAnchor) {
-          categoryEdges.push({
-            id: `${rootAnchor.id}→${cid}→RUNS_ON`,
-            source: rootAnchor.id,
-            target: cid,
-            label: 'RUNS_ON',
-            type: 'smoothstep',
-            markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
-            style: { stroke: '#2d2d52', strokeWidth: 1.5 },
-            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' },
-            labelBgStyle: { fill: '#070711', fillOpacity: 0.9 },
-          })
-        }
-      }
-
-      flowNodes = [...gn, ...categoryNodes]
-      flowEdges = [...ge, ...categoryEdges]
-
-      // Attach orphans: some raw relationships only point DOWNWARD from a
-      // hidden node (e.g. Namespace → Deployment exists, but nothing points
-      // INTO Namespace — there is no Cluster → Namespace edge in the data at
-      // all). When such a hidden node is skipped, its children have no path
-      // to bridge through and would float with zero connections. Give every
-      // still-unconnected node a sensible fallback parent instead of leaving
-      // it visibly detached.
-      const flowNodeIds = new Set(flowNodes.map((n) => n.id))
-      const hasIncoming = new Set(flowEdges.map((e) => e.target))
-      const findIndividualByType = (t: string) =>
-        flowNodes.find((n) => n.type === 'infraNode' && (n.data as InfraNodeData).nodeType === t)?.id
-
-      for (const n of flowNodes) {
-        if (rootAnchor && n.id === rootAnchor.id) continue
-        if (hasIncoming.has(n.id)) continue
-
-        const category = n.id.startsWith('category:')
-          ? ((n.data as GroupNodeData).groupType as FilterKey)
-          : n.type === 'groupNode'
-            ? TYPE_TO_CATEGORY[(n.data as GroupNodeData).groupType]
-            : n.type === 'infraNode'
-              ? TYPE_TO_CATEGORY[(n.data as InfraNodeData).nodeType]
-              : undefined
-
-        let anchorId: string | undefined
-        if (category === 'k8s') anchorId = findIndividualByType('cluster') ?? categoryNodeId('k8s')
-        else if (category === 'docker') anchorId = findIndividualByType('container_runtime') ?? categoryNodeId('docker')
-        if (!anchorId || anchorId === n.id || !flowNodeIds.has(anchorId)) anchorId = rootAnchor?.id
-
-        if (anchorId && anchorId !== n.id) {
-          flowEdges.push({
-            id: `${anchorId}→${n.id}→CONTAINS`,
-            source: anchorId,
-            target: n.id,
-            label: 'CONTAINS',
-            type: 'smoothstep',
-            markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#2d2d52' },
-            style: { stroke: '#2d2d52', strokeWidth: 1.5, strokeDasharray: '3 3' },
-            labelStyle: { fill: '#475569', fontSize: 9, fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)' },
-            labelBgStyle: { fill: '#070711', fillOpacity: 0.9 },
-          })
-          hasIncoming.add(n.id)
-        }
-      }
-
-      setGroupsMap(groups)
-    } else {
       const { nodes: fn, edges: fe } = buildFlatFlowElements(
         sourceNodes,
         sourceEdges,
@@ -454,22 +399,14 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       // `buildFlatFlowElements` emits `infraNode` (and `namespaceGroup`) for
       // the hierarchy tree, so swap the type here rather than duplicating the
       // whole builder.
-      if (viewMode === 'map') {
-        // The map is a containment hierarchy: platform → resource type →
-        // namespace → its members. Synthetic parent/child nodes and edges are
-        // added here; `applyHierarchyLayout` positions them.
-        const h = buildHubMap(
-          fn.map((n) => ({ ...n, type: 'mapOrb', width: ORB_CELL_W, height: ORB_CELL_H })) as Node[],
-          fe as Edge[],
-        )
-        flowNodes = h.nodes
-        flowEdges = h.edges as Edge[]
-      } else {
-        flowNodes = fn
-        flowEdges = fe
-      }
-      setGroupsMap(new Map())
-    }
+
+    const h = buildHubMap(
+      fn.map((n) => ({ ...n, type: 'mapOrb', width: ORB_CELL_W, height: ORB_CELL_H })) as Node[],
+      fe as Edge[],
+    )
+    flowNodes = h.nodes
+    flowEdges = h.edges as Edge[]
+    setGroupsMap(new Map())
 
     if (flowNodes.length === 0) {
       setNodes([])
@@ -477,17 +414,27 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
       return
     }
 
-    // Grouped mode: fixed zone positions — no layout algorithm needed
-    // Flat mode: rooted dagre for proper hierarchy
     let ln: Node[]
     let le: Edge[]
-    if (viewMode === 'map') {
       // Structured map: nodes bucketed by the thing that owns them (namespace
       // for k8s, type otherwise), each bucket a labelled grid of individual
       // nodes. A free radial layout loses all structure once the graph is big
       // — 189 identical discs in a circle is as unreadable as the count cards
       // it replaced. Deterministic, so a 15s refresh never reshuffles it.
       ln = applyHubRadialLayout(flowNodes, flowEdges).nodes
+      // Manual drags win over the algorithmic layout so a snapshot refresh
+      // doesn't teleport arranged nodes back. Stale ids (type filtered out,
+      // node deleted) are pruned so the map doesn't pin ghosts.
+      if (movedPositions.current.size > 0) {
+        const alive = new Set(ln.map((n) => n.id))
+        for (const id of [...movedPositions.current.keys()]) {
+          if (!alive.has(id)) movedPositions.current.delete(id)
+        }
+        ln = ln.map((n) => {
+          const p = movedPositions.current.get(n.id)
+          return p ? { ...n, position: { ...p } } : n
+        })
+      }
       // Three kinds of line, drawn differently so the structure is legible:
       // containment is the solid spine, the type→member reach is dashed (it
       // spans levels, so solid would read as false parentage), and the
@@ -514,15 +461,10 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           markerEnd: undefined,
         }
       })
-    } else {
-      // Namespace-scoped tree: namespaced resources nest under the namespace
-      // that owns them, everything else keeps the zone/tier grid.
-      ln = applyNamespaceHierarchyLayout(flowNodes, flowEdges).nodes
-      le = flowEdges
-    }
+
 
     // Apply spotlight opacity if active
-    const finalNodes = applySpotlight(ln, spotlightKey, viewMode)
+    const finalNodes = applySpotlight(ln, spotlightKey)
 
     // Wire the "•••" picker onto the host node and every group node. Defined
     // fresh each rebuild so it always closes over the current groupsMap/state.
@@ -560,12 +502,19 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
 
     setNodes(withPickers)
     setEdges(le)
-  }, [vm.graph, activeFilters, viewMode, expandedGroups, expandedNodeIds, revealedCategories, revealedTypes, hideDegraded, nsFocus])
+
+    if (!hadSnapshotRef.current) {
+      hadSnapshotRef.current = true
+      setTimeout(() => {
+        rfRef.current?.fitView({ padding: 0.12, duration: 300 })
+      }, 400)
+    }
+  }, [vm.graph, activeFilters, hideDegraded, nsFocus])
 
   // ── Re-apply spotlight without re-running layout ───────────────────────────
   useEffect(() => {
-    setNodes((prev) => applySpotlight(prev, spotlightKey, viewMode))
-  }, [spotlightKey, viewMode, nsFocus])
+    setNodes((prev) => applySpotlight(prev, spotlightKey))
+  }, [spotlightKey, nsFocus])
 
   // ── Spotlight helpers ──────────────────────────────────────────────────────
 
@@ -580,7 +529,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
   function applySpotlight(
     allNodes: Node[],
     key: FilterKey | null,
-    mode: 'map' | 'grouped',
   ): Node[] {
     // Namespace focus is a real graph filter (see the build effect), not a
     // dim, so only the type spotlight has any say over opacity here.
@@ -929,26 +877,21 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           </span>
         )}
 
-        {/* View mode toggle */}
-        <div style={{ display: 'flex', gap: 1, background: 'var(--surface)', border: '1px solid #1E1E1E', borderRadius: 7, padding: 2 }}>
-          {([
-            ['map', 'Map', 'Radial map: root, type hubs, resources'],
-            ['grouped', 'Grouped', 'Namespace tree with per-type counts'],
-          ] as const).map(([m, Label, hint]) => (
-            <button key={m} onClick={() => setViewMode(m)} title={hint}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                fontSize: 11, fontWeight: viewMode === m ? 600 : 400,
-                background: viewMode === m ? 'var(--line2)' : 'transparent',
-                color: viewMode === m ? 'var(--ink)' : 'var(--ink4)',
-                transition: 'all 0.1s',
-              }}>
-              {m === 'map' ? <Waypoints size={11} /> : <Rows3 size={11} />}
-              {Label}
-            </button>
-          ))}
-        </div>
+        {/* Group drag: one on/off, because it changes what drag does. */}
+        <button
+          onClick={() => setGroupDrag((v) => !v)}
+          title={groupDrag ? 'Group drag: ON — dragging a node moves its connected nodes too' : 'Group drag: OFF — drag moves only the node you grab'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px', borderRadius: 7, cursor: 'pointer', fontSize: 11,
+            border: '1px solid #1E1E1E',
+            background: groupDrag ? 'var(--line2)' : 'transparent',
+            color: groupDrag ? 'var(--ink)' : 'var(--ink4)',
+            transition: 'all 0.1s',
+          }}>
+          <Link2 size={11} />
+          Group drag
+        </button>
 
         {/* Search — searches the whole graph, including nodes the current
             filter is hiding, and reveals the match when selected. */}
@@ -1191,10 +1134,11 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodeChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={handleNodeClick}
             onPaneClick={handlePaneClick}
+            onNodeDragStart={handleNodeDragStart}
             nodeTypes={nodeTypes}
             onInit={(instance) => { rfRef.current = instance }}
             fitView
@@ -1344,11 +1288,6 @@ export default function InfraCanvas({ vm, onBack }: InfraCanvasProps) {
         fontFamily: 'var(--font-geist-mono,"Geist Mono",ui-monospace,monospace)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {viewMode === 'grouped' && groupsMap.size > 0 && (
-            <span style={{ fontSize: 10, color: 'var(--line2)' }}>
-              {groupsMap.size} groups · click to drill down
-            </span>
-          )}
           {stats && Object.entries(stats.nodesByType)
             .sort(([, a], [, b]) => b - a).slice(0, 5)
             .map(([type, count]) => (
