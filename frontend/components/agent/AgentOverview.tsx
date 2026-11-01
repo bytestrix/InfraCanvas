@@ -421,7 +421,6 @@ export default function AgentOverview({ graph, hostname, vmCode, onSwitchToCanva
       {selectedId && groupInfo && !selectedNode && (
         <GroupDrawer
           group={groupInfo}
-          vmCode={vmCode}
           onClose={closeAll}
           onSelectNode={id => {
             const n = detailNodes.find(n => n.id === id)
