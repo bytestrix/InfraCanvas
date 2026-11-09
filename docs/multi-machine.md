@@ -30,9 +30,9 @@ If you'd rather have separate dashboards, install normally on each VM; each gets
 
 A cluster doesn't need anything installed in it. Click **+** next to **Clusters** and drop a kubeconfig. The hub talks to the API server directly, the way `kubectl` does, so the API server has to be reachable from the machine running `infracanvas serve`.
 
-- A kubeconfig with several contexts shows a picker; nothing is added until you choose.
-- The dialog shows what the credential can do before you connect.
-- An unreachable API server is reported right away and not saved.
+- A kubeconfig with several contexts shows a picker. Tick one, several, or **Select all**; each ticked context becomes its own cluster. Nothing is added until you click **Connect**.
+- The dialog shows what each ticked context's credential can do before you connect.
+- An unreachable API server is reported right away and not saved. When you connect several contexts at once, the reachable ones are added and the others stay ticked with their errors, so you can retry or close.
 - Adding the same context again updates the existing entry instead of creating a second one.
 - If the credential can't list some resource kinds (nodes, secrets, persistent volumes), those are skipped and the rest of the cluster still shows.
 

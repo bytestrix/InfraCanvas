@@ -323,15 +323,94 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 	if contextName == "" {
 		contextName = cfg.CurrentContext
 	}
-	restCfg, err := restConfigForContext(cfg, contextName)
+	serverURL, err := checkContext(cfg, contextName)
 	if err != nil {
 		return Entry{}, err
+	}
+	return m.persist(name, kubeconfigBytes, contextName, serverURL, readOnly)
+}
+
+// AddFailure reports one context that AddMany could not connect.
+type AddFailure struct {
+	Context string `json:"context"`
+	Error   string `json:"error"`
+}
+
+// maxParallelPings bounds how many API servers AddMany contacts at once. Each
+// check can run an exec credential plugin and wait up to 8s on an unreachable
+// server, so checking one at a time would let a large kubeconfig outlast the
+// request timeout of a proxy in front of the dashboard (Cloudflare's is 100s).
+const maxParallelPings = 4
+
+// AddMany connects several contexts from one kubeconfig, each as its own
+// cluster entry named after its context, the same as calling Add once per
+// context with an empty name. Contexts are checked independently: one
+// unreachable or unknown context is reported in the failures and does not
+// stop the others. Duplicate names are connected once. The returned slices
+// are never nil. err is set only when the kubeconfig itself can't be parsed.
+func (m *Manager) AddMany(kubeconfigBytes []byte, contextNames []string, readOnly bool) (added []Entry, failed []AddFailure, err error) {
+	cfg, err := clientcmd.Load(kubeconfigBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid kubeconfig: %w", err)
+	}
+
+	names := make([]string, 0, len(contextNames))
+	seen := make(map[string]bool, len(contextNames))
+	for _, n := range contextNames {
+		if !seen[n] {
+			seen[n] = true
+			names = append(names, n)
+		}
+	}
+
+	// Reach every API server first, a few at a time; this is the slow part.
+	serverURLs := make([]string, len(names))
+	errs := make([]error, len(names))
+	sem := make(chan struct{}, maxParallelPings)
+	var wg sync.WaitGroup
+	for i, n := range names {
+		wg.Add(1)
+		go func(i int, n string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			// Each goroutine gets its own copy so nothing downstream can
+			// race on the shared config maps.
+			serverURLs[i], errs[i] = checkContext(cfg.DeepCopy(), n)
+		}(i, n)
+	}
+	wg.Wait()
+
+	// Persist one at a time: runstate.Update is a read-modify-write with no
+	// lock of its own, so concurrent writes would drop entries.
+	added = []Entry{}
+	failed = []AddFailure{}
+	for i, n := range names {
+		if errs[i] == nil {
+			entry, perr := m.persist(n, kubeconfigBytes, n, serverURLs[i], readOnly)
+			if perr == nil {
+				added = append(added, entry)
+				continue
+			}
+			errs[i] = perr
+		}
+		failed = append(failed, AddFailure{Context: n, Error: errs[i].Error()})
+	}
+	return added, failed, nil
+}
+
+// checkContext validates that contextName exists in cfg and that its API
+// server answers with the context's credentials, and returns the server URL.
+func checkContext(cfg *clientcmdapi.Config, contextName string) (string, error) {
+	restCfg, err := restConfigForContext(cfg, contextName)
+	if err != nil {
+		return "", err
 	}
 	// Fail fast on an unreachable/misconfigured cluster rather than persisting
 	// a dead entry that sits in the sidebar with an "error" status.
 	restCfg.Timeout = 8 * time.Second
 	if err := pingCluster(restCfg); err != nil {
-		return Entry{}, err
+		return "", err
 	}
 
 	serverURL := ""
@@ -340,6 +419,12 @@ func (m *Manager) Add(name string, kubeconfigBytes []byte, contextName string, r
 			serverURL = cl.Server
 		}
 	}
+	return serverURL, nil
+}
+
+// persist saves a context that checkContext already accepted and (re)starts
+// its virtual agent. name defaults to contextName if empty.
+func (m *Manager) persist(name string, kubeconfigBytes []byte, contextName, serverURL string, readOnly bool) (Entry, error) {
 	if name == "" {
 		name = contextName
 	}
