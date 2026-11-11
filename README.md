@@ -56,6 +56,10 @@ curl -fsSL https://github.com/bytestrix/InfraCanvas/releases/latest/download/ins
 
 Leave off `--private` and the installer opens a Cloudflare quick-tunnel and prints a public HTTPS URL. That's handy, but it puts a dashboard with terminal access on the internet behind a token, so read [the install guide](docs/install.md#on-a-linux-vm-with-the-installer) first.
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/InfraCanvas/)
+
 ## What it shows
 
 | Source | What you get |
